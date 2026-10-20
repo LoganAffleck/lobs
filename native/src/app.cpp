@@ -812,7 +812,7 @@ void App::runDemo(const QString &name)
 
 void App::addBackground()
 {
-	if (!doc().scenes.contains(m_editScene))
+	if (!doc().scenes.contains(m_editScene) || !liveSceneEditAllowed(m_editScene))
 		return;
 	m_store.commit("Add background", [&](Doc &d) { placeBackground(d, m_editScene); });
 }
@@ -828,6 +828,8 @@ void App::deleteScene(const QString &id)
 	// LOBS-013: a show always keeps one scene, so edit and program always have somewhere to point.
 	if (doc().sceneOrder.size() <= 1 && doc().sceneOrder.contains(id))
 		return showToast("A show needs at least one scene");
+	if (!liveSceneEditAllowed(id)) // deleting the program scene would switch what's on air
+		return;
 	m_store.commit("Delete scene", [&](Doc &d) { d.deleteScene(id); });
 }
 
@@ -912,6 +914,8 @@ void App::renameSource(const QString &id, const QString &name)
 
 void App::deleteSource(const QString &id)
 {
+	if (!liveSourceEditAllowed(id))
+		return;
 	m_store.commit("Delete source", [&](Doc &d) { d.deleteSource(id); });
 	if (m_poolSelection == id)
 		m_poolSelection.clear();
@@ -1328,8 +1332,7 @@ void App::setCrop(const QString &field, int value)
 
 void App::setOpacity(double value, bool final)
 {
-	if (!liveEditAllowed(m_selection))
-		return;
+	// Visibility and opacity are live controls: allowed on air even while locked (2026-10-20).
 	const QStringList ids = m_selection;
 	auto fn = [&](Doc &d) {
 		for (const QString &id : ids) {
@@ -1343,8 +1346,7 @@ void App::setOpacity(double value, bool final)
 
 void App::setVisibleFlag(bool visible)
 {
-	if (!liveEditAllowed(m_selection))
-		return;
+	// Visibility and opacity are live controls: allowed on air even while locked (2026-10-20).
 	const QStringList ids = m_selection;
 	m_store.commit(visible ? "Show layer" : "Hide layer", [&](Doc &d) {
 		for (const QString &id : ids) {
@@ -1551,6 +1553,9 @@ void App::forgetProject()
 
 void App::newDocument()
 {
+	// A new show replaces what's on air, so not while live (like Open and Import).
+	if (live())
+		return showToast("Stop streaming and recording to start a new show");
 	m_store.replace(Doc(), "New document");
 	forgetProject();
 	m_poolSelection.clear();
@@ -1561,6 +1566,8 @@ void App::newDocument()
 
 void App::loadSample()
 {
+	if (live())
+		return showToast("Stop streaming and recording to load the sample show");
 	m_store.replace(withDefaultDevices(Doc::sample(), m_engine), "Load sample show");
 	forgetProject();
 	editScene(doc().sceneOrder.value(0));
@@ -1740,6 +1747,8 @@ bool App::createProject(const QString &name, const QString &folder)
 {
 	if (!checkNewProject(name, folder).isEmpty())
 		return false;
+	if (live())
+		return showToast("Stop streaming and recording to start a new project"), false;
 	const QString dir = cleanFolder(folder) + "/" + name.trimmed();
 	const QString file = dir + "/" + name.trimmed() + ".lobs.json";
 	// The project being left keeps its latest changes; if that can't be saved, stop here.
