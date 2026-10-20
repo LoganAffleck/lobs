@@ -1453,9 +1453,23 @@ void App::jumpHistory(int index)
 	m_store.jumpTo(index);
 }
 
+// A new or sample show isn't any project yet: forget the project file, so a later Save or
+// "save before Open" can't write this show over the project that was open before.
+void App::forgetProject()
+{
+	if (m_projectFile.isEmpty())
+		return;
+	m_projectFile.clear();
+	QSettings().remove("project/file");
+	watchAssets();
+	emit assetsChanged();
+	emit projectChanged();
+}
+
 void App::newDocument()
 {
 	m_store.replace(Doc(), "New document");
+	forgetProject();
 	m_poolSelection.clear();
 	m_editScene.clear();
 	addScene();
@@ -1464,6 +1478,7 @@ void App::newDocument()
 void App::loadSample()
 {
 	m_store.replace(withDefaultDevices(Doc::sample(), m_engine), "Load sample show");
+	forgetProject();
 	editScene(doc().sceneOrder.value(0));
 }
 

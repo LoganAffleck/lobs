@@ -119,6 +119,21 @@ story("PJ-02a", "Autosave writes the current show", () => {
 	check("autosave is valid JSON", !!parsed);
 });
 
+story("PJ-01e", "New show, then Open, never overwrites the project you left (LOBS-007)", () => {
+	fresh();
+	const a = t.out("pj01e-a.lobs.json"), b = t.out("pj01e-b.lobs.json");
+	placeColor("Only in A", "#112233");
+	check("save A", app.saveAs(t.url(a)));
+	const aBefore = t.readFile(a);
+	app.newDocument();
+	eq("a new show has no project file", app.projectFile, "");
+	check("save the new show as B", app.saveAs(t.url(b)));
+	app.newDocument();
+	check("open A", app.open(t.url(a)));
+	eq("A's file is unchanged", t.readFile(a), aBefore);
+	check("A still has its layer", Object.keys(t.doc().instances).some(i => t.doc().instances[i].name === "Only in A"));
+});
+
 story("PJ-04", "Startup mode: only exact self-test flags use a throwaway show (LOBS-001)", () => {
 	const normal = [
 		["C:/Users/testuser/AppData/Local/Programs/LOBS/LOBS.exe"],

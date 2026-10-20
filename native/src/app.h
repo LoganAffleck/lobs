@@ -460,6 +460,7 @@ private:
 	int m_toolStrokeWidth = 6;
 	int m_laserTrailMs = 500;
 	Eyedropper m_eyedropper;
+	void forgetProject();
 	struct DeviceList { QVariantList items; qint64 at = 0; };
 	QHash<QString, DeviceList> m_sourceDevices; // by source id (the Inspector's device menu)
 	QHash<QString, QVariant> m_modelCache; // last value of each list sent to QML
