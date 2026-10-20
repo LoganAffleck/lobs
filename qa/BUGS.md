@@ -79,7 +79,7 @@ function broken · S3 minor/workaround exists · S4 cosmetic. Bugs are reported,
 ## Phase 2 run findings (run `runs/20261020-151552` unless noted)
 
 ## LOBS-006 · S2 · Live lock can be bypassed: the Inspector moves and Delete removes on-air layers
-- **Area:** live safety · **Story:** LY-06 · **Status:** Fixed in 85f5fbb · verified in `runs/20261020-181644` (was: Confirmed (scenario `20-scenes-layers`))
+- **Area:** live safety · **Story:** LY-06 · **Status:** REOPENED by QA verification (RG-02, back doors remain; see end of file) · was: Fixed in 85f5fbb · verified in `runs/20261020-181644` (was: Confirmed (scenario `20-scenes-layers`))
 - **Repro:** 1) Put a scene with a layer on program. 2) Start recording, so `live` and `liveLocked` are both true. 3) Canvas drag and nudge are correctly refused. 4) Type a new X in the Inspector: the layer moves on air (x 200 → 900). 5) Press Delete: the layer is removed from the live scene.
 - **Expected (PLAN §4b):** "layers locked while live (moving one needs a modifier key or an unlock)". The lock should cover every way of moving the layer, and destructive edits on the on-air scene should be guarded.
 - **Cause:** the check lives only in the canvas drag path and in `nudge()` ([app.cpp:2937](../native/src/app.cpp:2937)). `setTransform`, `scrubTransform`, `setSize`, `fit`, `deleteSelected` and others don't check `liveLocked()`.
@@ -178,7 +178,7 @@ function broken · S3 minor/workaround exists · S4 cosmetic. Bugs are reported,
 ## Phase 3 (performance) findings
 
 ## LOBS-022 · S1 · Memory leaks on every scene switch; long sessions end in "Not Responding"
-- **Area:** performance / stability · **Stories:** PF-02, PF-03 · **Status:** Fixed in 76589e2 · verified in `runs/20261020-181644` (was: Confirmed, reproduced in 3 separate runs)
+- **Area:** performance / stability · **Stories:** PF-02, PF-03 · **Status:** PARTLY FIXED per QA verification (UI leak gone; per-scene GPU buffers remain → LOBS-034) · was: Fixed in 76589e2 · verified in `runs/20261020-181644` (was: Confirmed, reproduced in 3 separate runs)
 - **Evidence:**
   - `runs/probe-growth` (heavy project, 30 switches): private memory **2,627 → 5,230 MB**, about **87 MB per switch**. OS handles stay flat (about 47.6k).
   - `runs/probe-growth2`, by project size:
@@ -297,3 +297,71 @@ Truncated, empty and non-OBS files are refused ("Not an OBS scene collection") a
 - **OUT-02 / OUT-03** fail or die only when `50-output` runs after other suites in one `run.ps1` call (`20261020-185702`). Alone they pass (`20261020-185848`). Flaky, cause not found.
 - **Open while live** replaced what was on air. Now refused, and Open/Import are disabled while live (2a7f1f3, PJ-06).
 - **An untitled show was lost on Open or Import.** These now ask Save… / Don't save / Cancel when it has changes (3b214b1, PJ-07, PJ-07u).
+
+
+---
+## QA verification pass on the fix commits (HEAD `2f3ad18`, 2026-10-20)
+
+Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/20261020-190750` (functional), `runs/20261020-191132` (QA regression probes, `90-regression.js`, written by QA after reading the fix diffs), `runs/probe-leak2-head`, and `runs/*-output` (output).
+
+- **Functional suite: 62/62 pass** (was 38/62). Every story the fix pass claimed now passes in QA's run too.
+- **Test changes reviewed:**
+  - LK-12 now follows the product decision. It's stricter, which is fine.
+  - LY-06, PJ-01d/01e/04–07, MP-04u and LK-01m add regression checks, which is fine.
+  - AX-01 no longer counts static `Text` as a control. That's defensible, but it shrinks the denominator: **102 of 127 named (80.3%)**, just over the bar.
+  - No check was weakened to hide a failure.
+- **Reopened or new below:** LOBS-006 (reopened), LOBS-022 (partly fixed → LOBS-034), LOBS-033 (new), LOBS-035 (new), and one product question.
+
+## LOBS-006 · REOPENED · Live lock still has back doors that change what's on air
+- **Story:** RG-02 (`90-regression.js`) · **Status:** Reopened (fix 85f5fbb/2dde2ba is incomplete)
+- While recording, with live lock on and scene "OnAir" on program:
+  1. **The Layers eye icon hides the on-air layer.** `App::toggleVisible` has no guard, while Inspector visibility (`setVisibleFlag`) is refused. Same action, two answers (H4).
+  2. **Delete source removes the on-air layers.** `App::deleteSource` has no guard.
+  3. **Deleting the on-air scene is allowed.** Program jumps to another scene ("OffAir") mid-recording. `App::deleteScene` has no guard.
+- Also unguarded (not checked for on-air effect): `renameSource`, `addBackground`, `setSourceSetting` paths reached through other callers. A static scan of `app.cpp` found 20+ committing functions with no `live*EditAllowed` call; the three above change what viewers see.
+- **Suggested fix:** route those three through `liveEditAllowed`/`liveSourceEditAllowed`/`liveSceneEditAllowed`. Or, if the eye icon should stay usable live (see the product question below), make the Inspector match it.
+
+## LOBS-033 · S3 · While live, arrow-key nudge is refused on scenes that aren't on air
+- **Story:** RG-01 · **Status:** Confirmed (pre-existing; the old blanket check survived the new guard)
+- **Repro:** while live, edit an off-air scene, select a layer, press an arrow key → "Live lock is on. Unlock to nudge while live." The layer doesn't move. Inspector edits, filters and adding sources on the same off-air scene all work.
+- **Cause:** `App::nudge` calls the new `liveEditAllowed(m_selection)` (correct), then still has `if (liveLocked()) return showToast(...)`, which refuses regardless of scene. That second check also ignores Alt, despite the toast.
+- **Why it matters:** preparing the next scene while live is the main reason the edit/program split exists (SC-02).
+
+## LOBS-022 · Partly fixed · UI leak fixed; memory still grows with every scene you visit (see LOBS-034)
+- **QA result:** RG-05 (`runs/20261020-191132`) and `runs/probe-leak2-head`:
+
+  | Case | Retained per switch |
+  |---|---|
+  | Tiny project, with or without rendering | ~0 MB ✅ |
+  | Heavy, 100 switches across all 40 scenes, rendering | **33.7 MB** (2,661 → 6,034 MB) |
+  | Heavy, 50 switches with a frame each | **56 MB** |
+  | Heavy, 50 switches without frames | 17 MB |
+  | Heavy, the same 2 scenes back and forth | **0 MB** |
+
+  Memory isn't returned after 10 s idle plus GC.
+- **Reading:** the unbounded UI leak (QML rows and menus) is fixed, so a click retains about 0.4 MB and repeated switching between visited scenes retains 0. What remains is a one-time cost per scene rendered that is **never released**. That's LOBS-034. The fix commit's "≈0 MB per 100 switches" figure holds only for switches between already-visited scenes, or without rendering.
+- **Speed is fixed:** switch + frame p95 **52 ms** (was 5.0 s), click + frame p95 **29 ms** (was 411 ms).
+
+## LOBS-034 · S2 · Every layer keeps a source-sized GPU buffer after its scene stops showing
+- **Area:** memory / scale · **Stories:** RG-05, PF-*-stress · **Status:** Confirmed by measurement; cause from code
+- **Cause:** `li_video_render` creates `li->texrender` at the **source's** full size on first render, and frees it only in `li_destroy` ([lobs_instance.c:140](../native/src/lobs_instance.c:140), [:77](../native/src/lobs_instance.c:77)). There's nothing on hide or deactivate. Color sources are canvas-sized (1920×1080×4 = 8 MB each), the camera is 8 MB, and a 4K display capture is about 33 MB. Every layer of every scene ever shown keeps its buffer.
+- **Effect:** memory ≈ the sum over **visited** layers. Heavy (424 layers) settles around 3.4 GB. Stress (3,270 layers) would need tens of GB, which matches the stress numbers below.
+- **Suggested fix:** release the texrender when the instance stops showing (`hide`/`deactivate` callback), or share one per source (not per layer). Also, skip the texrender entirely when no crop or radius is set, and draw plain color sources directly instead of rendering a canvas-sized texture.
+
+## LOBS-035 · S4 · The recording error still tells Windows 11 users about "Windows 10 Ransomware Protection"
+- Was a UX note in the report (not logged as a bug). Still present: OUT-01b `lastError`/status text. It comes from OBS. Suggested wording: "Windows Security → Controlled folder access".
+
+## Product decision (2026-10-20, from the product owner): visibility and opacity are live controls
+- While live and locked, **show/hide and opacity stay allowed** on the on-air scene, from both the Layers eye icon and the Inspector. A show runner needs to hide and show overlays or a temporary CTA mid-show.
+- **Everything else on air stays locked:** move, size, crop, corners, filters, rename, duplicate, reorder, group, add or delete layers, delete source, delete the on-air scene, source settings, link and reset.
+- The tests encode this: LY-06 and RG-02 (updated by QA). Both fail on `2f3ad18`, because the Inspector refuses hide and opacity while Delete source and Delete scene still slip through.
+
+## Perf verification (HEAD `2f3ad18`, `runs/20261020-191455`)
+- **LOBS-023:** verified fixed on heavy. Select scene p95 60 ms (was 5.0 s); Show (cut) p95 25 ms (was 457 ms).
+- **LOBS-024:** mostly fixed.
+  - Click p95 31 ms, edit p95 14 ms, linked edit p95 48 ms, scrub p95 24 ms.
+  - **Still over target:** UI frame interval while dragging, p95 **33.8 ms** / p99 40.5 ms / max 94 ms (target p95 ≤ 16.7 ms). Typical (p50 17 ms) is about 58 fps; the worst 5% of frames drop to about 30 fps.
+- **LOBS-025:** still partly fixed. Stress is now usable but misses targets:
+  - Pass: open 8.3 s ✅, Show p95 190 ms ✅, click p95 149 ms ✅, edit p95 21 ms ✅.
+  - **Fail:** select scene p95 339 ms (≤ 250), linked edit across 100 scenes p95 393 ms (≤ 250), drag frame p95 114 ms (≤ 33), scrub p95 120 ms (≤ 66), **autosave stall up to 2.9 s** (never > 1 s), memory 898 KB per edit. That's bounded by the 200-step history: about 175 MB.
+  - Resources after open are unchanged: **6.4 GB private, 270k handles, 2,003 GDI objects**. This is LOBS-034, and the GDI risk from LOBS-025 remains.

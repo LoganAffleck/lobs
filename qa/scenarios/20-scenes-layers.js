@@ -197,16 +197,25 @@ story("LY-06", "Live lock while recording", () => {
 	sel(r); app.moveSelected(1000);
 	check("reorder refused while live", t.doc().scenes[A].layers.indexOf(r) === 0, t.doc().scenes[A].layers);
 	check("refusals say why", app.toast.indexOf("Live lock") >= 0, app.toast);
-	// Everything else on air is locked too (product decision 2026-10-20).
-	const before = t.docJson();
+	// Product decision (2026-10-20, revised): visibility and opacity are live controls, so they
+	// stay allowed on air (show/hide an overlay or CTA mid-show), from the Inspector and the eye icon.
 	sel(r); app.setVisibleFlag(false);
+	eq("Inspector hide works on air", eff(r, "visibility").visible, false);
+	sel(r); app.setVisibleFlag(true);
+	app.toggleVisible(r);
+	eq("Layers eye icon hide works on air", eff(r, "visibility").visible, false);
+	app.toggleVisible(r);
 	sel(r); app.setOpacity(0.3, true);
+	near("opacity works on air", eff(r, "visibility").opacity, 0.3, 1e-9);
+	sel(r); app.setOpacity(1, true);
+	// Everything else on air stays locked.
+	const before = t.docJson();
 	sel(r); app.addFilter("color");
 	sel(r); app.renameLayer(r, "Renamed live");
 	sel(r); app.duplicateSelected();
 	app.addSource("color", "Added live", "#00ff00", true);
 	sel(r); app.resetGroup("transform");
-	check("hide, opacity, filters, rename, duplicate, add and reset are refused on air", t.docJson() === before, "doc changed while locked");
+	check("filters, rename, duplicate, add and reset are refused on air", t.docJson() === before, "doc changed while locked");
 	// The setting turns live lock off.
 	app.saveSettings({ liveLock: false });
 	check("with Live lock off in Settings, nothing is locked", !app.liveLocked);
