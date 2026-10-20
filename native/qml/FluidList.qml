@@ -5,6 +5,8 @@ import QtQuick
 // a delegate can opt out with `property bool hoverable: false` (e.g. bin headers).
 ListView {
     id: lv
+    Accessible.role: Accessible.List
+    Accessible.name: "List"
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     boundsMovement: Flickable.StopAtBounds

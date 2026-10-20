@@ -15,6 +15,8 @@ RowLayout {
 
     component Seg: AbstractButton {
         id: seg
+        Accessible.role: Accessible.Button
+        Accessible.name: text !== "" ? text : (tip !== "" ? tip : iconName)
         property string iconName
         property bool active: false
         property color dot: "#22c55e"

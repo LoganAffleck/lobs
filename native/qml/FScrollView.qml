@@ -1,10 +1,12 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 
 // Desktop scrolling: hard stops at the top and bottom (no touch-style overscroll bounce),
 // quick deceleration, and a thin scrollbar that fades in while scrolling or hovered.
 ScrollView {
     id: sv
+    Accessible.role: Accessible.Pane
+    Accessible.name: "Scroll area"
     clip: true
     contentWidth: availableWidth
     Component.onCompleted: {
@@ -18,6 +20,7 @@ ScrollView {
     }
     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
     ScrollBar.vertical: ScrollBar {
+        Accessible.name: "Scroll"
         id: bar
         parent: sv
         x: sv.width - width - 2

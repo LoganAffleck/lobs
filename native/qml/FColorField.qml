@@ -7,6 +7,8 @@ import QtQuick.Layouts
 // on whichever side of the field has room.
 FButton {
     id: cf
+    Accessible.role: Accessible.Button
+    Accessible.name: "Color " + color
     property string color: "#ffffff"   // #rrggbb
     signal picked(string color)
     readonly property bool valid: /^#[0-9a-fA-F]{6}$/.test(color)

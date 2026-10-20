@@ -10,6 +10,8 @@ import LOBS
 // double-click to float it. Close appears on hover.
 KDDW.TabBarBase {
     id: root
+    Accessible.role: Accessible.PageTabList
+    Accessible.name: "Panel tabs"
     implicitHeight: 36
 
     function getTabAtIndex(index) { return tabRow.children[index] }
@@ -30,6 +32,8 @@ KDDW.TabBarBase {
     readonly property bool inMainWindow: !!mainWin && mainWin.panelDrag !== undefined // floating windows have no drag controller
     MouseArea {
         id: tabMouse
+        Accessible.role: Accessible.PageTabList
+        Accessible.name: "Panel tabs"
         z: root.mouseAreaZ.z + 2
         anchors.left: parent.left
         anchors.top: parent.top

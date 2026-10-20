@@ -57,6 +57,8 @@ Item {
     }
     MouseArea {
         id: mouse
+        Accessible.role: Accessible.Slider
+        Accessible.name: s.label !== "" ? s.label : "Slider"
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.SizeHorCursor

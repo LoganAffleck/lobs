@@ -4,6 +4,8 @@ import QtQuick.Controls
 // Text field: sits one step below its surface, 12% border, blue focus ring.
 TextField {
     id: f
+    Accessible.role: Accessible.EditableText
+    Accessible.name: placeholderText
     implicitHeight: Pal.ctl
     font.family: Pal.font
     font.pixelSize: Pal.body

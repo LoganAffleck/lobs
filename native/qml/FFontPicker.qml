@@ -89,7 +89,7 @@ FButton {
                 clip: true
                 model: pop.shown
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; Accessible.name: "Scroll" }
                 delegate: Item {
                   id: row
                   required property string modelData

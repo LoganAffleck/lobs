@@ -6,6 +6,9 @@ import QtQuick.Controls
 // Hover tints on the fast spring; press dips.
 AbstractButton {
     id: b
+    // Screen readers and voice control: the visible text, else the tooltip (icon-only buttons).
+    Accessible.role: Accessible.Button
+    Accessible.name: text !== "" ? text : (tip !== "" ? tip : iconName)
     property string variant: "secondary"
     property string tip: ""
     property bool selected: false

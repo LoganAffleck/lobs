@@ -256,6 +256,8 @@ ApplicationWindow {
                                 height: Pal.ctl + 2
                                 Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.editing }
                                 MouseArea {
+                                    Accessible.role: Accessible.ListItem
+                                    Accessible.name: String(modelData.name || "Scene")
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.popup() }
@@ -323,6 +325,8 @@ ApplicationWindow {
                                         FBadge { visible: modelData.program; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
                                     }
                                     MouseArea {
+                                        Accessible.role: Accessible.ListItem
+                                        Accessible.name: String(modelData.name || "Scene")
                                         id: tileMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
@@ -546,6 +550,8 @@ ApplicationWindow {
                             // Drag onto the canvas to place it where you drop it; click selects (settings in
                             // the Inspector); double-click adds it to the scene; right-click for more.
                             MouseArea {
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: String(modelData.name || "Source")
                                 enabled: !modelData.divider
                                 anchors.fill: parent
                                 anchors.rightMargin: 150 // leave the row's buttons clickable
@@ -908,7 +914,7 @@ ApplicationWindow {
                             cellHeight: Math.round(cellWidth * 0.62) + 52 // thumbnail + two lines of name
                             model: assetsGuest.items.filter(a => !a.folder) // folders sit above, compact
                             footer: dropHint
-                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; Accessible.name: "Scroll" }
                             // Folders: short rectangles, one cell wide and a third of a tile tall, so three
                             // stack in the space of one asset. They open, select, and take drops like tiles do.
                             header: Item {
@@ -1267,6 +1273,8 @@ ApplicationWindow {
                             Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.selected }
                             opacity: layerList.dragId === modelData.id ? 0.45 : 1
                             MouseArea {
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: String(modelData.name || "Layer")
                                 anchors.fill: parent
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 property real pressY: 0
@@ -1743,7 +1751,7 @@ ApplicationWindow {
                 width: ListView.view.width
                 height: Pal.ctl + 2
                 Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: index === app.historyIndex }
-                MouseArea { anchors.fill: parent; onClicked: app.jumpHistory(index) }
+                MouseArea { Accessible.role: Accessible.ListItem; Accessible.name: String(modelData.label || modelData.name || "History step"); anchors.fill: parent; onClicked: app.jumpHistory(index) }
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 14
@@ -1786,7 +1794,7 @@ ApplicationWindow {
                             FIcon { name: modelData[1]; size: 18; color: on ? Pal.fg : Pal.muted; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: modelData[2]; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: on ? 550 : 400; anchors.horizontalCenter: parent.horizontalCenter }
                         }
-                        MouseArea { id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: addDialog.kind = modelData[0] }
+                        MouseArea { Accessible.role: Accessible.Button; Accessible.name: String(modelData[2]); id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: addDialog.kind = modelData[0] }
                     }
                 }
             }

@@ -21,7 +21,7 @@ Rectangle {
         Text { id: t; color: parent.tone; font.family: Pal.font; font.pixelSize: Pal.caption; anchors.verticalCenter: parent.verticalCenter }
     }
 
-    MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: statsPopup.opened ? statsPopup.close() : statsPopup.open() }
+    MouseArea { Accessible.role: Accessible.Button; Accessible.name: "Stream and recording stats"; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: statsPopup.opened ? statsPopup.close() : statsPopup.open() }
 
     RowLayout {
         anchors.fill: parent
