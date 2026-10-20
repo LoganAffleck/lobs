@@ -48,6 +48,18 @@ void Engine::pollLiveStats()
 		{"cpu", os_cpu_usage_info_query(m_cpu)},
 		{"memoryMb", double(os_get_proc_resident_size()) / (1024.0 * 1024.0)},
 	};
+	// The warning uses the last 10 s, so a startup hiccup doesn't read as an ongoing problem;
+	// the totals above stay for the stats popup.
+	if (!m_frameClock.isValid())
+		m_frameClock.start();
+	const qint64 now = m_frameClock.elapsed();
+	m_frameSamples.push_back({now, lagged, rendered, skipped, encoded});
+	while (m_frameSamples.size() > 2 && now - m_frameSamples[1].ms >= 10000)
+		m_frameSamples.removeFirst();
+	const FrameSample &old = m_frameSamples.first();
+	const auto pct = [](uint32_t part, uint32_t all) { return all ? 100.0 * part / all : 0.0; };
+	s["recentLaggedPct"] = pct(lagged - old.lagged, rendered - old.rendered);
+	s["recentSkippedPct"] = encoded >= old.encoded ? pct(skipped - old.skipped, encoded - old.encoded) : 0.0;
 	const QString recDir = m_settings.recordFolder();
 	QDir().mkpath(recDir);
 	s["diskFreeGb"] = double(os_get_free_disk_space(recDir.toUtf8().constData())) / (1024.0 * 1024.0 * 1024.0);

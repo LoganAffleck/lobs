@@ -295,6 +295,10 @@ private:
 	QString m_root;
 	QVariantMap m_liveStats;
 	os_cpu_usage_info *m_cpu = nullptr;
+	// Frame counters at each stats poll over the last ~10 s, for the status bar's warning (LOBS-005).
+	struct FrameSample { qint64 ms; uint32_t lagged, rendered, skipped, encoded; };
+	QVector<FrameSample> m_frameSamples;
+	QElapsedTimer m_frameClock;
 	QElapsedTimer m_recClock;
 	void pollLiveStats();
 	obs_output *m_replayOutput = nullptr;

@@ -27,6 +27,10 @@ story("PF-07a", "render lag: startup vs idle vs snapshot load", () => {
 	const idle = sample("idle", 20);
 	check("idle near-empty scene: <1% lagged frames", idle.rendered && idle.lagged / idle.rendered < 0.01, idle);
 	check("idle renders ~60 fps", idle.rendered / 20 > 57, idle.rendered / 20);
+	const after = t.engineStats().live;
+	t.metric("afterIdle", after);
+	check("status bar lag uses the recent window, so an idle show reads ≤ 1% (LOBS-005)", (after.recentLaggedPct || 0) <= 1 && after.recentLaggedPct !== undefined,
+	      { recent: after.recentLaggedPct, cumulative: after.laggedPct });
 	const snap = sample("whileSnapshotting", 10, () => t.snapshot("", "lag.png", 0));
 	t.note("snapshot-load lag: " + snap.lagged + "/" + snap.rendered + " (harness side effect if high)");
 });
