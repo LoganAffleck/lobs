@@ -1786,6 +1786,9 @@ bool App::open(const QUrl &url)
 {
 	QFile f(url.toLocalFile());
 	if (!f.open(QIODevice::ReadOnly))
+	// Opening replaces what's on air, so not while live (like Import).
+	if (live())
+		return showToast("Stop streaming and recording to open another show"), false;
 		return showToast("Couldn't open " + url.toLocalFile()), false;
 	const QJsonDocument j = QJsonDocument::fromJson(f.readAll());
 	if (j.isObject() && isObsCollection(j.object()))

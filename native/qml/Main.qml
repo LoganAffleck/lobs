@@ -144,7 +144,8 @@ ApplicationWindow {
                 id: importButton
                 text: "Import"
                 variant: "ghost"
-                tip: "Import scenes and sources from OBS"
+                enabled: !app.live
+                tip: app.live ? "Stop streaming and recording to import a collection" : "Import scenes and sources from OBS"
                 onClicked: { importMenu.collections = app.obsCollections(); importMenu.popup(importButton, 0, importButton.height + 4) }
                 FMenu {
                     id: importMenu
