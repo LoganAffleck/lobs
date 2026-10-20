@@ -117,7 +117,7 @@ void AppSettings::applyMap(const QVariantMap &m)
 	str("preset", video.preset);
 	if (m.contains("recordFolder")) {
 		const QString f = m["recordFolder"].toString();
-		record.folder = (f == QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LOBS") ? QString() : f;
+		record.folder = (f == defaultRecordFolder()) ? QString() : f;
 	}
 	num("replaySeconds", record.replaySeconds);
 	record.replaySeconds = std::clamp(record.replaySeconds, 5, 600);
@@ -130,7 +130,19 @@ void AppSettings::applyMap(const QVariantMap &m)
 	str("recordQuality", record.quality);
 }
 
+QString &AppSettings::defaultRecordFolderOverride()
+{
+	static QString folder;
+	return folder;
+}
+
+QString AppSettings::defaultRecordFolder()
+{
+	const QString &o = defaultRecordFolderOverride();
+	return o.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LOBS" : o;
+}
+
 QString AppSettings::recordFolder() const
 {
-	return record.folder.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LOBS" : record.folder;
+	return record.folder.isEmpty() ? defaultRecordFolder() : record.folder;
 }

@@ -152,3 +152,10 @@ story("PJ-04", "Startup mode: only exact self-test flags use a throwaway show (L
 	];
 	tests.forEach(a => check("self-test launch: " + a[1], t.isSelfTestArgs(a)));
 });
+
+story("PJ-05", "Self-test recordings never go to the user's Videos folder (LOBS-003)", () => {
+	app.saveSettings({ recordFolder: "" }); // no folder chosen: the default applies
+	const f = String(app.settings.recordFolder || "");
+	t.note("default record folder in a self-test run: " + f);
+	check("the default record folder is the temp folder, not Videos", /lobs-selftest-recordings/.test(f) && !/Videos/i.test(f), f);
+});

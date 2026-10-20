@@ -506,8 +506,10 @@ int main(int argc, char *argv[])
 	const bool selfTest = isSelfTestRun(app.arguments());
 	const QString docPath = selfTest ? QDir::tempPath() + "/lobs-selftest.lobs.json"
 					 : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/current.lobs.json";
-	if (selfTest)
+	if (selfTest) {
 		QFile::remove(docPath);
+		AppSettings::defaultRecordFolderOverride() = QDir::tempPath() + "/lobs-selftest-recordings"; // LOBS-003
+	}
 
 	// --engine-smoketest <report.json>: headless check that this engine works with LOBS.
 	if (const int st = int(app.arguments().indexOf("--engine-smoketest")); st > 0 && st + 1 < app.arguments().size())
