@@ -246,9 +246,19 @@ story("LK-12", "Reset on a linked section", () => {
 	const aCrop = eff(p.a, "crop").l;
 	const said = app.toast !== toastBefore ? app.toast : "";
 	t.note("Reset crop in B: A crop.l " + 50 + " -> " + aCrop + ", still linked: " + linkedTogether(p.a, p.b, "crop") + ", feedback: '" + said + "'");
-	check("reset of a linked section tells the user other scenes changed", aCrop === 50 || /scene|linked|everywhere/i.test(said),
-	      "A was reset too (crop.l=" + aCrop + ") and feedback was '" + said + "'");
-	eq("reset is one undo step", app.undoLabel, "Reset crop");
+	// Product decision (2026-10-20): Reset is local. It unlinks this layer, keeping the other
+	// scenes' values, then resets only here; later edits apply to this layer alone.
+	eq("other scenes keep their value", aCrop, 50);
+	eq("this layer is reset", eff(p.b, "crop").l, 0);
+	check("this layer is unlinked for that section", !linkedTogether(p.a, p.b, "crop"));
+	check("other sections stay linked", linkedTogether(p.a, p.b, "transform"));
+	check("the user is told it was unlinked", /unlink/i.test(said), said);
+	sel(p.b); app.setCrop("l", 20);
+	eq("a later edit applies to this layer only", eff(p.a, "crop").l, 50);
+	app.undo();
+	app.undo();
+	eq("unlink and reset is one undo step", eff(p.b, "crop").l, 50);
+	check("undo relinks", linkedTogether(p.a, p.b, "crop"));
 });
 
 story("SC-03", "Duplicate scene: plain vs linked", () => {
