@@ -108,13 +108,13 @@ function broken · S3 minor/workaround exists · S4 cosmetic. Bugs are reported,
 - **Suggested fix:** reject reserved names (CON, PRN, AUX, NUL, COM1–9, LPT1–9, with or without an extension) and cap the name so the full file path stays under MAX_PATH.
 
 ## LOBS-011 · S3 · A linked group's own visibility and opacity don't link, and the group shows no link badge
-- **Area:** linking / groups · **Story:** LK-09 · **Status:** Open: needs a product decision (see the fix-pass report) · Confirmed (confirms lead R-01)
+- **Area:** linking / groups · **Story:** LK-09 · **Status:** Fixed in 1bdecc2 after the 2026-10-20 product decision · verified in `runs/20261020-185532` (was: Confirmed (confirms lead R-01))
 - **Detail:** Copying a group as **Linked** links its children but not the group itself (`links: {}`). Moving the group in B does move A's copy, because the move is applied to the linked children. Hiding the group or setting it to 50% opacity in B doesn't touch A. The Layers row for the group has no link badge, so the user can't tell which actions will propagate.
 - **Expected (PLAN §3.5):** groups are "copyable/linkable like any instance".
 - **Why it matters:** the same object behaves as linked for one action and unlinked for another, with no signifier (Norman; H4 consistency).
 
 ## LOBS-012 · S3 · "Reset" on a linked section silently resets every linked scene
-- **Area:** linking / UX · **Story:** LK-12 · **Status:** Open: needs a product decision (see the fix-pass report) · Confirmed
+- **Area:** linking / UX · **Story:** LK-12 · **Status:** Fixed in 1e9aa16 (test updated to the decision in 71a3153) after the 2026-10-20 product decision · verified in `runs/20261020-185532` (was: Confirmed)
 - **Repro:** linked pair, crop L=50 in B, then Reset on the Crop section → A's crop is also 0. No toast or confirmation, and the Undo label is "Reset crop".
 - **Note:** propagating is consistent with linking, but Reset reads as a local action. Say "Reset in 2 scenes" on the button or in a toast, or offer "Reset here only (unlink)" (H5, H1).
 
@@ -293,3 +293,5 @@ Truncated, empty and non-OBS files are refused ("Not an OBS scene collection") a
 ## Fix-pass notes (2026-10-20)
 - **OUT-03 (virtual camera)** died once in the full run `20261020-181644` and passed alone in `20261020-182650` and in `run-output` `20261020-182828-output`. Flaky, cause not found.
 - **OUT-04:** `received.flv` reports 0.00 s duration in ffprobe although the story passes. The receiver probably closes before the FLV duration is written. Not investigated.
+- **Live lock (follow-up to LOBS-006):** after the product decision, every edit to what's on air is locked: visibility, opacity, filters, rename, duplicate, link and reset, adding layers, and on-air source settings. Alt or Unlock overrides it, and Settings > Stream > Live lock turns it off (2dde2ba, LY-06).
+- **OUT-02 / OUT-03** fail or die only when `50-output` runs after other suites in one `run.ps1` call (`20261020-185702`). Alone they pass (`20261020-185848`). Flaky, cause not found.
