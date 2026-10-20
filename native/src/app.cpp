@@ -1534,6 +1534,8 @@ QString App::streamKeyUrl(const QString &service) const
 	return {};
 }
 
+static void placeBackground(Doc &d, const QString &sceneId); // defined with the scene helpers
+
 bool App::saveProject()
 {
 	if (m_projectFile.isEmpty())
@@ -1584,15 +1586,30 @@ bool App::createProject(const QString &name, const QString &folder)
 	if (!checkNewProject(name, folder).isEmpty())
 		return false;
 	const QString dir = cleanFolder(folder) + "/" + name.trimmed();
-	if (!QDir().mkpath(dir + "/assets"))
+	const QString file = dir + "/" + name.trimmed() + ".lobs.json";
+	// The project being left keeps its latest changes; if that can't be saved, stop here.
+	if (!m_projectFile.isEmpty() && !saveProject())
+		return false;
+	// Write the new project before switching to it, so a failure leaves the open show alone.
+	Doc fresh;
+	const QString scene = fresh.addScene("Scene").id;
+	placeBackground(fresh, scene);
+	if (!QDir().mkpath(dir + "/assets") || !writeShowFile(file, fresh)) {
+		QDir(dir).removeRecursively(); // it didn't exist before (checkNewProject)
 		return showToast("Couldn't create " + QDir::toNativeSeparators(dir)), false;
-	saveProject(); // the project being left keeps its latest changes
-	newDocument();
-	const bool ok = saveAs(QUrl::fromLocalFile(dir + "/" + name.trimmed() + ".lobs.json"));
+	}
+	m_store.replace(fresh, "New project");
+	m_poolSelection.clear();
+	m_editScene.clear();
+	editScene(scene);
+	m_projectFile = file;
+	QSettings().setValue("project/file", m_projectFile);
+	watchAssets();
+	adoptExternalFiles();
+	emit assetsChanged();
 	emit projectChanged();
-	if (ok)
-		showToast("Created " + name.trimmed());
-	return ok;
+	showToast("Created " + name.trimmed());
+	return true;
 }
 
 bool App::saveAs(const QUrl &url)

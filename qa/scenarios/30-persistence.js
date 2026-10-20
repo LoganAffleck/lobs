@@ -57,6 +57,21 @@ story("PJ-01b", "Save As to a folder that can't be written", () => {
 	check("next Save still works", app.saveProject(), "saveProject returned false (toast: '" + app.toast + "')");
 });
 
+story("PJ-01d", "A New Project that can't be created leaves the open show alone (LOBS-008)", () => {
+	fresh();
+	const good = t.out("pj01d.lobs.json");
+	check("save the current show", app.saveAs(t.url(good)));
+	placeColor("Still here", "#336699");
+	const before = t.docJson(), fileBefore = app.projectFile;
+	// Passes the name check, but the folder can't be made.
+	eq("name and folder look fine", app.checkNewProject("Unreachable", "Z:/no/such/drive"), "");
+	const ok = app.createProject("Unreachable", "Z:/no/such/drive");
+	check("createProject reports failure", !ok, app.toast);
+	check("the open show is unchanged", t.docJson() === before);
+	eq("the project file is unchanged", app.projectFile, fileBefore);
+	check("the show it left was saved first", t.readFile(good).indexOf("Still here") >= 0);
+});
+
 story("PJ-01c", "Open rejects junk without touching the current show", () => {
 	fresh();
 	placeColor("Keep me", "#abcdef");
