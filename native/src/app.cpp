@@ -70,7 +70,7 @@ static Doc loadDoc(const QString &path)
 			return Doc::fromJson(j.object());
 	}
 	// Self-tests (temp shows named "...test...") build on the sample show.
-	if (QFileInfo(path).fileName().contains("test", Qt::CaseInsensitive))
+	if (QFileInfo(path).fileName() == "lobs-selftest.lobs.json")
 		return Doc::sample();
 	// First run: one empty scene on a black background, with the mic and desktop audio ready.
 	Doc d;

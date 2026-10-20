@@ -103,3 +103,20 @@ story("PJ-02a", "Autosave writes the current show", () => {
 	try { parsed = JSON.parse(t.readFile(docPath)); } catch (e) {}
 	check("autosave is valid JSON", !!parsed);
 });
+
+story("PJ-04", "Startup mode: only exact self-test flags use a throwaway show (LOBS-001)", () => {
+	const normal = [
+		["C:/Users/testuser/AppData/Local/Programs/LOBS/LOBS.exe"],
+		["D:/Tests/latest-build/LOBS.exe"],
+		["C:/Users/contestant/Downloads/LOBS/LOBS.exe"],
+		["C:/LOBS/LOBS.exe", "C:/Users/me/shows/test.lobs.json"],
+		["C:/LOBS/LOBS.exe", "--use-engine", "32.2.2"],
+	];
+	normal.forEach(a => check("normal launch: " + a.join(" "), !t.isSelfTestArgs(a)));
+	const tests = [
+		["C:/LOBS/LOBS.exe", "--autotest", "out.json"],
+		["C:/LOBS/LOBS.exe", "--scenariotest", "s.js", "out"],
+		["C:/LOBS/LOBS.exe", "--snapshot", "p.png"],
+	];
+	tests.forEach(a => check("self-test launch: " + a[1], t.isSelfTestArgs(a)));
+});

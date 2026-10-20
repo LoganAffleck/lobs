@@ -2,6 +2,7 @@
 //   app - the App controller, exactly as QML sees it (invokables + properties)
 //   t   - TestApi below: waits, doc/engine/UI inspection, input synthesis, results
 // plus the helpers in kPrelude (story, check, eq, near, time, stats...).
+#include "startup_mode.h"
 #include "test_runner.h"
 
 #include "app.h"
@@ -163,6 +164,8 @@ public:
 	Q_INVOKABLE qint64 fileSize(const QString &path) const { return QFileInfo(path).size(); }
 	Q_INVOKABLE bool removeFile(const QString &path) const { return QFile::remove(path); }
 	Q_INVOKABLE QStringList listDir(const QString &path) const { return QDir(path).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot); }
+	// LOBS-001: which argument lists start a self-test (and so use a throwaway document).
+	Q_INVOKABLE bool isSelfTestArgs(const QStringList &args) const { return isSelfTestRun(args); }
 	Q_INVOKABLE QString tempDir() const { return QDir::tempPath(); }
 	Q_INVOKABLE QString appDataDir() const { return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation); }
 	Q_INVOKABLE bool include(const QString &file)

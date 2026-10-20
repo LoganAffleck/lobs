@@ -14,6 +14,7 @@
 #include "shellmeta.h"
 #include "shapes.h"
 #include "browser_view.h"
+#include "startup_mode.h"
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QUrl>
@@ -499,7 +500,7 @@ int main(int argc, char *argv[])
 	EngineUpdater engineUpdater(sel);
 
 	// Self-tests work on a throwaway document, so they never touch the user's show.
-	const bool selfTest = app.arguments().join(' ').contains("test");
+	const bool selfTest = isSelfTestRun(app.arguments());
 	const QString docPath = selfTest ? QDir::tempPath() + "/lobs-selftest.lobs.json"
 					 : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/current.lobs.json";
 	if (selfTest)
@@ -554,7 +555,7 @@ int main(int argc, char *argv[])
 	QTimer::singleShot(5000, [&]() {
 		if (engine.started())
 			engine_store::markGood(sel.version);
-		if (!app.arguments().join(' ').contains("test"))
+		if (!selfTest)
 			engineUpdater.checkIfDue();
 	});
 
