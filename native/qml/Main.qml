@@ -598,7 +598,10 @@ ApplicationWindow {
                                         : (modelData.scenes || []).length ? "Used in " + modelData.scenes.join(", ") : "Not used in any scene yet"
                                 }
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { text: "Delete source"; onTriggered: app.deleteSource(modelData.id) }
+                                FMenuItem { // LOBS-018: confirm when the source is in more than one scene
+                                    text: "Delete source"
+                                    onTriggered: (modelData.scenes || []).length > 1 ? deleteSourceDialog.ask(modelData) : app.deleteSource(modelData.id)
+                                }
                             }
                         }
                         Caption {
@@ -1845,3 +1848,28 @@ ApplicationWindow {
         }
     }
 }
+    FDialog {
+        id: deleteSourceDialog
+        objectName: "deleteSourceDialog"
+        property var row: ({})
+        title: "Delete " + (row.name || "source") + "?"
+        width: 400
+        function ask(r) { row = r; open() }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                text: "It's used in " + (deleteSourceDialog.row.scenes || []).length + " scenes (" + (deleteSourceDialog.row.scenes || []).join(", ")
+                      + "). Deleting it removes it from all of them. You can undo this."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                FButton { text: "Cancel"; variant: "ghost"; onClicked: deleteSourceDialog.close() }
+                FButton { text: "Delete from all scenes"; variant: "danger"; onClicked: { app.deleteSource(deleteSourceDialog.row.id); deleteSourceDialog.close() } }
+            }
+        }
+    }
