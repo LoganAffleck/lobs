@@ -381,7 +381,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         // Video first, then audio, with a divider between; the filter narrows it.
-                        model: RowsModel { rows: poolRowsFn() } // rows stay alive across changes
+                        model: RowsModel { rows: poolList.poolRowsFn() } // rows stay alive across changes
                         function poolRowsFn() {
                             const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (app.sourceStatus[r.id] || {}).detail, r.kindLabel))
                             const video = rows.filter(r => r.video), audio = rows.filter(r => !r.video)
