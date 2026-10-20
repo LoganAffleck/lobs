@@ -1639,6 +1639,9 @@ bool App::open(const QUrl &url)
 		return f.close(), importObs(url.toLocalFile());
 	if (!j.isObject() || j["version"].toInt() != 1)
 		return showToast("Not a LOBS document"), false;
+	// The project being left keeps its latest changes; if that can't be saved, don't open.
+	if (!m_projectFile.isEmpty() && !saveProject())
+		return false;
 	m_store.replace(withDefaultDevices(Doc::fromJson(j.object()), m_engine), "Open " + QFileInfo(f).fileName());
 	m_projectFile = url.toLocalFile();
 	QSettings().setValue("project/file", m_projectFile);
@@ -1695,6 +1698,12 @@ bool App::importObs(const QString &path)
 		}
 	}
 	const QString name = o["name"].toString(QFileInfo(path).completeBaseName());
+	// An import replaces the whole show, including what's on air, so not while live.
+	if (live())
+		return showToast("Stop streaming and recording to import a collection"), false;
+	// The project being left keeps its latest changes; if that can't be saved, don't import.
+	if (!m_projectFile.isEmpty() && !saveProject())
+		return false;
 	// Read-only: the OBS file is never written. The import becomes a new LOBS document.
 	m_store.replace(withDefaultDevices(imp.doc, m_engine), "Import " + name + " from OBS");
 	editScene(imp.programScene);
