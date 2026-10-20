@@ -200,7 +200,11 @@ void App::onStoreChanged()
 		m_engine->setProgramScene(m_editScene);
 	updateOverlay();
 	m_perfEditUs += pt.nsecsElapsed() / 1000;
-	m_saveTimer.start(400);
+	// Autosave 400 ms after the last edit, but never more than 2 s after the first unsaved one,
+	// so steady editing (holding a key, scrubbing) can't hold it off (LOBS-032).
+	if (!m_saveTimer.isActive())
+		m_unsavedSince.start();
+	m_saveTimer.start(std::max<qint64>(0, std::min<qint64>(400, 2000 - m_unsavedSince.elapsed())));
 	pt.restart();
 	rebuildHotkeys(); // scenes and sources come and go
 	m_perfHotkeyUs += pt.nsecsElapsed() / 1000;

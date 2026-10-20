@@ -15,6 +15,7 @@
 #include <QPointF>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QVariant>
 
@@ -451,6 +452,7 @@ private:
 	QString m_poolSelection;
 	QString m_toast;
 	QTimer m_toastTimer, m_saveTimer;
+	QElapsedTimer m_unsavedSince; // first edit since the last autosave
 	// Imported layers whose size waits on the engine learning each source's natural size.
 	QVector<lobs::ObsPlacement> m_pendingPlacements;
 	QTimer m_placeTimer;
