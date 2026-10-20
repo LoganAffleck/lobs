@@ -119,6 +119,7 @@ story("LY-02", "Group and ungroup keep what's on screen (R-02)", () => {
 	const before2 = t.docJson();
 	app.groupSelected();
 	t.note("grouping a child with a top-level layer: " + (t.docJson() === before2 ? "no-op" : "grouped " + JSON.stringify(t.doc().instances[app.inspector.id] && t.doc().instances[app.inspector.id].children)));
+	check("mixed-level group never silently leaves a layer out (LOBS-014)", t.docJson() === before2 && /same level/.test(app.toast), "unchanged=" + (t.docJson() === before2) + ", toast=" + app.toast);
 	integrity("integrity after mixed-level group");
 	const gid = Object.keys(t.doc().instances).filter(i => t.doc().instances[i].kind === "group")[0];
 	const pre = t.docJson();

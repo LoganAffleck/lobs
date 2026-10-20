@@ -1067,6 +1067,14 @@ void App::groupSelected()
 		return;
 	QString gid;
 	const QStringList ids = m_selection;
+	// LOBS-014: only layers at the same level group together; say so instead of leaving some out.
+	if (!ids.isEmpty()) {
+		Doc probe = doc();
+		const QStringList level = probe.siblings(ids.first());
+		for (const QString &id : ids)
+			if (!level.contains(id))
+				return showToast("To group layers, pick ones at the same level (all inside one group, or all outside)");
+	}
 	m_store.commit("Group layers", [&](Doc &d) { gid = d.groupLayers(ids); });
 	if (!gid.isEmpty())
 		m_selection = {gid}, updateOverlay(), emit docChanged();
