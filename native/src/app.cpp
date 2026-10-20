@@ -818,6 +818,9 @@ void App::renameScene(const QString &id, const QString &name)
 
 void App::deleteScene(const QString &id)
 {
+	// LOBS-013: a show always keeps one scene, so edit and program always have somewhere to point.
+	if (doc().sceneOrder.size() <= 1 && doc().sceneOrder.contains(id))
+		return showToast("A show needs at least one scene");
 	m_store.commit("Delete scene", [&](Doc &d) { d.deleteScene(id); });
 }
 

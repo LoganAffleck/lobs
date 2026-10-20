@@ -279,7 +279,7 @@ ApplicationWindow {
                                     FMenuItem { text: "Duplicate with linked layers"; onTriggered: app.duplicateScene(modelData.id, true) }
                                     FMenuItem { text: "Duplicate"; onTriggered: app.duplicateScene(modelData.id, false) }
                                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                    FMenuItem { text: "Delete scene"; onTriggered: app.deleteScene(modelData.id) }
+                                    FMenuItem { text: "Delete scene"; enabled: app.scenes.length > 1; onTriggered: app.deleteScene(modelData.id) }
                                 }
                             }
                         }
