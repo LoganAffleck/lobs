@@ -147,6 +147,8 @@ Rectangle {
     }
     FMenu {
         id: canvasMenu
+        FCopyToMenu {}
+        MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
         FMenu {
             id: progMenu
             title: "Open projector"

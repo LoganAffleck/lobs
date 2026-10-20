@@ -1184,6 +1184,7 @@ ApplicationWindow {
                             property var row: ({}) // the row it was opened on
                             FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", layerMenu.row.id, layerMenu.row.name) }
                             FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
+                            FCopyToMenu {}
                             FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
                             FMenuItem { text: "Ungroup"; enabled: layerMenu.row.group; onTriggered: app.ungroupSelected() }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
@@ -1847,7 +1848,6 @@ ApplicationWindow {
             }
         }
     }
-}
     FDialog {
         id: deleteSourceDialog
         objectName: "deleteSourceDialog"
@@ -1873,3 +1873,4 @@ ApplicationWindow {
             }
         }
     }
+}

@@ -131,3 +131,56 @@ story("V-02", "Save: Ctrl+S and toolbar Save on an already-saved project", () =>
 		      "file updated=" + saved2 + ", dialogs=" + JSON.stringify(dlg2));
 	}
 });
+
+story("MP-04u", "Delete source asks first when it's used in several scenes (LOBS-018)", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const k = addKind("camera", "Shared logo"); // Sources lists cameras, captures, audio and media
+	const a = k.inst, src = k.source;
+	copyTo(a, mkScene("B"), true);
+	app.editScene(A);
+	t.wait(300);
+	check("Sources lists the camera (LOBS-031)", ui("Shared logo").some(r => r.x < 400), ui("Shared logo"));
+	t.grab("mp04u-before.png");
+	// Right-click each "Shared logo" item until one opens the Sources row menu.
+	let opened = false;
+	for (let i = 0; i < ui("Shared logo").length && !opened; i++) {
+		t.clickItem("Shared logo", i, "", true); t.wait(300);
+		opened = has("Delete source");
+		if (!opened) { t.key("Escape"); t.wait(150); }
+	}
+	check("Sources row menu offers Delete source", opened);
+	if (!opened) return;
+	t.click("Delete source"); t.wait(400);
+	t.grab("mp04u-confirm.png");
+	check("a confirmation names the scenes before deleting", has("Delete from all scenes"));
+	check("nothing is deleted until confirmed", !!t.doc().sources[src]);
+	t.click("Cancel"); t.wait(300);
+	check("Cancel keeps the source", !!t.doc().sources[src]);
+});
+
+story("LK-01m", "Copy to is in the layer row's right-click menu (LOBS-020)", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const a = placeColor("Menu copy", "#00ffff");
+	const B = mkScene("Menu B");
+	app.editScene(A); sel(a); t.wait(300);
+	let opened = false;
+	for (let i = 0; i < ui("Menu copy").length && !opened; i++) {
+		t.clickItem("Menu copy", i, "", true); t.wait(300);
+		opened = has("Bring forward    Ctrl ]");
+		if (!opened) { t.key("Escape"); t.wait(150); }
+	}
+	check("layer row menu opens", opened);
+	if (!opened) return;
+	check("layer row menu offers Copy to", has("Copy to"));
+	t.click("Copy to"); t.wait(300);
+	t.clickItem("Menu B", ui("Menu B").length - 1); t.wait(300); // the submenu entry is the newest item
+	t.grab("lk01m-copyto.png");
+	const n = Object.keys(t.doc().instances).filter(i => t.doc().instances[i].sceneId === B).length;
+	t.click("Linked copy"); t.wait(300);
+	const copies = Object.keys(t.doc().instances).filter(i => t.doc().instances[i].sceneId === B && t.doc().instances[i].sourceId === t.doc().instances[a].sourceId);
+	check("Copy to ▸ scene ▸ Linked copy makes a linked copy there", copies.length === 1 && linkedTogether(a, copies[0], "transform"), { before: n, copies: copies });
+});
