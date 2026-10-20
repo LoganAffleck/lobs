@@ -68,8 +68,11 @@ static Doc loadDoc(const QString &path)
 	QFile f(path);
 	if (f.open(QIODevice::ReadOnly)) {
 		const QJsonDocument j = QJsonDocument::fromJson(f.readAll());
-		if (j.isObject() && j["version"].toInt() == 1)
-			return Doc::fromJson(j.object());
+		if (j.isObject() && j["version"].toInt() == 1) {
+			Doc d = Doc::fromJson(j.object());
+			d.repair();
+			return d;
+		}
 	}
 	// Self-tests (temp shows named "...test...") build on the sample show.
 	if (QFileInfo(path).fileName() == "lobs-selftest.lobs.json")
@@ -1744,7 +1747,10 @@ bool App::open(const QUrl &url)
 	// The project being left keeps its latest changes; if that can't be saved, don't open.
 	if (!m_projectFile.isEmpty() && !saveProject())
 		return false;
-	m_store.replace(withDefaultDevices(Doc::fromJson(j.object()), m_engine), "Open " + QFileInfo(f).fileName());
+	Doc opened = Doc::fromJson(j.object());
+	if (const int n = opened.repair()) // LOBS-016
+		showToast(QString("Repaired %1 broken reference%2 in this show").arg(n).arg(n == 1 ? "" : "s"));
+	m_store.replace(withDefaultDevices(opened, m_engine), "Open " + QFileInfo(f).fileName());
 	m_projectFile = url.toLocalFile();
 	QSettings().setValue("project/file", m_projectFile);
 	watchAssets();

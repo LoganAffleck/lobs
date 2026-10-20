@@ -174,6 +174,9 @@ struct Doc {
 	// --- io ---
 	QJsonObject toJson() const;
 	static Doc fromJson(const QJsonObject &o);
+	// Drops references to scenes, layers and links that don't exist (a hand-edited or damaged
+	// file). Returns how many it dropped.
+	int repair();
 	static Doc sample();
 
 private:

@@ -106,6 +106,8 @@ story("PJ-01c", "Open rejects junk without touching the current show", () => {
 		t.wait(500);
 		const L = app.layers;
 		check("dangling layer reference doesn't crash or show a ghost row", L.every(l => l.id !== "ins_ghost" || l.name), L.map(l => l.id + ":" + l.name));
+		check("the dangling id is dropped from the scene on load (LOBS-016)", t.doc().scenes[sid].layers.indexOf("ins_ghost") < 0, t.doc().scenes[sid].layers);
+		check("Open reports the repair", /Repaired/.test(app.toast), app.toast);
 	}
 });
 
