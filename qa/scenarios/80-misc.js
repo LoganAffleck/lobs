@@ -132,6 +132,7 @@ story("SA-02", "Setup assistant: server pings and recommendations", () => {
 	const lowUp = rec[0];
 	t.note("1 Mbps upload → " + lowUp.bitrate + " kbps at " + lowUp.outWidth + "x" + lowUp.outHeight + "@" + lowUp.fps);
 	check("a 1 Mbps upload isn't told to stream above its upload", lowUp.bitrate <= 1000 * 0.9, lowUp);
+	check("a slow upload is flagged so the setup assistant warns (LOBS-028)", lowUp.slow === true && rec.filter(r => r.upload >= 2000).every(r => r.slow === false), rec.map(r => [r.upload, r.slow]));
 	t.note("bandwidth test to Twitch needs a stream key; the QA profile has none (run it from your installed LOBS: MANUAL M-02)");
 });
 

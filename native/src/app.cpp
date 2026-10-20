@@ -1605,7 +1605,9 @@ QVariantMap App::recommendSettings(int measured, const QString &service) const
 {
 	// Leave a quarter of the measured upload free for the rest of your connection.
 	const int cap = service == "Twitch" ? 6000 : service.startsWith("YouTube") ? 9000 : 8000;
-	const int bitrate = std::clamp(int(measured * 0.75 / 100) * 100, 1500, cap);
+	// LOBS-028: never recommend more than that, even on a slow connection (the wizard warns below 2 Mbps).
+	const int bitrate = std::clamp(int(measured * 0.75 / 100) * 100, 100, cap);
+	const bool slow = measured < 2000;
 	int w = 1920, h = 1080, fps = 60;
 	if (bitrate < 2500) w = 852, h = 480, fps = 30;
 	else if (bitrate < 3500) w = 1280, h = 720, fps = 30;
@@ -1620,7 +1622,7 @@ QVariantMap App::recommendSettings(int measured, const QString &service) const
 	for (const QVariant &e : m_engine->encoders())
 		if (e.toMap()["id"].toString() == enc)
 			encName = e.toMap()["name"].toString();
-	return {{"bitrate", bitrate}, {"outWidth", w}, {"outHeight", h}, {"fps", fps}, {"encoder", "auto"}, {"encoderName", encName}, {"hardware", hardware}, {"measured", measured}};
+	return {{"bitrate", bitrate}, {"outWidth", w}, {"outHeight", h}, {"fps", fps}, {"encoder", "auto"}, {"encoderName", encName}, {"hardware", hardware}, {"measured", measured}, {"slow", slow}};
 }
 
 QString App::streamKeyUrl(const QString &service) const
