@@ -69,3 +69,14 @@ target_link_options(LOBS PRIVATE "/DELAYLOAD:obs.dll")
 
 # App folder (what the installer ships): dist/LOBS/LOBS.exe, engines in dist/LOBS/engine/<version>
 set_target_properties(LOBS PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/dist/LOBS)
+
+# QA build (qa/build-qa.bat): adds the --scenariotest runner and goes to dist/LOBS-qa instead,
+# so the shipped app never contains it.
+option(LOBS_TESTS "Build the QA scenario runner" OFF)
+if(LOBS_TESTS)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    target_sources(LOBS PRIVATE src/test_runner.cpp src/test_runner.h)
+    target_compile_definitions(LOBS PRIVATE LOBS_TESTS)
+    target_link_libraries(LOBS PRIVATE Qt6::Test psapi)
+    set_target_properties(LOBS PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/dist/LOBS-qa)
+endif()

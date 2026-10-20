@@ -46,6 +46,9 @@
 #include <QWindow>
 
 #include <windows.h>
+#ifdef LOBS_TESTS
+#include "test_runner.h"
+#endif
 
 QString installEngineZip(const QString &zip, const QString &version, QString *note);
 
@@ -374,6 +377,12 @@ int main(int argc, char *argv[])
 	QGuiApplication app(argc, argv);
 	app.setOrganizationName("LOBS");
 	app.setApplicationName("LOBS");
+#ifdef LOBS_TESTS
+	const int scenarioAt = int(app.arguments().indexOf("--scenariotest"));
+	const bool scenario = scenarioAt > 0 && scenarioAt + 2 < app.arguments().size();
+	if (scenario)
+		lobs_test::isolateProfile(app.arguments()[scenarioAt + 2]);
+#endif
 
 	// --render-svg <in.svg> <out.png> <size>: rasterize an SVG (used to build the app icon).
 	if (const int at = int(app.arguments().indexOf("--render-svg")); at > 0 && at + 3 < app.arguments().size()) {
@@ -536,6 +545,10 @@ int main(int argc, char *argv[])
 	qml.loadFromModule("LOBS", "Main");
 	if (qml.rootObjects().isEmpty())
 		return 1;
+#ifdef LOBS_TESTS
+	if (scenario)
+		lobs_test::startScenario(app, controller, engine, qml, app.arguments()[scenarioAt + 1], app.arguments()[scenarioAt + 2]);
+#endif
 	// The UI is up on this engine: it's good (ends a new engine's trial), then look for
 	// OBS updates at most once a day, a little after startup.
 	QTimer::singleShot(5000, [&]() {
