@@ -1564,9 +1564,16 @@ QString App::checkNewProject(const QString &name, const QString &folder) const
 	static const QRegularExpression bad(R"([<>:"/\\|?*])");
 	if (n.contains(bad) || n.endsWith('.'))
 		return "Names can't contain < > : \" / \\ | ? * or end with a period.";
+	// Windows device names can't be folder or file names (with or without an extension).
+	static const QRegularExpression reserved(R"(^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$)", QRegularExpression::CaseInsensitiveOption);
+	if (reserved.match(n).hasMatch())
+		return "\"" + n + "\" is reserved by Windows. Choose another name.";
 	const QString f = cleanFolder(folder);
 	if (f.isEmpty() || !QDir::isAbsolutePath(f))
 		return "Choose where to keep it.";
+	// The show file and its assets must fit in Windows' usual path limit (260), with room to spare.
+	if ((f + "/" + n + "/" + n + ".lobs.json").size() > 200)
+		return "That name is too long for this folder. Use a shorter name or folder.";
 	if (QFileInfo::exists(f + "/" + n))
 		return "There's already a folder named \"" + n + "\" there.";
 	return {};
