@@ -1976,8 +1976,6 @@ void App::nudge(int dx, int dy)
 		return;
 	if (m_selection.isEmpty())
 		return;
-	if (liveLocked())
-		return showToast("Live lock is on. Unlock to nudge while live.");
 	const QStringList ids = m_selection;
 	m_store.commit("Nudge", [&](Doc &d) {
 		QSet<QString> seen;
