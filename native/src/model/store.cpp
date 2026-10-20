@@ -15,6 +15,8 @@ void Store::commit(const QString &label, const std::function<void(Doc &)> &fn)
 		endGesture(QStringLiteral("Edit"));
 	Doc draft = m_doc;
 	fn(draft);
+	if (draft == m_doc) // LOBS-017: an edit that changes nothing adds no undo step
+		return;
 	m_past.push_back(m_current);
 	if (m_past.size() > kMaxHistory)
 		m_past.removeFirst();

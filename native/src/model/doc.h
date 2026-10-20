@@ -44,6 +44,7 @@ struct PropMap {
 	Crop crop;
 	QVector<Filter> filters;
 	Visibility visibility;
+	bool operator==(const PropMap &) const = default;
 };
 
 struct AudioSettings {
@@ -64,6 +65,7 @@ struct Transition {
 	QString id, name, type;
 	int durationMs = 300;
 	QVariantMap settings;
+	bool operator==(const Transition &) const = default;
 };
 
 struct Source {
@@ -80,18 +82,21 @@ struct Instance {
 	bool locked = false;
 	PropMap props;
 	QHash<Group, QString> links; // group -> link id
+	bool operator==(const Instance &) const = default;
 };
 
 struct Link {
 	QString id;
 	Group group = Group::Transform;
 	PropMap value; // only `group` is meaningful
+	bool operator==(const Link &) const = default;
 };
 
 struct Scene {
 	QString id, name, folder;
 	bool favorite = false;
 	QStringList layers; // top-level instance ids, top-first
+	bool operator==(const Scene &) const = default;
 };
 
 struct KindInfo {
@@ -175,6 +180,9 @@ private:
 	PropMap *propsFor(const QString &instId, Group g);
 	const PropMap &propsFor(const Instance &i, Group g) const;
 	void gcLinks();
+
+public:
+	bool operator==(const Doc &) const = default;
 };
 
 QString uid(const QString &prefix);
