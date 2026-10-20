@@ -1,5 +1,7 @@
 # LOBS
 
+Logan's OBS
+
 A streaming and recording app for Windows, built on OBS Studio's engine. Installs on its own,
 no OBS required.
 
