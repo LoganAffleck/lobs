@@ -121,9 +121,13 @@ story("V-02", "Save: Ctrl+S and toolbar Save on an already-saved project", () =>
 	      "file updated=" + saved + ", dialogs=" + JSON.stringify(dlg));
 	const tb = ui("Save").map((r, i) => Object.assign({ i: i }, r)).filter(r => r.text === "Save");
 	if (tb.length) {
+		placeColor("After toolbar save", "#ffffff");
 		t.clickItem("Save", tb[0].i); t.wait(1200);
 		const dlg2 = t.nativeDialogs();
-		t.note("toolbar Save: native dialogs " + JSON.stringify(dlg2) + ", file updated: " + (t.readFile(f).indexOf("After first save") >= 0));
+		const saved2 = t.readFile(f).indexOf("After toolbar save") >= 0;
+		t.note("toolbar Save: native dialogs " + JSON.stringify(dlg2) + ", file updated: " + saved2);
 		t.closeNativeDialogs(); t.wait(500);
+		check("toolbar Save saves an already-saved project without a Save As dialog", saved2 && dlg2.length === 0,
+		      "file updated=" + saved2 + ", dialogs=" + JSON.stringify(dlg2));
 	}
 });

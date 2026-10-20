@@ -36,7 +36,7 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+Shift+]", "Ctrl+}"]; onActivated: app.moveSelected(-1000) }
     Shortcut { sequences: ["Ctrl+Shift+[", "Ctrl+{"]; onActivated: app.moveSelected(1000) }
     Shortcut { sequence: "Delete"; onActivated: app.deleteSelected() }
-    Shortcut { sequence: "Ctrl+S"; onActivated: saveDialog.open() }
+    Shortcut { sequence: "Ctrl+S"; onActivated: { if (!app.saveProject()) saveDialog.open() } } // saves in place; Save As only for an unsaved show
     Shortcut { sequence: "Ctrl+O"; onActivated: openDialog.open() }
 
     FileDialog { id: saveDialog; fileMode: FileDialog.SaveFile; nameFilters: ["LOBS show (*.lobs.json)"]; defaultSuffix: "lobs.json"; onAccepted: app.saveAs(selectedFile) }
@@ -166,7 +166,7 @@ ApplicationWindow {
                     FMenuItem { text: "Choose a file..."; onTriggered: importDialog.open() }
                 }
             }
-            FButton { text: "Save"; variant: "ghost"; onClicked: saveDialog.open() }
+            FButton { text: "Save"; variant: "ghost"; tip: "Save (Ctrl+S)"; onClicked: { if (!app.saveProject()) saveDialog.open() } }
             FButton {
                 visible: ["available", "ready", "downloading", "installing", "testing"].indexOf(engineUpdater.state) >= 0
                 iconName: "refresh-cw"
