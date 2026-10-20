@@ -387,7 +387,7 @@ QStringList Doc::copyToScene(const QStringList &ids, const QString &sceneId, boo
 				kids << copy(c);
 			n.children = kids;
 		}
-		if (!linked || src.kind == "group") {
+		if (!linked) { // a linked group links its own properties too, like any layer (LOBS-011)
 			for (Group g : kGroups)
 				copyGroup(n.props, propsFor(src, g), g);
 			n.links.clear();
