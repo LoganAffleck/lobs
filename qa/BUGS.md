@@ -295,3 +295,5 @@ Truncated, empty and non-OBS files are refused ("Not an OBS scene collection") a
 - **OUT-04:** `received.flv` reports 0.00 s duration in ffprobe although the story passes. The receiver probably closes before the FLV duration is written. Not investigated.
 - **Live lock (follow-up to LOBS-006):** after the product decision, every edit to what's on air is locked: visibility, opacity, filters, rename, duplicate, link and reset, adding layers, and on-air source settings. Alt or Unlock overrides it, and Settings > Stream > Live lock turns it off (2dde2ba, LY-06).
 - **OUT-02 / OUT-03** fail or die only when `50-output` runs after other suites in one `run.ps1` call (`20261020-185702`). Alone they pass (`20261020-185848`). Flaky, cause not found.
+- **Open while live** replaced what was on air. Now refused, and Open/Import are disabled while live (2a7f1f3, PJ-06).
+- **An untitled show was lost on Open or Import.** These now ask Save… / Don't save / Cancel when it has changes (3b214b1, PJ-07, PJ-07u).
