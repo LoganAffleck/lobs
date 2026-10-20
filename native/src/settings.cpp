@@ -69,6 +69,7 @@ AppSettings AppSettings::load()
 	s.record.quality = r["quality"].toString(s.record.quality);
 	s.record.replaySeconds = r["replaySeconds"].toInt(s.record.replaySeconds);
 	s.hotkeys = o["hotkeys"].toObject().toVariantMap();
+	s.liveLock = o["liveLock"].toBool(true);
 	return s;
 }
 
@@ -81,6 +82,7 @@ void AppSettings::save() const
 		{"video", QJsonObject{{"outWidth", video.outWidth}, {"outHeight", video.outHeight}, {"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}}},
 		{"record", QJsonObject{{"folder", record.folder}, {"format", record.format}, {"quality", record.quality}, {"replaySeconds", record.replaySeconds}}},
 		{"hotkeys", QJsonObject::fromVariantMap(hotkeys)},
+		{"liveLock", liveLock},
 		{"transition", QJsonObject{{"type", transition.type}, {"durationMs", transition.durationMs}}},
 	};
 	QFile f(settingsPath());
@@ -94,7 +96,7 @@ QVariantMap AppSettings::toMap() const
 		{"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"outWidth", video.outWidth}, {"outHeight", video.outHeight},
 		{"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}, {"recordFolder", recordFolder()},
 		{"recordFormat", record.format}, {"recordQuality", record.quality},
-		{"transition", transition.type}, {"transitionMs", transition.durationMs}, {"replaySeconds", record.replaySeconds}, {"hotkeys", hotkeys}};
+		{"transition", transition.type}, {"transitionMs", transition.durationMs}, {"replaySeconds", record.replaySeconds}, {"hotkeys", hotkeys}, {"liveLock", liveLock}};
 }
 
 void AppSettings::applyMap(const QVariantMap &m)
@@ -123,6 +125,8 @@ void AppSettings::applyMap(const QVariantMap &m)
 	record.replaySeconds = std::clamp(record.replaySeconds, 5, 600);
 	if (m.contains("hotkeys"))
 		hotkeys = m["hotkeys"].toMap();
+	if (m.contains("liveLock"))
+		liveLock = m["liveLock"].toBool();
 	str("transition", transition.type);
 	num("transitionMs", transition.durationMs);
 	transition.durationMs = std::clamp(transition.durationMs, 50, 5000);

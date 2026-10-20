@@ -197,6 +197,23 @@ story("LY-06", "Live lock while recording", () => {
 	sel(r); app.moveSelected(1000);
 	check("reorder refused while live", t.doc().scenes[A].layers.indexOf(r) === 0, t.doc().scenes[A].layers);
 	check("refusals say why", app.toast.indexOf("Live lock") >= 0, app.toast);
+	// Everything else on air is locked too (product decision 2026-10-20).
+	const before = t.docJson();
+	sel(r); app.setVisibleFlag(false);
+	sel(r); app.setOpacity(0.3, true);
+	sel(r); app.addFilter("color");
+	sel(r); app.renameLayer(r, "Renamed live");
+	sel(r); app.duplicateSelected();
+	app.addSource("color", "Added live", "#00ff00", true);
+	sel(r); app.resetGroup("transform");
+	check("hide, opacity, filters, rename, duplicate, add and reset are refused on air", t.docJson() === before, "doc changed while locked");
+	// The setting turns live lock off.
+	app.saveSettings({ liveLock: false });
+	check("with Live lock off in Settings, nothing is locked", !app.liveLocked);
+	sel(r); app.setOpacity(0.5, true);
+	eq("edits go through with the setting off", eff(r, "visibility").opacity, 0.5);
+	app.saveSettings({ liveLock: true });
+	check("turning the setting back on locks again", app.liveLocked);
 	// Unlocking lifts it.
 	app.setLiveUnlock(true);
 	sel(r); app.setTransform("x", 300);

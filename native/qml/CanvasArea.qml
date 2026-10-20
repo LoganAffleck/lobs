@@ -28,9 +28,9 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     color: "#fecaca"; font.family: Pal.font; font.pixelSize: Pal.body
-                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? " · layers are locked. Hold Alt to move one." : " · live lock is off.")
+                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? " · editing what's on air is locked. Hold Alt, or unlock to edit." : " · live lock is off, edits go on air.")
                 }
-                FButton { text: app.liveLocked ? "Unlock" : "Lock again"; variant: "ghost"; onClicked: app.setLiveUnlock(app.liveLocked) }
+                FButton { visible: app.settings.liveLock !== false; text: app.liveLocked ? "Unlock" : "Lock again"; variant: "ghost"; onClicked: app.setLiveUnlock(app.liveLocked) }
             }
         }
         Item {

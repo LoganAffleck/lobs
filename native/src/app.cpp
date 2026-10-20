@@ -846,6 +846,8 @@ void App::duplicateScene(const QString &id, bool linked)
 
 void App::addSource(const QString &kind, const QString &name, const QString &extra, bool place)
 {
+	if (place && !liveSceneEditAllowed(m_editScene))
+		return;
 	QVariantMap settings;
 	if (kind == "text") settings = {{"text", extra.isEmpty() ? "Text" : extra}, {"size", 96}};
 	else if (kind == "color") settings = {{"color", extra.isEmpty() ? "#1d1b2e" : extra}};
@@ -881,6 +883,8 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 
 void App::placeSource(const QString &id)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	if (!doc().sources.contains(id) || !doc().scenes.contains(m_editScene))
 		return;
 	if (!kindInfo(doc().sources[id].kind).video)
@@ -940,6 +944,8 @@ QVariantList App::devices(const QString &sourceId, bool fresh)
 
 void App::setSourceSetting(const QString &id, const QString &key, const QVariant &value)
 {
+	if (!liveSourceEditAllowed(id))
+		return;
 	m_store.commit("Edit " + doc().sources.value(id).name, [&](Doc &d) { d.sources[id].settings[key] = value; });
 }
 
@@ -1044,6 +1050,8 @@ void App::dropLayer(const QString &id, const QString &target, const QString &mod
 
 void App::renameLayer(const QString &id, const QString &name)
 {
+	if (!liveEditAllowed({id}))
+		return;
 	if (!name.trimmed().isEmpty())
 		m_store.commit("Rename layer", [&](Doc &d) { d.instances[id].name = name.trimmed(); });
 }
@@ -1095,6 +1103,8 @@ void App::ungroupSelected()
 
 void App::duplicateSelected()
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	if (m_selection.isEmpty())
 		return;
 	QStringList made;
@@ -1112,6 +1122,8 @@ void App::duplicateSelected()
 
 void App::copySelectedTo(const QString &sceneId, bool linked)
 {
+	if (!liveSceneEditAllowed(sceneId))
+		return;
 	if (m_selection.isEmpty() || !doc().scenes.contains(sceneId))
 		return;
 	const QStringList ids = m_selection;
@@ -1316,6 +1328,8 @@ void App::setCrop(const QString &field, int value)
 
 void App::setOpacity(double value, bool final)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QStringList ids = m_selection;
 	auto fn = [&](Doc &d) {
 		for (const QString &id : ids) {
@@ -1329,6 +1343,8 @@ void App::setOpacity(double value, bool final)
 
 void App::setVisibleFlag(bool visible)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QStringList ids = m_selection;
 	m_store.commit(visible ? "Show layer" : "Hide layer", [&](Doc &d) {
 		for (const QString &id : ids) {
@@ -1367,6 +1383,8 @@ void App::fit(const QString &mode)
 
 void App::addFilter(const QString &type)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty() || !filterTypes().contains(type))
 		return;
@@ -1377,6 +1395,8 @@ void App::addFilter(const QString &type)
 
 void App::removeFilter(int index)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
@@ -1389,6 +1409,8 @@ void App::removeFilter(int index)
 
 void App::toggleFilter(int index)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
@@ -1401,6 +1423,8 @@ void App::toggleFilter(int index)
 
 void App::setFilterValue(int index, const QString &key, const QVariant &value, bool final)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
@@ -1424,6 +1448,8 @@ static bool groupFromName(const QString &name, Group &out)
 
 void App::linkGroup(const QString &group, const QString &targetId, bool keepMine)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	Group g;
 	if (id.isEmpty() || !groupFromName(group, g) || !doc().instances.contains(targetId))
@@ -1435,6 +1461,8 @@ void App::linkGroup(const QString &group, const QString &targetId, bool keepMine
 
 void App::resetGroup(const QString &group)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	Group g;
 	if (id.isEmpty() || !groupFromName(group, g))
@@ -1453,10 +1481,14 @@ void App::resetGroup(const QString &group)
 		case Group::Visibility: d.setVisibility(id, {}); break;
 		}
 	});
+	if (wasLinked)
+		showToast("Unlinked " + group + " and reset it here only");
 }
 
 void App::unlinkGroup(const QString &group)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	for (Group g : kGroups)
 		if (groupKey(g) == group && !id.isEmpty())
@@ -1481,8 +1513,6 @@ void App::liveEdit(const QString &key, const QString &label, const std::function
 
 // ---------- history & files ----------
 
-	if (wasLinked)
-		showToast("Unlinked " + group + " and reset it here only");
 void App::undo()
 {
 	if (m_store.canUndo()) {
@@ -1902,6 +1932,25 @@ void App::toggleRecording()
 	m_engine->recording() ? m_engine->stopRecording() : m_engine->startRecording();
 }
 
+bool App::liveSceneEditAllowed(const QString &sceneId)
+{
+	if (!liveLocked() || sceneId != m_engine->programScene() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
+		return true;
+	showToast("Live lock is on. Hold Alt or unlock to change layers on air.");
+	return false;
+}
+
+bool App::liveSourceEditAllowed(const QString &sourceId)
+{
+	if (!liveLocked() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
+		return true;
+	const QString program = m_engine->programScene();
+	for (const Instance &i : doc().instances)
+		if (i.sourceId == sourceId && i.sceneId == program)
+			return showToast("Live lock is on. Hold Alt or unlock to change sources on air."), false;
+	return true;
+}
+
 bool App::liveEditAllowed(const QStringList &ids)
 {
 	if (!liveLocked() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
@@ -1917,6 +1966,8 @@ bool App::liveEditAllowed(const QStringList &ids)
 
 void App::nudge(int dx, int dy)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	if (m_selection.isEmpty())
 		return;
 	if (liveLocked())
@@ -1956,6 +2007,8 @@ void App::poolDragMove(const QString &sourceId, double x, double y)
 
 void App::poolDrop(const QString &sourceId, double x, double y)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	m_dropBoxes.clear();
 	if (!doc().sources.contains(sourceId) || !doc().scenes.contains(m_editScene))
 		return updateOverlay();
@@ -2077,6 +2130,8 @@ void App::refreshSourceStatus()
 
 void App::toggleInScene(const QString &sourceId)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	if (!doc().sources.contains(sourceId) || !doc().scenes.contains(m_editScene))
 		return;
 	QStringList here;
@@ -2690,6 +2745,8 @@ void App::assetDragMove(const QString &path, double x, double y)
 
 void App::assetDrop(const QString &path, double x, double y)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	m_dropBoxes.clear();
 	if (!doc().scenes.contains(m_editScene) || assetKind(path) == "other")
 		return updateOverlay();
@@ -3412,6 +3469,8 @@ void App::setToolStrokeWidth(int w) { m_toolStrokeWidth = std::clamp(w, 0, 64); 
 // Mouse up with a drawing tool: make the layer. A click without a drag gets a default size.
 void App::finishCreate()
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	m_engine->setInk({}, "#ffffff", 1);
 	m_engine->setGhost({}, {});
 	m_dropBoxes.clear();

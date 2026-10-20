@@ -40,6 +40,7 @@ struct AppSettings {
 	StreamSettings stream;
 	VideoSettings video;
 	RecordSettings record;
+	bool liveLock = true; // while streaming or recording, layers on air need Alt or Unlock to change
 
 	static AppSettings load();
 	void save() const;
