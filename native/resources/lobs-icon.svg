@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- LOBS: a simply cut round amethyst. Light enters at the top left, is colored by the
+       stone, and leaves the lower right as a violet glow. Edges are arcs (no clip paths),
+       so every renderer draws it the same. -->
+  <defs>
+    <linearGradient id="table" x1="0.15" y1="0.05" x2="0.85" y2="0.95">
+      <stop offset="0" stop-color="#fbf6ff"/>
+      <stop offset="0.5" stop-color="#d6b3ff"/>
+      <stop offset="1" stop-color="#a466f5"/>
+    </linearGradient>
+    <radialGradient id="exit" gradientUnits="userSpaceOnUse" cx="395" cy="296" r="160">
+      <stop offset="0" stop-color="#f4b0ff" stop-opacity="0.6"/>
+      <stop offset="0.5" stop-color="#b862ff" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#8a3dff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="entry" gradientUnits="userSpaceOnUse" cx="160" cy="140" r="180">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="edge" cx="50%" cy="50%" r="50%">
+      <stop offset="0.8" stop-color="#12002a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#12002a" stop-opacity="0.4"/>
+    </radialGradient>
+  </defs>
+  <path d="M251.8,119.6 L256.0,8.0 A248,248 0 0 1 491.9,179.4 L363.3,205.1 Z" fill="#a465f4" stroke="#a465f4" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M363.3,205.1 L491.9,179.4 A248,248 0 0 1 401.8,456.6 L324.7,341.7 Z" fill="#4f179f" stroke="#4f179f" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M324.7,341.7 L401.8,456.6 A248,248 0 0 1 110.2,456.6 L182.9,336.2 Z" fill="#340b72" stroke="#340b72" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M182.9,336.2 L110.2,456.6 A248,248 0 0 1 20.1,179.4 L138.2,204.4 Z" fill="#6c28cc" stroke="#6c28cc" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M138.2,204.4 L20.1,179.4 A248,248 0 0 1 256.0,8.0 L251.8,119.6 Z" fill="#c48cff" stroke="#c48cff" stroke-width="1" stroke-linejoin="round"/>
+  <polygon points="251.8,119.6 363.3,205.1 324.7,341.7 182.9,336.2 138.2,204.4" fill="url(#table)" fill-opacity="0.94"/>
+  <circle cx="256" cy="256" r="248" fill="url(#exit)"/>
+  <circle cx="256" cy="256" r="248" fill="url(#entry)"/>
+  <circle cx="256" cy="256" r="248" fill="url(#edge)"/>
+</svg>

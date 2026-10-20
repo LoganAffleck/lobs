@@ -1,0 +1,46 @@
+import QtQuick
+import QtQuick.Controls
+
+// Dropdown menu: one surface step above the page, rounded, rows highlight on hover.
+Menu {
+    id: m
+    padding: 4
+    z: 1000 // above full-page overlays like Settings
+    delegate: FMenuItem {}
+    // The engine's preview is a native window above all QML; step it aside while open.
+    property bool coversPreview: false
+    // True if this popup's rect overlaps the canvas preview (a native window above all QML).
+    function overlapsPreview(popup) {
+        const w = popup.parent ? popup.parent.Window.window : null
+        const p = w ? w.previewItem : null
+        if (!p || !p.visible || !popup.parent) return false
+        const a = p.mapToGlobal(0, 0), b = popup.parent.mapToGlobal(popup.x, popup.y)
+        const pw = Math.max(popup.width, popup.implicitWidth), ph = Math.max(popup.height, popup.implicitHeight)
+        return b.x < a.x + p.width && b.x + pw > a.x && b.y < a.y + p.height && b.y + ph > a.y
+    }
+    // Size and position settle after aboutToShow (popup() at the cursor, contents laid out),
+    // so check again once they do; otherwise the native preview can cut the menu off.
+    function recheck() {
+        if (!visible || coversPreview) return
+        if (overlapsPreview(m)) { coversPreview = true; app.popupOpened() }
+    }
+    onAboutToShow: { coversPreview = overlapsPreview(m); if (coversPreview) app.popupOpened() }
+    onOpened: recheck()
+    onXChanged: recheck()
+    onYChanged: recheck()
+    onWidthChanged: recheck()
+    onHeightChanged: recheck()
+    onAboutToHide: if (coversPreview) { coversPreview = false; app.popupClosed() }
+    enter: Transition {
+        // A plain fade: scaling made menus wider than their field look like they slide in.
+        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Pal.fast }
+    }
+    exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: Pal.fast } }
+    background: Rectangle {
+        implicitWidth: 220
+        radius: Pal.radius + 2
+        color: Pal.s4
+        border.width: 1
+        border.color: Pal.border
+    }
+}

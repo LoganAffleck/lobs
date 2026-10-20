@@ -1,0 +1,2 @@
+// The app icon (exe, taskbar, Start menu, installer shortcut).
+IDI_APPICON ICON "lobs.ico"

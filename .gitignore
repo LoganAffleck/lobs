@@ -1,0 +1,22 @@
+# Build output and installers
+native/build/
+native/dist/
+obs-plugin/build/
+app/dist/
+app/node_modules/
+
+# Downloaded or separately cloned dependencies (see BUILDING.md)
+native/deps/downloads/
+native/deps/tools/
+native/deps/redist/
+native/deps/KDDockWidgets/
+native/deps/kddw/
+native/deps/kddw-build/
+obs-plugin/deps/obs-studio/
+native/runtime/
+
+# Logs and test output
+*.log
+autotest.json
+streamtest.json
+native/resources/icon-preview.html

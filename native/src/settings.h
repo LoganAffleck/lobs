@@ -1,0 +1,49 @@
+// App settings (not part of a show): streaming, encoder, video and recording.
+// Saved to %APPDATA%/LOBS/LOBS/settings.json. The stream key is encrypted with Windows
+// DPAPI (CryptProtectData), so only this Windows user on this PC can read it back.
+#pragma once
+
+#include <QString>
+#include <QVariantMap>
+
+struct StreamSettings {
+	QString service = "Twitch"; // a name from rtmp-services, or "Custom"
+	QString server = "auto";
+	QString customUrl;
+	QString key;
+	int bitrate = 6000; // kbps
+	int audioBitrate = 160;
+};
+
+struct VideoSettings {
+	int outWidth = 1920, outHeight = 1080;
+	int fps = 60;
+	QString encoder = "auto"; // auto | obs_nvenc_h264_tex | obs_qsv11_v2 | h264_texture_amf | obs_x264
+	QString preset = "quality"; // speed | balanced | quality (mapped per encoder)
+};
+
+struct RecordSettings {
+	QString folder; // empty = Videos/LOBS
+	QString format = "mp4"; // mp4 | mkv | mov
+	QString quality = "high"; // stream (reuse stream encoder) | high | indistinguishable
+	int replaySeconds = 30;   // replay buffer length
+};
+
+struct TransitionSettings {
+	QString type = "fade"; // cut | fade | slide | swipe | fade_to_black
+	int durationMs = 300;
+};
+
+struct AppSettings {
+	TransitionSettings transition;
+	QVariantMap hotkeys; // action -> key combo ("Ctrl+Shift+F1"); see hotkeys.h
+	StreamSettings stream;
+	VideoSettings video;
+	RecordSettings record;
+
+	static AppSettings load();
+	void save() const;
+	QVariantMap toMap() const; // for QML (stream key never included, only whether one is set)
+	void applyMap(const QVariantMap &m);
+	QString recordFolder() const;
+};
