@@ -159,3 +159,28 @@ story("PJ-05", "Self-test recordings never go to the user's Videos folder (LOBS-
 	t.note("default record folder in a self-test run: " + f);
 	check("the default record folder is the temp folder, not Videos", /lobs-selftest-recordings/.test(f) && !/Videos/i.test(f), f);
 });
+
+story("PJ-06", "Open is refused while live, so what's on air never changes underneath you", () => {
+	fresh();
+	const f = t.out("pj06.lobs.json");
+	app.saveAs(t.url(f));
+	placeColor("On air", "#00ff00");
+	const before = t.docJson();
+	t.startRecording();
+	t.waitUntil(() => app.live, 10000);
+	const ok = app.open(t.url(f));
+	check("Open returns false while live", ok === false, ok);
+	check("the show on air is untouched", t.docJson() === before);
+	check("the user is told why", /Stop streaming and recording/.test(app.toast), app.toast);
+	t.stopRecording();
+	t.waitUntil(() => !app.live, 10000);
+});
+
+story("PJ-07", "An untitled show reports unsaved changes; a fresh one doesn't", () => {
+	app.newDocument();
+	check("a brand-new untitled show has nothing to lose", app.unsavedShow === false);
+	placeColor("Work", "#123456");
+	check("an edited untitled show has unsaved changes", app.unsavedShow === true);
+	app.saveAs(t.url(t.out("pj07.lobs.json")));
+	check("a saved project isn't untitled", app.unsavedShow === false);
+});

@@ -41,6 +41,8 @@ class App : public QObject {
 	Q_PROPERTY(int thumbTick READ thumbTick NOTIFY thumbTickChanged)
 	Q_PROPERTY(bool streaming READ streaming NOTIFY engineChanged)
 	Q_PROPERTY(bool live READ live NOTIFY engineChanged)
+	// An untitled show with changes since New/Sample/Import: Open and Import ask to save it first.
+	Q_PROPERTY(bool unsavedShow READ unsavedShow NOTIFY docChanged)
 	Q_PROPERTY(bool liveLocked READ liveLocked NOTIFY engineChanged)
 	Q_PROPERTY(QVariantMap streamStats READ streamStats NOTIFY streamStatsChanged)
 	Q_PROPERTY(QVariantMap settings READ settings NOTIFY settingsChanged)
@@ -208,6 +210,7 @@ public:
 	// going live
 	bool streaming() const { return m_engine->streaming(); }
 	bool live() const { return m_engine->live(); }
+	bool unsavedShow() const { return m_projectFile.isEmpty() && !(doc() == m_cleanDoc); }
 	bool liveLocked() const { return m_engine->live() && m_engine->settings().liveLock && !m_liveUnlock; }
 	// LOBS-006: the one check for edits that move, resize, crop, reorder or remove layers in the
 	// scene viewers see. Refuses (with a toast) while live lock is on, unless Alt is held.
@@ -431,6 +434,7 @@ private:
 	QString m_docPath;
 	Hotkeys *m_hotkeys = nullptr;
 	QString m_projectFile; // the saved show this session belongs to ("" = unsaved)
+	lobs::Doc m_cleanDoc; // an untitled show matching this has nothing to lose (see unsavedShow)
 	QFileSystemWatcher m_assetWatch;
 	QVariantMap m_sourceStatus;
 	int m_sourceTick = 0;

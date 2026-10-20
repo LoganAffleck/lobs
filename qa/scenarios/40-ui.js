@@ -184,3 +184,16 @@ story("LK-01m", "Copy to is in the layer row's right-click menu (LOBS-020)", () 
 	const copies = Object.keys(t.doc().instances).filter(i => t.doc().instances[i].sceneId === B && t.doc().instances[i].sourceId === t.doc().instances[a].sourceId);
 	check("Copy to ▸ scene ▸ Linked copy makes a linked copy there", copies.length === 1 && linkedTogether(a, copies[0], "transform"), { before: n, copies: copies });
 });
+
+story("PJ-07u", "Open asks to save an untitled show with changes", () => {
+	app.newDocument(); t.wait(200);
+	placeColor("Unsaved work", "#abcdef"); t.wait(200);
+	const before = t.docJson();
+	t.clickItem("Open", ui("Open").map((r, i) => Object.assign({ i: i }, r)).filter(r => r.text === "Open" && r.y < 40)[0].i); t.wait(400);
+	t.grab("pj07u-prompt.png");
+	check("a save prompt appears", has("Save this show first?"));
+	check("no file picker yet", t.nativeDialogs().length === 0, t.nativeDialogs());
+	t.click("Cancel"); t.wait(300);
+	check("Cancel keeps the show", t.docJson() === before);
+	t.closeNativeDialogs();
+});

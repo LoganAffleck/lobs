@@ -1556,6 +1556,7 @@ void App::newDocument()
 	m_poolSelection.clear();
 	m_editScene.clear();
 	addScene();
+	m_cleanDoc = doc();
 }
 
 void App::loadSample()
@@ -1563,6 +1564,7 @@ void App::loadSample()
 	m_store.replace(withDefaultDevices(Doc::sample(), m_engine), "Load sample show");
 	forgetProject();
 	editScene(doc().sceneOrder.value(0));
+	m_cleanDoc = doc();
 }
 
 // ---------- setup assistant ----------
@@ -1784,11 +1786,11 @@ bool App::saveAs(const QUrl &url)
 
 bool App::open(const QUrl &url)
 {
-	QFile f(url.toLocalFile());
-	if (!f.open(QIODevice::ReadOnly))
 	// Opening replaces what's on air, so not while live (like Import).
 	if (live())
 		return showToast("Stop streaming and recording to open another show"), false;
+	QFile f(url.toLocalFile());
+	if (!f.open(QIODevice::ReadOnly))
 		return showToast("Couldn't open " + url.toLocalFile()), false;
 	const QJsonDocument j = QJsonDocument::fromJson(f.readAll());
 	if (j.isObject() && isObsCollection(j.object()))
@@ -1865,6 +1867,7 @@ bool App::importObs(const QString &path)
 		return false;
 	// Read-only: the OBS file is never written. The import becomes a new LOBS document.
 	m_store.replace(withDefaultDevices(imp.doc, m_engine), "Import " + name + " from OBS");
+	m_cleanDoc = doc(); // the OBS file still has it all
 	editScene(imp.programScene);
 	take();
 	// Sources only report their size while running, so run every scene until sizes settle.

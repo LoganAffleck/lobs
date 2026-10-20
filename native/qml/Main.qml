@@ -37,9 +37,24 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+Shift+[", "Ctrl+{"]; onActivated: app.moveSelected(1000) }
     Shortcut { sequence: "Delete"; onActivated: app.deleteSelected() }
     Shortcut { sequence: "Ctrl+S"; onActivated: { if (!app.saveProject()) saveDialog.open() } } // saves in place; Save As only for an unsaved show
-    Shortcut { sequence: "Ctrl+O"; onActivated: openDialog.open() }
+    Shortcut { sequence: "Ctrl+O"; enabled: !app.live; onActivated: win.guardUnsaved(() => openDialog.open()) }
 
-    FileDialog { id: saveDialog; fileMode: FileDialog.SaveFile; nameFilters: ["LOBS show (*.lobs.json)"]; defaultSuffix: "lobs.json"; onAccepted: app.saveAs(selectedFile) }
+    FileDialog {
+        id: saveDialog; fileMode: FileDialog.SaveFile; nameFilters: ["LOBS show (*.lobs.json)"]; defaultSuffix: "lobs.json"
+        onAccepted: {
+            app.saveAs(selectedFile)
+            const next = win.afterSave
+            win.afterSave = null
+            if (next && app.projectFile !== "") next() // saved: carry on with Open or Import
+        }
+        onRejected: win.afterSave = null
+    }
+    // An untitled show with changes asks to be saved before Open or Import replaces it.
+    property var afterSave: null
+    function guardUnsaved(next) {
+        if (app.unsavedShow) { unsavedDialog.next = next; unsavedDialog.open() }
+        else next()
+    }
     FileDialog { id: importDialog; fileMode: FileDialog.OpenFile; nameFilters: ["OBS scene collection (*.json)"]; onAccepted: app.importObs(selectedFile.toString().replace(/^file:\/{3}/, "")) }
     FileDialog { id: openDialog; fileMode: FileDialog.OpenFile; nameFilters: ["LOBS show (*.lobs.json *.json)"]; onAccepted: app.open(selectedFile) }
 
@@ -139,7 +154,7 @@ ApplicationWindow {
             Text { text: "LOBS"; color: Pal.fg; font.family: Pal.font; font.pixelSize: 15; font.weight: 700; Layout.rightMargin: 4 }
             FButton { iconName: "settings"; variant: "ghost"; onClicked: settingsPage.show(); tip: "Settings  Ctrl ,"; Layout.rightMargin: 8 }
             FButton { text: "New"; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "Start a new project in its own folder" }
-            FButton { text: "Open"; variant: "ghost"; onClicked: openDialog.open() }
+            FButton { text: "Open"; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : "Open a show (Ctrl+O)"; onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
                 id: importButton
                 text: "Import"
@@ -157,14 +172,14 @@ ApplicationWindow {
                         delegate: FMenuItem {
                             required property var modelData
                             text: "OBS: " + modelData.name + "  ·  " + modelData.scenes + " scenes"
-                            onTriggered: app.importObs(modelData.path)
+                            onTriggered: { const p = modelData.path; win.guardUnsaved(() => app.importObs(p)) }
                         }
                         onObjectAdded: (i, o) => importMenu.insertItem(i, o)
                         onObjectRemoved: (i, o) => importMenu.removeItem(o)
                     }
                     FMenuItem { text: "No OBS scene collections found"; enabled: false; visible: importMenu.collections.length === 0; height: visible ? implicitHeight : 0 }
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                    FMenuItem { text: "Choose a file..."; onTriggered: importDialog.open() }
+                    FMenuItem { text: "Choose a file..."; onTriggered: win.guardUnsaved(() => importDialog.open()) }
                 }
             }
             FButton { text: "Save"; variant: "ghost"; tip: "Save (Ctrl+S)"; onClicked: { if (!app.saveProject()) saveDialog.open() } }
@@ -1846,6 +1861,29 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: renameDialog.close() }
                 FButton { text: "Rename"; variant: "primary"; onClicked: renameDialog.apply() }
+            }
+        }
+    }
+    FDialog {
+        id: unsavedDialog
+        property var next: null
+        title: "Save this show first?"
+        width: 400
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                text: "This show has never been saved. If you don't save it, its changes are lost."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                FButton { text: "Cancel"; variant: "ghost"; onClicked: unsavedDialog.close() }
+                FButton { text: "Don't save"; variant: "secondary"; onClicked: { const n = unsavedDialog.next; unsavedDialog.close(); n() } }
+                FButton { text: "Save…"; variant: "primary"; onClicked: { win.afterSave = unsavedDialog.next; unsavedDialog.close(); saveDialog.open() } }
             }
         }
     }
