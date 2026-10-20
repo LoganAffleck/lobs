@@ -55,6 +55,7 @@ struct AudioSettings {
 	bool mono = false;       // downmix to mono (e.g. a mic that only comes in on one side)
 	double balance = 0.5;    // 0 = left, 0.5 = center, 1 = right
 	int syncMs = 0;          // delay against video, ms (OBS's Sync Offset)
+	bool operator==(const AudioSettings &) const = default;
 };
 
 // A scene transition (how Show switches scenes). type is the kind (cut, fade, swipe, slide,
@@ -70,6 +71,7 @@ struct Source {
 	QVariantMap settings;
 	bool hasAudio = false;
 	AudioSettings audio;
+	bool operator==(const Source &) const = default;
 };
 
 struct Instance {

@@ -20,11 +20,11 @@
 
 class App : public QObject {
 	Q_OBJECT
-	Q_PROPERTY(QVariantList scenes READ scenes NOTIFY docChanged)
-	Q_PROPERTY(QVariantList pool READ pool NOTIFY docChanged)
-	Q_PROPERTY(QVariantList layers READ layers NOTIFY docChanged)
-	Q_PROPERTY(QVariantMap inspector READ inspector NOTIFY docChanged)
-	Q_PROPERTY(QVariantList history READ history NOTIFY docChanged)
+	Q_PROPERTY(QVariantList scenes READ scenes NOTIFY scenesChanged)
+	Q_PROPERTY(QVariantList pool READ pool NOTIFY poolChanged)
+	Q_PROPERTY(QVariantList layers READ layers NOTIFY layersChanged)
+	Q_PROPERTY(QVariantMap inspector READ inspector NOTIFY inspectorChanged)
+	Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
 	Q_PROPERTY(int historyIndex READ historyIndex NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneId READ editSceneId NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneName READ editSceneName NOTIFY docChanged)
@@ -45,7 +45,7 @@ class App : public QObject {
 	Q_PROPERTY(QVariantMap settings READ settings NOTIFY settingsChanged)
 	Q_PROPERTY(QVariantList encoders READ encoders CONSTANT)
 	Q_PROPERTY(QStringList services READ services CONSTANT)
-	Q_PROPERTY(QVariantList mixer READ mixer NOTIFY docChanged)
+	Q_PROPERTY(QVariantList mixer READ mixer NOTIFY mixerChanged)
 	Q_PROPERTY(QVariantMap levels READ levels NOTIFY levelsChanged)
 
 public:
@@ -83,7 +83,9 @@ public:
 	Q_INVOKABLE void renameSource(const QString &id, const QString &name);
 	Q_INVOKABLE void deleteSource(const QString &id);
 	Q_INVOKABLE void selectSource(const QString &id);
-	Q_INVOKABLE QVariantList devices(const QString &sourceId);
+	// Devices or windows a source can use. Asking Windows takes 100-500 ms, so the list is kept
+	// for a few seconds; fresh = true (opening the menu) always asks again.
+	Q_INVOKABLE QVariantList devices(const QString &sourceId, bool fresh = false);
 	Q_INVOKABLE void setSourceSetting(const QString &id, const QString &key, const QVariant &value);
 	// Audio effects on a pool source (mixer).
 	Q_INVOKABLE QVariantList audioFxTypes() const;
@@ -268,7 +270,7 @@ public:
 	Q_INVOKABLE void closeProjectors(); // before the engine shuts down
 	void requestCanvasMenu(QPointF windowPos) { emit canvasMenuRequested(windowPos.x(), windowPos.y()); }
 	// Transitions (stored in the show): the list, the one Show uses, and editing them.
-	Q_PROPERTY(QVariantList transitions READ transitions NOTIFY docChanged)
+	Q_PROPERTY(QVariantList transitions READ transitions NOTIFY transitionsChanged)
 	Q_PROPERTY(QString currentTransition READ currentTransition NOTIFY docChanged)
 	QVariantList transitions() const;
 	QString currentTransition() const { const lobs::Transition *t = doc().transition(); return t ? t->id : QString(); }
@@ -320,7 +322,7 @@ public:
 	Q_PROPERTY(bool vcamActive READ vcamActive NOTIFY engineChanged)
 	Q_PROPERTY(bool vcamAvailable READ vcamAvailable NOTIFY engineChanged)
 	Q_PROPERTY(QVariantMap liveStats READ liveStats NOTIFY engineChanged)
-	Q_PROPERTY(QVariantList hotkeyActions READ hotkeyActions NOTIFY docChanged)
+	Q_PROPERTY(QVariantList hotkeyActions READ hotkeyActions NOTIFY hotkeyActionsChanged)
 	bool replayActive() const { return m_engine->replayActive(); }
 	bool vcamActive() const { return m_engine->vcamActive(); }
 	bool vcamAvailable() const { return m_engine->vcamAvailable(); }
@@ -374,6 +376,15 @@ public:
 
 signals:
 	void docChanged();
+	// The big lists, each emitted only when its contents changed (so QML rebuilds only those).
+	void scenesChanged();
+	void poolChanged();
+	void layersChanged();
+	void inspectorChanged();
+	void historyChanged();
+	void mixerChanged();
+	void transitionsChanged();
+	void hotkeyActionsChanged();
 	void engineChanged();
 	void toastChanged();
 	void assetsChanged();
@@ -449,6 +460,12 @@ private:
 	int m_toolStrokeWidth = 6;
 	int m_laserTrailMs = 500;
 	Eyedropper m_eyedropper;
+	struct DeviceList { QVariantList items; qint64 at = 0; };
+	QHash<QString, DeviceList> m_sourceDevices; // by source id (the Inspector's device menu)
+	QHash<QString, QVariant> m_modelCache; // last value of each list sent to QML
+	QTimer m_inspectorTimer; // drags: Inspector updates once per frame
+	void refreshModels();
+	QString m_hotkeySig; // scenes and sources the global hotkeys were built for
 	bool m_autosaveFailed = false; // toast once per failing streak
 	int m_visibleMenus = 0;
 	QList<QPointer<QWindow>> m_projectors;

@@ -5,6 +5,7 @@ import QtQuick.Dialogs
 import QtQuick.Effects
 import com.kdab.dockwidgets 2.0 as KDDW
 import LOBS
+import LOBS.Models
 
 // LOBS editor shell, built from the Fluid Functionalism component set (F*.qml).
 // Surfaces: window s1 → side panels s2 → popovers s4 → dialogs s5. Compact (28px) density.
@@ -47,6 +48,8 @@ ApplicationWindow {
     TransitionsDialog { id: trDialog }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
     SetupWizard { id: setupWizard; onAddPanels: (chat, info) => win.openTwitchPanels(chat, info) }
+    // Stable models for the big lists: rows are updated in place instead of rebuilt (LOBS-022).
+    RowsModel { id: sceneRows; rows: app.scenes }
     function openSetup() { setupWizard.open() }
     // Screenshots: LOBS_DEMO=<name> stages a feature on the sample show.
     Timer {
@@ -148,6 +151,7 @@ ApplicationWindow {
                     width: 280
                     property var collections: []
                     Instantiator {
+                        active: importMenu.populated // built while the menu is open
                         model: importMenu.collections
                         delegate: FMenuItem {
                             required property var modelData
@@ -184,6 +188,7 @@ ApplicationWindow {
                     id: windowMenu
                     width: 240
                     Instantiator {
+                        active: windowMenu.populated // built while the menu is open
                         model: win.panels
                         delegate: FMenuItem {
                             required property var modelData
@@ -242,7 +247,7 @@ ApplicationWindow {
                         currentIndex: win.sceneView
                         FluidList {
                             id: sceneList
-                            model: app.scenes
+                            model: sceneRows
                             topMargin: 2
                             delegate: Item {
                                 required property var modelData
@@ -283,7 +288,7 @@ ApplicationWindow {
                             boundsMovement: Flickable.StopAtBounds
                             flickDeceleration: 6000
                             maximumFlickVelocity: 3000
-                            model: app.scenes
+                            model: sceneRows
                             leftMargin: 8; rightMargin: 8; topMargin: 4
                             cellWidth: (width - 16) / 2
                             cellHeight: cellWidth * 9 / 16 + 30
@@ -372,7 +377,8 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         // Video first, then audio, with a divider between; the filter narrows it.
-                        model: {
+                        model: RowsModel { rows: poolRowsFn() } // rows stay alive across changes
+                        function poolRowsFn() {
                             const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (app.sourceStatus[r.id] || {}).detail, r.kindLabel))
                             const video = rows.filter(r => r.video), audio = rows.filter(r => !r.video)
                             if (poolGuest.filter === 1) return video
@@ -1150,6 +1156,7 @@ ApplicationWindow {
                         FMenu {
                             id: copyMenu
                             Instantiator {
+                                active: copyMenu.populated // built while the menu is open
                                 model: app.scenes
                                 delegate: FMenu {
                                     required property var modelData
@@ -1162,11 +1169,27 @@ ApplicationWindow {
                             }
                         }
                     }
+                    // One right-click menu for every layer row.
+                        FMenu {
+                            id: layerMenu
+                            property var row: ({}) // the row it was opened on
+                            FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", layerMenu.row.id, layerMenu.row.name) }
+                            FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
+                            FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
+                            FMenuItem { text: "Ungroup"; enabled: layerMenu.row.group; onTriggered: app.ungroupSelected() }
+                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                            FMenuItem { text: "Bring to front    Ctrl Shift ]"; onTriggered: app.moveSelected(-1000) }
+                            FMenuItem { text: "Bring forward    Ctrl ]"; onTriggered: app.moveSelected(-1) }
+                            FMenuItem { text: "Send backward    Ctrl ["; onTriggered: app.moveSelected(1) }
+                            FMenuItem { text: "Send to back    Ctrl Shift ["; onTriggered: app.moveSelected(1000) }
+                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                            FMenuItem { visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; text: "Delete"; onTriggered: app.deleteSelected() }
+                        }
                     FluidList {
                         id: layerList
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: app.layers
+                        model: RowsModel { rows: app.layers } // rows stay alive across clicks
                         topMargin: 2
                         // Blank space under the layers deselects (pinned to the view, not the content).
                         MouseArea { parent: layerList; anchors.fill: parent; z: -1; onPressed: (m) => { app.clearSelection(); m.accepted = false } }
@@ -1260,7 +1283,7 @@ ApplicationWindow {
                                 onClicked: (m) => {
                                     if (dragged) return
                                     app.selectLayer(modelData.id, m.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
-                                    if (m.button === Qt.RightButton) layerMenu.popup()
+                                    if (m.button === Qt.RightButton) { layerMenu.row = modelData; layerMenu.popup() }
                                 }
                                 onDoubleClicked: renameDialog.ask("layer", modelData.id, modelData.name)
                             }
@@ -1284,20 +1307,6 @@ ApplicationWindow {
                                 }
                                 FButton { visible: modelData.locked && !showTools; iconName: "lock"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: "Unlock" }
                                 FButton { iconName: modelData.visible ? "eye" : "eye-off"; variant: "ghost"; onClicked: app.toggleVisible(modelData.id); tip: modelData.visible ? "Hide" : "Show" }
-                            }
-                            FMenu {
-                                id: layerMenu
-                                FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", modelData.id, modelData.name) }
-                                FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
-                                FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
-                                FMenuItem { text: "Ungroup"; enabled: modelData.group; onTriggered: app.ungroupSelected() }
-                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { text: "Bring to front    Ctrl Shift ]"; onTriggered: app.moveSelected(-1000) }
-                                FMenuItem { text: "Bring forward    Ctrl ]"; onTriggered: app.moveSelected(-1) }
-                                FMenuItem { text: "Send backward    Ctrl ["; onTriggered: app.moveSelected(1) }
-                                FMenuItem { text: "Send to back    Ctrl Shift ["; onTriggered: app.moveSelected(1000) }
-                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { visible: !modelData.background; height: visible ? implicitHeight : 0; text: "Delete"; onTriggered: app.deleteSelected() }
                             }
                         }
                         Caption {
@@ -1726,7 +1735,7 @@ ApplicationWindow {
     Component {
         id: historyView
         FluidList {
-            model: app.history
+            model: RowsModel { rows: app.history } // rows stay alive across edits
             topMargin: 2
             delegate: Item {
                 required property var modelData

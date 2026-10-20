@@ -67,6 +67,7 @@ FDialog {
                 FMenu {
                     id: addMenu
                     Instantiator {
+                        active: addMenu.populated // built while the menu is open
                         model: ["fade", "cut", "swipe", "slide", "fade_to_color", "luma_wipe", "stinger"]
                         delegate: FMenuItem {
                             required property string modelData

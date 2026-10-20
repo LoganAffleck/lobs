@@ -276,9 +276,17 @@ void Engine::apply(const Doc &doc)
 	if (!m_started)
 		return;
 
+	// Most changes touch one layer or source; everything unchanged is skipped below, so an edit
+	// costs about the same in a 3-scene show and a 300-scene one (LOBS-024).
+	const bool canvasSame = m_appliedCanvasW == doc.canvasW && m_appliedCanvasH == doc.canvasH;
+	m_appliedCanvasW = doc.canvasW, m_appliedCanvasH = doc.canvasH;
+
 	// 1. Inputs: one per pool source, named by its id.
 	for (const QString &id : doc.sourceOrder) {
 		const Source &s = doc.sources[id];
+		if (canvasSame && m_inputs.contains(id) && m_appliedInput.value(id) == s)
+			continue;
+		m_appliedInput[id] = s;
 		const QJsonObject settings = inputSettings(doc, s);
 		const QString sig = QString(obsKind(s.kind)) + QJsonDocument(settings).toJson(QJsonDocument::Compact);
 		obs_source_t *in = m_inputs.value(id);
@@ -349,6 +357,14 @@ void Engine::apply(const Doc &doc)
 			Item &it = m_items[inst.id];
 			const Crop c = doc.crop(inst);
 			const Source &src = doc.sources[inst.sourceId];
+			const Item::Applied now{doc.transform(inst), c, Visibility{leaf.visible, leaf.opacity}, order, sceneId, src.kind,
+						src.kind == "text" || src.kind == "shape" ? src.settings : QVariantMap(), doc.filters(inst)};
+			if (it.hasApplied && it.item && canvasSame && it.applied == now) {
+				++order;
+				continue;
+			}
+			it.applied = now;
+			it.hasApplied = true;
 			QString childName = inst.sourceId;
 			if (src.kind == "text") {
 				// Font pixel size from the layer's height (split across lines), so it renders 1:1.

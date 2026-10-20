@@ -183,6 +183,14 @@ private:
 		obs_scene_item *item = nullptr;
 		QString sceneId, cropSig, filterSig;
 		QString filterValueSig, maskPath;
+		// What this layer was last applied with: when nothing here changed, apply() skips it.
+		struct Applied {
+			lobs::Transform t; lobs::Crop c; lobs::Visibility v; int order = -1;
+			QString sceneId, sourceKind; QVariantMap sourceSettings; QVector<lobs::Filter> filters;
+			bool operator==(const Applied &) const = default;
+		};
+		Applied applied;
+		bool hasApplied = false;
 		obs_source *maskFilter = nullptr, *opacityFilter = nullptr; // kept, updated in place
 		double opacity = 1;
 	};
@@ -199,6 +207,8 @@ private:
 
 	QHash<QString, obs_source *> m_inputs; // source id -> input (named by id)
 	QHash<QString, QString> m_inputSig;
+	QHash<QString, lobs::Source> m_appliedInput; // input as last applied (apply() skips unchanged ones)
+	int m_appliedCanvasW = 0, m_appliedCanvasH = 0;
 	QHash<QString, QString> m_audioFxSig; // source id -> filter chain shape (ids + types)
 	void applyAudioFilters(obs_source *in, const QString &sourceId, const QVector<lobs::Filter> &fs);
 	QHash<QString, int> m_audioChannel;

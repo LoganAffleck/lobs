@@ -80,6 +80,7 @@ Rectangle {
                     FMenu {
                         id: trMenu
                         Instantiator {
+                            active: trMenu.populated // built while the menu is open
                             model: app.transitions
                             delegate: FMenuItem {
                                 required property var modelData
@@ -150,6 +151,7 @@ Rectangle {
             id: progMenu
             title: "Open projector"
             Instantiator {
+                active: progMenu.populated // built while the menu is open
                 model: app.screens()
                 delegate: FMenuItem { required property var modelData; text: modelData.name; onTriggered: app.openProjector("", modelData.index) }
                 onObjectAdded: (i, o) => progMenu.insertItem(i, o)
@@ -162,6 +164,7 @@ Rectangle {
             id: sceneMenu
             title: "Open scene projector"
             Instantiator {
+                active: sceneMenu.populated // built while the menu is open
                 model: app.screens()
                 delegate: FMenuItem { required property var modelData; text: modelData.name; onTriggered: app.openProjector(app.editSceneId, modelData.index) }
                 onObjectAdded: (i, o) => sceneMenu.insertItem(i, o)

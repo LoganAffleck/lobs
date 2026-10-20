@@ -15,6 +15,7 @@
 #include <shlobj.h>
 
 #include <QDir>
+#include <QDateTime>
 #include <QFont>
 #include <QFontMetricsF>
 #include <QPainter>
@@ -107,6 +108,18 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	: QObject(parent), m_engine(engine), m_store(withDefaultDevices(loadDoc(docPath), engine)), m_docPath(docPath)
 {
 	connect(&m_store, &Store::changed, this, &App::onStoreChanged);
+	// docChanged is cheap for QML; the big lists follow only when they actually changed.
+	connect(this, &App::docChanged, this, &App::refreshModels);
+	m_inspectorTimer.setSingleShot(true);
+	m_inspectorTimer.setInterval(16);
+	connect(&m_inspectorTimer, &QTimer::timeout, this, [this] {
+		const QVariant v = QVariant::fromValue(inspector());
+		QVariant &old = m_modelCache["inspector"];
+		if (!old.isValid() || old != v) {
+			old = v;
+			emit inspectorChanged();
+		}
+	});
 	connect(engine, &Engine::statsChanged, this, &App::engineChanged);
 	connect(engine, &Engine::statusChanged, this, &App::engineChanged);
 	connect(engine, &Engine::recordingChanged, this, &App::engineChanged);
@@ -204,6 +217,34 @@ static bool writeShowFile(const QString &path, const Doc &d)
 	if (f.write(data) != data.size())
 		return f.cancelWriting(), false;
 	return f.commit();
+}
+
+void App::refreshModels()
+{
+	// Comparing is far cheaper than QML rebuilding every row of an unchanged list (all the
+	// hotkey rows, the mixer, every scene) on each click and keystroke.
+	auto push = [&](const char *key, const QVariant &v, void (App::*signal)()) {
+		QVariant &old = m_modelCache[QString::fromLatin1(key)];
+		if (old.isValid() && old == v)
+			return;
+		old = v;
+		emit (this->*signal)();
+	};
+	push("scenes", QVariant::fromValue(scenes()), &App::scenesChanged);
+	push("pool", QVariant::fromValue(pool()), &App::poolChanged);
+	push("layers", QVariant::fromValue(layers()), &App::layersChanged);
+	// While dragging on the canvas, the Inspector follows at most once a frame: rebuilding it on
+	// every mouse move cost more than the move itself on big shows (LOBS-024).
+	if (m_drag != Drag::None) {
+		if (!m_inspectorTimer.isActive())
+			m_inspectorTimer.start();
+	} else {
+		push("inspector", QVariant::fromValue(inspector()), &App::inspectorChanged);
+	}
+	push("history", QVariant::fromValue(history()), &App::historyChanged);
+	push("mixer", QVariant::fromValue(mixer()), &App::mixerChanged);
+	push("transitions", QVariant::fromValue(transitions()), &App::transitionsChanged);
+	push("hotkeyActions", QVariant::fromValue(hotkeyActions()), &App::hotkeyActionsChanged);
 }
 
 void App::autosave()
@@ -863,9 +904,21 @@ void App::selectSource(const QString &id)
 	emit docChanged();
 }
 
-QVariantList App::devices(const QString &sourceId)
+QVariantList App::devices(const QString &sourceId, bool fresh)
 {
-	return doc().sources.contains(sourceId) ? m_engine->listDevices(sourceId, doc().sources[sourceId].kind) : QVariantList{};
+	if (!doc().sources.contains(sourceId))
+		return {};
+	// Status already lists each kind's devices; reuse that instead of asking Windows again.
+	const QString kind = doc().sources[sourceId].kind;
+	if (!fresh && m_deviceCache.contains(kind))
+		return m_deviceCache.value(kind);
+	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+	DeviceList &c = m_sourceDevices[sourceId];
+	if (fresh || now - c.at > 5000) {
+		c.items = m_engine->listDevices(sourceId, doc().sources[sourceId].kind);
+		c.at = now;
+	}
+	return c.items;
 }
 
 void App::setSourceSetting(const QString &id, const QString &key, const QVariant &value)
@@ -2706,6 +2759,15 @@ void App::setHotkey(const QString &action, const QString &combo)
 
 void App::rebuildHotkeys()
 {
+	QString sig;
+	for (const QString &id : doc().sceneOrder)
+		sig += id + "=" + doc().scenes.value(id).name + ";";
+	for (const QString &id : doc().sourceOrder)
+		sig += id + "=" + doc().sources.value(id).name + ";";
+	sig += QJsonDocument(QJsonObject::fromVariantMap(m_engine->settings().hotkeys)).toJson(QJsonDocument::Compact);
+	if (sig == m_hotkeySig)
+		return; // nothing a hotkey points at changed
+	m_hotkeySig = sig;
 	QStringList valid;
 	for (const QVariant &v : hotkeyActions())
 		valid << v.toMap()["id"].toString();

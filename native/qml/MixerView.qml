@@ -369,6 +369,7 @@ Item {
                         FMenu {
                             id: fxMenu
                             Instantiator {
+                                active: fxMenu.populated // built while the menu is open
                                 model: app.audioFxTypes()
                                 delegate: FMenuItem { required property var modelData; text: modelData.label; onTriggered: app.addAudioFilter(details.s.id, modelData.type) }
                                 onObjectAdded: (i, o) => fxMenu.insertItem(i, o)

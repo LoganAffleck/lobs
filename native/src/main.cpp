@@ -6,6 +6,7 @@
 #include <kddockwidgets/qtquick/Platform.h>
 #include <kddockwidgets/qtquick/ViewFactory.h>
 #include "icons.h"
+#include <QQmlPropertyMap>
 #include <QIcon>
 #include <QSvgRenderer>
 #include "engine.h"
@@ -15,6 +16,7 @@
 #include "shapes.h"
 #include "browser_view.h"
 #include "startup_mode.h"
+#include "rows_model.h"
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QUrl>
@@ -489,6 +491,7 @@ int main(int argc, char *argv[])
 
 	Engine engine;
 	qmlRegisterType<BrowserView>("LOBS.Web", 1, 0, "BrowserView");
+	qmlRegisterType<RowsModel>("LOBS.Models", 1, 0, "RowsModel");
 	engine.setSettings(AppSettings::load());
 	blog(LOG_INFO, "[lobs] OBS engine %s from %s", qPrintable(sel.version), qPrintable(sel.root));
 	if (!engine.start(sel.root))
@@ -531,7 +534,11 @@ int main(int argc, char *argv[])
 	// Fluid Functionalism tokens (dark), shared by every QML file as `Pal.<name>`:
 	// the 8-step surface ladder, 2 text colors, 12% borders, +6%/+10% hover/selected,
 	// 3 springs (fast/moderate/slow, ms), the compact size step and the 5-style type scale.
-	qml.rootContext()->setContextProperty("Pal", QVariantMap{
+	// A property map, not a QVariantMap: QML reads one property instead of converting the whole
+	// map to a new JS object on every Pal.x access (thousands per list rebuild).
+	auto *palMap = new QQmlPropertyMap(&qml);
+	{
+		const QVariantMap values{
 		{"s1", "#171717"}, {"s2", "#1e1e1e"}, {"s3", "#252525"}, {"s4", "#2c2c2c"},
 		{"s5", "#333333"}, {"s6", "#3a3a3a"}, {"s7", "#414141"}, {"s8", "#484848"},
 		{"fg", "#f5f5f5"}, {"muted", "#a3a3a3"},
@@ -539,7 +546,11 @@ int main(int argc, char *argv[])
 		{"focus", "#6b97ff"}, {"link", "#7aa7ff"}, {"danger", "#fca5a5"}, {"dangerBg", "#450a0a"}, {"live", "#ef4444"},
 		{"fast", 80}, {"moderate", 160}, {"slow", 240},
 		{"ctl", 28}, {"radius", 8}, {"font", fontFamily},
-		{"display", 22}, {"title", 14}, {"subtitle", 13}, {"body", 12}, {"caption", 11}});
+		{"display", 22}, {"title", 14}, {"subtitle", 13}, {"body", 12}, {"caption", 11}};
+		for (auto it = values.cbegin(); it != values.cend(); ++it)
+			palMap->insert(it.key(), it.value());
+	}
+	qml.rootContext()->setContextProperty("Pal", palMap);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
 	qml.addImageProvider("icon", new IconProvider(root + "/icons"));

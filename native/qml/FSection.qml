@@ -50,6 +50,7 @@ ColumnLayout {
                 FMenu {
                     id: linkedMenu
                     Instantiator {
+                        active: linkedMenu.populated // built while the menu is open
                         model: sec.peers
                         delegate: FMenuItem { required property var modelData; text: "Shared with " + modelData.scene; enabled: false }
                         onObjectAdded: (i, o) => linkedMenu.insertItem(i, o)
@@ -71,6 +72,7 @@ ColumnLayout {
                     id: linkMenu
                     width: 260
                     Instantiator {
+                        active: linkMenu.populated // built while the menu is open
                         model: sec.candidates
                         delegate: FMenu {
                             required property var modelData

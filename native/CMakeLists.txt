@@ -37,6 +37,8 @@ qt_add_executable(LOBS WIN32
     src/eyedropper.cpp
     src/browser_view.cpp
     src/projector.cpp
+    src/rows_model.cpp
+    src/rows_model.h
     src/projector.h
     src/browser_view.h
     src/eyedropper.h
