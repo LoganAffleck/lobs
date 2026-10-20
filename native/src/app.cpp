@@ -1305,7 +1305,7 @@ void App::setOpacity(double value, bool final)
 	auto fn = [&](Doc &d) {
 		for (const QString &id : ids) {
 			Visibility v = d.visibility(d.instances[id]);
-			v.opacity = value;
+			v.opacity = std::clamp(value, 0.0, 1.0); // LOBS-030
 			d.setVisibility(id, v);
 		}
 	};
