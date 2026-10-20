@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 
 // Desktop scrolling: hard stops at the top and bottom (no touch-style overscroll bounce),
