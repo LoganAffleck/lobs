@@ -1441,7 +1441,11 @@ void App::resetGroup(const QString &group)
 		return;
 	const Instance &i = doc().instances[id];
 	const PropMap def = doc().defaultProps(i.kind == "group" ? nullptr : &doc().sources[i.sourceId]);
-	m_store.commit("Reset " + group, [&](Doc &d) {
+	// LOBS-012: Reset is local. A linked section unlinks first (keeping its values everywhere
+	// else), then only this layer resets; later edits apply to it alone.
+	const bool wasLinked = i.links.contains(g);
+	m_store.commit(wasLinked ? "Unlink and reset " + group : "Reset " + group, [&](Doc &d) {
+		d.unlink(id, g);
 		switch (g) {
 		case Group::Transform: if (i.kind != "group") d.setTransform(id, def.transform); break;
 		case Group::Crop: d.setCrop(id, {}); break;
@@ -1477,6 +1481,8 @@ void App::liveEdit(const QString &key, const QString &label, const std::function
 
 // ---------- history & files ----------
 
+	if (wasLinked)
+		showToast("Unlinked " + group + " and reset it here only");
 void App::undo()
 {
 	if (m_store.canUndo()) {
