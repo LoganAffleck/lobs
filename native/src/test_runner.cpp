@@ -25,6 +25,7 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSettings>
@@ -166,6 +167,45 @@ public:
 	Q_INVOKABLE QStringList listDir(const QString &path) const { return QDir(path).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot); }
 	// LOBS-001: which argument lists start a self-test (and so use a throwaway document).
 	Q_INVOKABLE bool isSelfTestArgs(const QStringList &args) const { return isSelfTestRun(args); }
+	// Runs both JavaScript collectors (the scenario's and the UI's), to tell garbage from leaks.
+	// Diagnostics: stop the controller notifying the UI, to tell UI costs from C++ ones.
+	Q_INVOKABLE void blockAppSignals(bool on) { m_c.blockSignals(on); }
+	// Diagnostics: creates and destroys a QML snippet n times in the UI's engine (under the main
+	// window), then collects, and returns the private-memory growth in MB.
+	Q_INVOKABLE double churn(const QString &qml, int n)
+	{
+		QQuickWindow *w = m_qml.rootObjects().isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(m_qml.rootObjects().first());
+		if (!w)
+			return -1;
+		QQmlComponent comp(&m_qml);
+		const QString header = QStringLiteral("import QtQuick\nimport QtQuick.Controls\nimport LOBS\n");
+		comp.setData((header + qml).toUtf8(), QUrl("qrc:/qt/qml/LOBS/qml/churn.qml"));
+		if (comp.isError()) {
+			qWarning("[churn] %s", qPrintable(comp.errorString()));
+			return -2;
+		}
+		auto mb = [] {
+			PROCESS_MEMORY_COUNTERS_EX pm{};
+			GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&pm), sizeof(pm));
+			return double(pm.PrivateUsage) / (1 << 20);
+		};
+		m_qml.collectGarbage();
+		QCoreApplication::processEvents();
+		const double m0 = mb();
+		for (int i = 0; i < n; ++i) {
+			QObject *o = comp.create(m_qml.rootContext());
+			if (auto *it = qobject_cast<QQuickItem *>(o))
+				it->setParentItem(w->contentItem());
+			delete o;
+			if (i % 50 == 0)
+				QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		}
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		m_qml.collectGarbage();
+		QCoreApplication::processEvents();
+		return mb() - m0;
+	}
+	Q_INVOKABLE void gc() { m_js.collectGarbage(); m_qml.collectGarbage(); }
 	Q_INVOKABLE QString tempDir() const { return QDir::tempPath(); }
 	Q_INVOKABLE QString appDataDir() const { return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation); }
 	Q_INVOKABLE bool include(const QString &file)
