@@ -104,7 +104,7 @@ story("AX-01", "Screen-reader names on interactive controls", () => {
 	const c = t.accessibilityCensus();
 	t.metric("census", c);
 	check("most interactive controls have an accessible name", c.interactive > 0 && c.named / c.interactive >= 0.8,
-	      c.named + " of " + c.interactive + " named; e.g. " + JSON.stringify(c.sampleUnnamed.slice(0, 8)));
+	      c.named + " of " + c.interactive + " named; e.g. " + JSON.stringify(c.sampleUnnamed));
 });
 
 story("V-02", "Save: Ctrl+S and toolbar Save on an already-saved project", () => {

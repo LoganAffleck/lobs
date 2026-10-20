@@ -494,7 +494,9 @@ public:
 		for (QQuickItem *root : roots())
 			walk(root, [&](QQuickItem *it) {
 				const QString cls = QString::fromLatin1(it->metaObject()->className());
-				const bool control = it->acceptedMouseButtons() != Qt::NoButton || it->activeFocusOnTab() || cls.contains("Button") || cls.contains("TextInput") || cls.contains("TextField");
+				// Static text accepts the left button only for link clicks, and Qt already names it from
+				// its text for screen readers, so it isn't a control here.
+				const bool control = !it->inherits("QQuickText") && (it->acceptedMouseButtons() != Qt::NoButton || it->activeFocusOnTab() || cls.contains("Button") || cls.contains("TextInput") || cls.contains("TextField"));
 				if (!control)
 					return;
 				++interactive;
@@ -505,8 +507,8 @@ public:
 				const QString name = att ? att->property("name").toString() : QString();
 				if (!name.isEmpty())
 					++named;
-				else if (unnamed.size() < 40)
-					unnamed << cls + ":" + it->property("text").toString();
+				else if (unnamed.size() < 80)
+					unnamed << cls + ":" + it->property("text").toString() + " in " + (it->parentItem() ? QString::fromLatin1(it->parentItem()->metaObject()->className()) + "/" + it->parentItem()->property("text").toString() + "/" + it->parentItem()->property("title").toString() : QString());
 			});
 		return {{"interactive", interactive}, {"named", named}, {"sampleUnnamed", unnamed}};
 	}
