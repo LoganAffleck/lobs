@@ -2895,6 +2895,8 @@ QVariantList App::mixer() const
 		QStringList warn;
 		if (s.kind == "desktop_audio" && s.audio.monitor == "monitor_and_output")
 			warn << "Echo risk: monitoring desktop audio plays it back into itself.";
+		if (s.kind == "mic" && s.audio.monitor == "monitor_and_output") // LOBS-029
+			warn << "Feedback risk: you hear your own mic. Use headphones, or speakers will feed back into it.";
 		if (s.audio.monitor == "monitor_only")
 			warn << "Monitor only: you hear it, the stream and recording don't.";
 		if (s.kind == "browser" && s.audio.monitor == "off")
