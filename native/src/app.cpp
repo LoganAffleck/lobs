@@ -954,7 +954,7 @@ void App::toggleLock(const QString &id)
 
 void App::moveLayer(const QString &id, int delta)
 {
-	if (isBackgroundLayer(doc(), id))
+	if (isBackgroundLayer(doc(), id) || !liveEditAllowed({id}))
 		return;
 	// Stop above the background, which stays at the bottom.
 	const QStringList &sib = doc().scenes.value(doc().instances.value(id).sceneId).layers;
@@ -967,7 +967,7 @@ void App::moveLayer(const QString &id, int delta)
 
 void App::moveSelected(int delta)
 {
-	if (m_selection.isEmpty())
+	if (m_selection.isEmpty() || !liveEditAllowed(m_selection))
 		return;
 	const QStringList ids = m_selection;
 	const QString label = delta <= -100 ? "Bring to front" : delta >= 100 ? "Send to back" : delta < 0 ? "Bring forward" : "Send backward";
@@ -995,6 +995,8 @@ void App::dropLayer(const QString &id, const QString &target, const QString &mod
 {
 	const Doc &cur = doc();
 	if (id == target || !cur.instances.contains(id) || !cur.instances.contains(target) || cur.descendants(id).contains(target))
+		return;
+	if (!liveEditAllowed({id, target}))
 		return;
 	if (mode == "into" && cur.instances[target].kind != "group")
 		return;
@@ -1031,7 +1033,7 @@ void App::renameLayer(const QString &id, const QString &name)
 
 void App::deleteSelected()
 {
-	if (m_selection.isEmpty())
+	if (m_selection.isEmpty() || !liveEditAllowed(m_selection))
 		return;
 	QStringList ids;
 	for (const QString &id : m_selection)
@@ -1048,6 +1050,8 @@ void App::deleteSelected()
 
 void App::groupSelected()
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	QString gid;
 	const QStringList ids = m_selection;
 	m_store.commit("Group layers", [&](Doc &d) { gid = d.groupLayers(ids); });
@@ -1058,6 +1062,8 @@ void App::groupSelected()
 void App::ungroupSelected()
 {
 	const QString id = singleSelection();
+	if (!liveEditAllowed({id}))
+		return;
 	if (!id.isEmpty() && doc().instances[id].kind == "group")
 		m_store.commit("Ungroup", [&](Doc &d) { d.ungroup(id); });
 }
@@ -1095,6 +1101,8 @@ void App::setTransform(const QString &field, double value)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty())
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Instance &i = doc().instances[id];
 	if (i.kind == "group") {
@@ -1143,6 +1151,8 @@ void App::scrubTransform(const QString &field, double value, bool final, bool ke
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	const int mode = final ? 2 : 1;
 	if (doc().instances[id].kind == "group") {
 		if (field != "x" && field != "y")
@@ -1165,6 +1175,8 @@ void App::setSize(const QString &field, double value, bool keepAspect)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Transform t = withField(doc().transform(doc().instances[id]), field, value, keepAspect);
 	m_store.commit("Resize", [&](Doc &d) { d.setTransform(id, t); });
@@ -1198,6 +1210,8 @@ void App::cropToAspect(double ratio)
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	const QSize ns = m_engine->sourceSize(doc().instances[id].sourceId);
 	if (ns.isEmpty())
 		return showToast("This layer's size isn't known yet");
@@ -1219,6 +1233,8 @@ void App::setCornerRadius(double pct, bool final)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Doc &base = m_store.gestureBase() ? *m_store.gestureBase() : doc();
 	Crop c = base.crop(base.instances[id]);
@@ -1243,6 +1259,8 @@ void App::scrubCrop(const QString &field, int value, bool final)
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	const Doc &base = m_store.gestureBase() ? *m_store.gestureBase() : doc();
 	Crop c = base.crop(base.instances[id]);
 	value = std::max(0, value);
@@ -1258,6 +1276,8 @@ void App::setCrop(const QString &field, int value)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	Crop c = doc().crop(doc().instances[id]);
 	value = std::max(0, value);
@@ -1298,6 +1318,8 @@ void App::fit(const QString &mode)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Instance &i = doc().instances[id];
 	const QSize ns = m_engine->sourceSize(i.sourceId);
@@ -1840,6 +1862,19 @@ void App::resolvePlacements(bool last)
 void App::toggleRecording()
 {
 	m_engine->recording() ? m_engine->stopRecording() : m_engine->startRecording();
+}
+
+bool App::liveEditAllowed(const QStringList &ids)
+{
+	if (!liveLocked() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
+		return true;
+	const QString program = m_engine->programScene();
+	for (const QString &id : ids)
+		if (doc().instances.value(id).sceneId == program && !program.isEmpty()) {
+			showToast("Live lock is on. Hold Alt or unlock to change layers on air.");
+			return false;
+		}
+	return true;
 }
 
 void App::nudge(int dx, int dy)

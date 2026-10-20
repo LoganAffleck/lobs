@@ -208,6 +208,9 @@ public:
 	bool streaming() const { return m_engine->streaming(); }
 	bool live() const { return m_engine->live(); }
 	bool liveLocked() const { return m_engine->live() && !m_liveUnlock; }
+	// LOBS-006: the one check for edits that move, resize, crop, reorder or remove layers in the
+	// scene viewers see. Refuses (with a toast) while live lock is on, unless Alt is held.
+	bool liveEditAllowed(const QStringList &ids);
 	QVariantMap streamStats() const { return m_engine->streamStats(); }
 	QVariantMap settings() const;
 	QVariantList encoders() const { return m_engine->encoders(); }

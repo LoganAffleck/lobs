@@ -186,7 +186,21 @@ story("LY-06", "Live lock while recording", () => {
 	      "Inspector changed the on-air layer while locked (x=" + eff(r, "transform").x + ")");
 	sel(r); app.deleteSelected();
 	check("deleting an on-air layer is guarded while live-locked", !!t.doc().instances[r], "layer deleted while live-locked");
-	app.undo();
+	// LOBS-006 regression: every other way of moving the on-air layer goes through the same guard.
+	sel(r); app.scrubTransform("x", 950, true);
+	eq("scrub refused while live", eff(r, "transform").x, 200);
+	sel(r); app.fit("fill");
+	eq("Fit/Fill refused while live", eff(r, "transform").w, 400);
+	sel(r); app.setCrop("l", 40);
+	eq("crop refused while live", eff(r, "crop").l, 0);
+	sel(r); app.moveSelected(1000);
+	check("reorder refused while live", t.doc().scenes[A].layers.indexOf(r) === 0, t.doc().scenes[A].layers);
+	check("refusals say why", app.toast.indexOf("Live lock") >= 0, app.toast);
+	// Unlocking lifts it.
+	app.setLiveUnlock(true);
+	sel(r); app.setTransform("x", 300);
+	eq("edits work after Unlock", eff(r, "transform").x, 300);
+	app.setLiveUnlock(false);
 	t.stopRecording();
 	t.waitUntil(() => !app.live, 10000);
 });
