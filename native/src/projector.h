@@ -27,6 +27,7 @@ private:
 	void ensureDisplay();
 	Engine *m_engine;
 	obs_source *m_scene = nullptr; // held while open, so its inputs stay active
+	QString m_sceneId;
 	obs_display *m_display = nullptr;
 	int m_canvasW = 1920, m_canvasH = 1080;
 };

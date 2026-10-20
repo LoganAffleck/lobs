@@ -137,10 +137,32 @@ static void li_video_render(void *data, gs_effect_t *unused)
 		return;
 	}
 
+	// Mirroring happens inside the layer's own box, so position and size are unchanged.
+	gs_matrix_push();
+	if (li->flip_h) {
+		gs_matrix_translate3f((float)w, 0.0f, 0.0f);
+		gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
+	}
+	if (li->flip_v) {
+		gs_matrix_translate3f(0.0f, (float)h, 0.0f);
+		gs_matrix_scale3f(1.0f, -1.0f, 1.0f);
+	}
+
+	// No crop: draw the source straight through. Only a crop needs an offscreen copy, so most
+	// layers hold no texture at all (LOBS-034).
+	if (!li->crop_l && !li->crop_t && !li->crop_r && !li->crop_b) {
+		obs_source_video_render(child);
+		gs_matrix_pop();
+		obs_source_release(child);
+		return;
+	}
+
 	if (!li->texrender)
 		li->texrender = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	gs_texrender_reset(li->texrender);
 
+	gs_matrix_push(); // the offscreen pass sets its own projection
+	gs_matrix_identity();
 	gs_blend_state_push();
 	// Render the child premultiplied (color × alpha), the way the draw below expects it.
 	// Plain ONE/ZERO kept straight alpha and gave text and other soft edges a harsh fringe.
@@ -154,6 +176,7 @@ static void li_video_render(void *data, gs_effect_t *unused)
 		gs_texrender_end(li->texrender);
 	}
 	gs_blend_state_pop();
+	gs_matrix_pop();
 
 	gs_texture_t *tex = gs_texrender_get_texture(li->texrender);
 	if (tex) {
@@ -161,22 +184,23 @@ static void li_video_render(void *data, gs_effect_t *unused)
 		gs_effect_set_texture(gs_effect_get_param_by_name(effect, "image"), tex);
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
-		// Mirroring happens here, inside the layer's own box, so position and size are unchanged.
-		gs_matrix_push();
-		if (li->flip_h) {
-			gs_matrix_translate3f((float)w, 0.0f, 0.0f);
-			gs_matrix_scale3f(-1.0f, 1.0f, 1.0f);
-		}
-		if (li->flip_v) {
-			gs_matrix_translate3f(0.0f, (float)h, 0.0f);
-			gs_matrix_scale3f(1.0f, -1.0f, 1.0f);
-		}
 		while (gs_effect_loop(effect, "Draw"))
 			gs_draw_sprite_subregion(tex, 0, (uint32_t)li->crop_l, (uint32_t)li->crop_t, w, h);
-		gs_matrix_pop();
 		gs_blend_state_pop();
 	}
+	gs_matrix_pop();
 	obs_source_release(child);
+}
+
+// A layer that stops showing (its scene is no longer previewed or on air) gives its offscreen
+// copy back; it's recreated on the next render (LOBS-034).
+static void li_hide(void *data)
+{
+	struct lobs_instance *li = data;
+	obs_enter_graphics();
+	gs_texrender_destroy(li->texrender);
+	li->texrender = NULL;
+	obs_leave_graphics();
 }
 
 static void li_enum_sources(void *data, obs_source_enum_proc_t cb, void *param)
@@ -221,6 +245,7 @@ static struct obs_source_info lobs_instance_info = {
 	.get_properties = li_properties,
 	.video_tick = li_video_tick,
 	.video_render = li_video_render,
+	.hide = li_hide,
 	.enum_active_sources = li_enum_sources,
 };
 

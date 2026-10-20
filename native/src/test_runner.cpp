@@ -226,7 +226,7 @@ public:
 
 	// ---------- engine ----------
 	Q_INVOKABLE QString programScene() const { return m_e.programScene(); }
-	Q_INVOKABLE QVariantMap engineStats() const { return QVariantMap{{"stats", m_e.stats()}, {"live", m_e.liveStats()}, {"status", m_e.status()}}; }
+	Q_INVOKABLE QVariantMap engineStats() const { return QVariantMap{{"stats", m_e.stats()}, {"live", m_e.liveStats()}, {"status", m_e.status()}, {"layers", m_e.layerResources()}}; }
 	Q_INVOKABLE QVariantMap inputFilters() const { return m_e.inputFilters().toVariantMap(); }
 	Q_INVOKABLE QString lastError() const { return m_e.lastError(); }
 	Q_INVOKABLE QVariantList obsInputs() const

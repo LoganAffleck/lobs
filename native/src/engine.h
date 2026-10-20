@@ -81,6 +81,7 @@ public:
 	bool started() const { return m_started; }
 	QString status() const { return m_status; }
 	QString stats() const { return m_stats; }
+	QVariantMap layerResources() const; // for QA: how many layers hold filters, text and shape renderers
 	bool recording() const { return m_recording; }
 	bool streaming() const { return m_streaming; }
 	bool live() const { return m_streaming || m_recording; }
@@ -96,7 +97,9 @@ public:
 	QImage renderThumbnail(const QString &sceneId, int width); // reads back a small frame of a scene
 	QImage renderSourceThumbnail(const QString &sourceId, int width); // one input, at its own aspect
 	bool sourceActive(const QString &sourceId) const; // running because a shown scene uses it
-	void setAllScenesShowing(bool on); // keep every scene's sources active (for live thumbnails)
+	void setAllScenesShowing(bool on);
+	// A scene projector keeps its scene showing (and its layers' filters attached) while open.
+	void holdScene(const QString &sceneId, bool on); // keep every scene's sources active (for live thumbnails)
 	QSize sourceSize(const QString &sourceId) const; // natural size, or 0x0 if unknown
 	QVariantList listDevices(const QString &sourceId, const QString &kind) const;
 
@@ -193,7 +196,18 @@ private:
 		bool hasApplied = false;
 		obs_source *maskFilter = nullptr, *opacityFilter = nullptr; // kept, updated in place
 		double opacity = 1;
+		bool parked = false; // filters detached while its scene isn't showing (LOBS-034)
 	};
+	// Each OBS filter, and a scene item with a scale filter, keeps a render target the size of the
+	// layer's source until it's destroyed. So a layer whose scene stopped showing gives its filters
+	// and scale filter back, and gets them again just before the scene shows (LOBS-034).
+	void parkHiddenFilters();
+	void unparkScene(const QString &sceneId);
+	QTimer m_parkTimer;
+	QHash<QString, int> m_heldScenes; // scene -> number of projectors holding it
+	QString m_unparkTarget; // the scene unparkScene() is preparing
+	bool sceneWanted(const QString &sceneId) const { return sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId); }
+	lobs::Doc m_lastDoc;
 	void setStatus(const QString &s);
 	void pollStats();
 	void removeItem(const QString &instId);

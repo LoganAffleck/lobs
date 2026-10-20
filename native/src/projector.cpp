@@ -17,6 +17,8 @@ Projector::Projector(Engine *engine, const QString &sceneId, const QString &titl
 	if (!sceneId.isEmpty()) {
 		m_scene = engine->sceneSource(sceneId);
 		if (m_scene) {
+			m_sceneId = sceneId;
+			engine->holdScene(sceneId, true);
 			obs_source_get_ref(m_scene);
 			obs_source_inc_showing(m_scene);
 		}
@@ -40,6 +42,7 @@ Projector::~Projector()
 		obs_display_destroy(m_display);
 	}
 	if (m_scene) {
+		m_engine->holdScene(m_sceneId, false);
 		obs_source_dec_showing(m_scene);
 		obs_source_release(m_scene);
 	}

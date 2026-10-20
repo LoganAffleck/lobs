@@ -325,3 +325,27 @@ story("MP-03", "Rename and delete a source used in several scenes", () => {
 	app.undo();
 	eq("undo restores all exactly", t.docJson(), before);
 });
+
+story("LY-07", "A scene that stops showing gives back its render memory and looks the same when it returns (LOBS-034)", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A); app.take();
+	const B = mkScene("Other");
+	app.editScene(A);
+	const r = placeColor("Graded", "#3366ff");
+	setT(r, "x", 100); setT(r, "y", 100); setT(r, "w", 400); setT(r, "h", 300);
+	sel(r); app.addFilter("color");
+	sel(r); app.setFilterValue(0, "gamma", 0.6, true);
+	sel(r); app.setOpacity(0.6, true);
+	const top = placeColor("On top", "#ff8800"); setT(top, "x", 400); setT(top, "y", 300); setT(top, "w", 300); setT(top, "h", 200);
+	t.waitFrames(3, 2000);
+	const before = pixelAt(A, "ly07-before.png", 200, 200).hex, before2 = pixelAt(A, "ly07-before2.png", 450, 350).hex;
+	app.editScene(B); app.take(); t.wait(1500); t.waitFrames(2, 2000);
+	const res = t.engineStats().layers;
+	t.metric("whileAway", res);
+	check("layers of the scene that stopped showing are parked", res.parked >= 2, res);
+	app.editScene(A); app.take(); t.waitFrames(4, 3000);
+	const after = pixelAt(A, "ly07-after.png", 200, 200).hex, after2 = pixelAt(A, "ly07-after2.png", 450, 350).hex;
+	check("the filtered, faded layer looks the same after coming back", before === after, [before, after]);
+	check("where the layers overlap, the top one still draws on top", before2 === after2 && before2 !== before, [before2, after2]);
+});
