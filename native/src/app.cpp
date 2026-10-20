@@ -1845,6 +1845,8 @@ bool App::importObs(const QString &path)
 	if (unsupported) gaps << QString("%1 source%2 with no LOBS equivalent").arg(unsupported).arg(unsupported == 1 ? "" : "s");
 	if (devices) gaps << QString("%1 device%2 not connected, set to this PC's default").arg(devices).arg(devices == 1 ? "" : "s");
 	if (other) gaps << QString("%1 other item%2").arg(other).arg(other == 1 ? "" : "s");
+	if (!imp.pluginScenes.isEmpty())
+		gaps << QString("%1 scene%2 made with the old LOBS plugin (%3)").arg(imp.pluginScenes.size()).arg(imp.pluginScenes.size() == 1 ? "" : "s").arg(imp.pluginScenes.join(", "));
 	const int n = int(imp.doc.scenes.size());
 	showToast(QString("Imported %1 scene%2 and %3 sources from OBS \"%4\".").arg(n).arg(n == 1 ? "" : "s").arg(imp.doc.sources.size()).arg(name) +
 		  (gaps.isEmpty() ? QString() : " Not carried over: " + gaps.join(", ") + "."));

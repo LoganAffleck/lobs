@@ -229,8 +229,10 @@ ObsImport importObsCollection(const QJsonObject &o)
 			const QJsonObject src = byName.value(x.it["name"].toString());
 			return isLobsHelper(x.it["name"].toString(), src["id"].toString());
 		});
-		if (onlyHelpers)
+		if (onlyHelpers) {
+			r.pluginScenes << sceneName; // LOBS-027: say so instead of dropping it silently
 			continue;
+		}
 
 		Scene &scene = d.addScene(sceneName);
 		const QString sceneId = scene.id;
