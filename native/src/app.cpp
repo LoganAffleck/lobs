@@ -1577,17 +1577,19 @@ bool App::createProject(const QString &name, const QString &folder)
 
 bool App::saveAs(const QUrl &url)
 {
-	// The show's folder becomes the project: its assets folder sits next to it.
-	m_projectFile = url.toLocalFile();
+	const QString path = url.toLocalFile();
+	QFile f(path);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(QJsonDocument(doc().toJson()).toJson()) < 0)
+		return showToast("Couldn't save " + path), false;
+	f.close();
+	// Only now does the show's folder become the project (its assets folder sits next to it),
+	// so a failed Save As leaves the current project as it was.
+	m_projectFile = path;
 	QSettings().setValue("project/file", m_projectFile);
 	watchAssets();
 	adoptExternalFiles();
 	emit assetsChanged();
-	QFile f(url.toLocalFile());
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		return showToast("Couldn't save " + url.toLocalFile()), false;
-	f.write(QJsonDocument(doc().toJson()).toJson());
-	showToast("Saved " + QFileInfo(f).fileName());
+	showToast("Saved " + QFileInfo(path).fileName());
 	emit projectChanged();
 	return true;
 }
