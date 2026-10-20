@@ -60,7 +60,7 @@ struct OverlayBox {
 	QRectF rect; // canvas px
 	double rot = 0;
 	bool handles = false;
-	bool drop = false; // drop-target preview while dragging from the Media Pool
+	bool drop = false; // drop-target preview while dragging from Sources
 	bool group = false;
 	bool linked = false;
 	bool crop = false; // crop mode: edge and corner crop handles instead of resize handles

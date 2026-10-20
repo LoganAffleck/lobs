@@ -177,7 +177,7 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 	if (s.kind == "color")
 		return {{"color", hexToAbgr(st.value("color", "#000000").toString())}, {"width", doc.canvasW}, {"height", doc.canvasH}};
 	if (s.kind == "text")
-		return textSettings(s, 96); // nominal size; only used for Media Pool previews
+		return textSettings(s, 96); // nominal size; only used for Sources previews
 	if (s.kind == "image")
 		return {{"file", st.value("file").toString()}};
 	if (s.kind == "browser") {

@@ -1919,7 +1919,7 @@ void App::nudge(int dx, int dy)
 	});
 }
 
-// ---------- media pool → canvas drag ----------
+// ---------- Sources → canvas drag ----------
 
 static Transform dropTransform(const Doc &d, const QString &sourceId, QPointF c)
 {

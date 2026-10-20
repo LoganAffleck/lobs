@@ -97,7 +97,7 @@ public:
 	Q_INVOKABLE void refreshBrowser(const QString &id) { m_engine->refreshBrowser(id); }
 	// layers
 	Q_INVOKABLE void selectLayer(const QString &id, bool additive);
-	Q_INVOKABLE void clearSelection(); // nothing selected: layers and Media Pool sources
+	Q_INVOKABLE void clearSelection(); // nothing selected: layers and Sources rows
 	Q_INVOKABLE void toggleVisible(const QString &id);
 	Q_INVOKABLE void toggleLock(const QString &id);
 	Q_INVOKABLE void moveLayer(const QString &id, int delta);
@@ -168,7 +168,7 @@ public:
 	Q_INVOKABLE bool importObs(const QString &path);
 	Q_INVOKABLE void toggleRecording();
 	Q_INVOKABLE void nudge(int dx, int dy);
-	// drag a Media Pool source over the preview (coords relative to the preview item)
+	// drag a source from Sources over the preview (coords relative to the preview item)
 	Q_INVOKABLE void poolDragMove(const QString &sourceId, double x, double y);
 	Q_INVOKABLE void poolDrop(const QString &sourceId, double x, double y);
 	Q_INVOKABLE void poolDragCancel();

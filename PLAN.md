@@ -14,12 +14,12 @@ OBS is a great engine wrapped in a frustrating authoring model:
 | Need different filters or sizing per scene → add the source again | Filters live on the **source**, not the **scene item**, so one camera with two looks means two sources (and sometimes two device captures fighting over one webcam) |
 | Hard to tell what's shared vs. unique | No visual sign of which sources are the same object |
 
-## 2. Core concept: Media Pool → Scene Instances
+## 2. Core concept: Sources → Scene Instances
 
-Borrowed from DaVinci Resolve's Media Pool and Adobe's Project panel.
+The idea comes from the project bins in DaVinci Resolve and Adobe Premiere. In LOBS the panel is called **Sources**.
 
 ```
- Media Pool (global, added once)          Scenes (canvases)
+ Sources (global, added once)             Scenes (canvases)
  ┌────────────────────────┐        ┌──────────────────────────┐
  │ 🎥 Facecam (Brio)      │──drag─▶│ Scene "Just Chatting"     │
  │ 🖥 Display 1            │        │   Facecam  (instance A)   │
@@ -31,7 +31,7 @@ Borrowed from DaVinci Resolve's Media Pool and Adobe's Project panel.
                                    └──────────────────────────┘
 ```
 
-- **Source** = a single input (device, window, file, browser, etc.). Added **once** to the Media Pool. Owns only *input* settings (device, resolution, URL). One device = one capture, always.
+- **Source** = a single input (device, window, file, browser, etc.). Added **once** to Sources. Owns only *input* settings (device, resolution, URL). One device = one capture, always.
 - **Instance** = a source placed on a scene. Owns its **transform, crop, filters, blend mode, opacity, visibility, audio mix**. Changes are **local to that scene by default**.
 - Drag from the pool onto the canvas (or into the layer list) to make an instance.
 
@@ -54,7 +54,7 @@ When you copy or paste an instance (or a group) into another scene, you pick:
 
 ## 3. MVP feature set
 
-1. Media Pool with bins/folders, search, a thumbnail preview, an "in use by N scenes" count, and an unused-source warning.
+1. Sources panel with bins/folders, search, a thumbnail preview, an "in use by N scenes" count, and an unused-source warning.
 2. Drag-to-place onto the canvas; layer list with real nesting.
 3. Per-instance transform, crop, filters, opacity, blend mode.
 4. Copy/paste across scenes with a Linked / Independent prompt (with a remembered default).
@@ -127,7 +127,7 @@ Taken from OBS forum threads and feature-request posts (see Sources). These are 
 | **Scene list doesn't scale** | Scrolling a long list to switch scenes is "a major pain"; people ask for a button grid | Scene grid/thumbnail view, folders, search, and favorites, alongside the list view; rundowns (§4G) |
 | **Accidental moves, weak undo** | Top-listed request: Ctrl+Z for accidental drags/resizes in the preview | Full command-based undo history (already in the model); **lock** layers by default in Live mode; drag needs a modifier while live |
 | **Dock layout is rigid** | Preview can't be undocked; docks below the preview are forced full-width; floating docks don't restore after restart; plugins (jrDockie, DockX) exist just to save layouts | Free docking grid, saved and hotkeyed workspaces (§4F), reliable restore of multi-monitor layouts |
-| **Audio routing is opaque** | Global "Desktop/Mic" sources vs. per-scene audio sources confuse people; filters land on the wrong source; hidden ducker/limiter filters cause mystery cutouts; monitor-and-output causes echo; Windows volume mixer silently lowers OBS | Audio sources live in the Media Pool like video; a **signal-flow view** showing every source → filters → bus → output; a warning when monitor and output would echo; show OS-level volume in the mixer |
+| **Audio routing is opaque** | Global "Desktop/Mic" sources vs. per-scene audio sources confuse people; filters land on the wrong source; hidden ducker/limiter filters cause mystery cutouts; monitor-and-output causes echo; Windows volume mixer silently lowers OBS | Audio sources live in Sources like video; a **signal-flow view** showing every source → filters → bus → output; a warning when monitor and output would echo; show OS-level volume in the mixer |
 | **Mixer clutter** | Can't easily hide unused device audio; meters look mono; sort order changes between versions | Hide/pin channels, true stereo meters, user-defined fixed order, channel groups |
 | **"Monitor doesn't match stream"** | Users hear unfiltered audio through monitoring while recording is filtered | Monitor tap-point selector (pre/post filters, pre/post fader), clearly labeled |
 | **UI density & scaling** | Excess padding steals preview space; controls too small when shrunk; high-DPI/4K scaling bugs | Compact / comfortable density setting; per-monitor DPI-aware UI; preview gets priority space |
@@ -142,7 +142,7 @@ Taken from OBS forum threads and feature-request posts (see Sources). These are 
 
 ```
 ┌──────────────── LOBS.exe (Qt 6 + QML) ───┐
-│ Media Pool │ Canvas │ Layers │ Inspector │   QML UI; canvas = native libobs display
+│ Sources    │ Canvas │ Layers │ Inspector │   QML UI; canvas = native libobs display
 └──────────────────┬───────────────────────┘
                    │ commands (undoable)
 ┌──────────────────▼───────────────────────┐
@@ -166,7 +166,7 @@ Taken from OBS forum threads and feature-request posts (see Sources). These are 
 |---|---|---|
 | **0. Spike ✅** | Prove per-instance filters on one shared input in libobs | One webcam capture, two instances with different filters/crops, no extra device capture, acceptable GPU cost |
 | **0b. Native spike ✅** | LOBS.exe embeds libobs with no OBS install; live preview in a Qt window; per-layer filtered copies of one camera; record a clip | Camera previews live, 2 filtered layers from one capture, a 10 s MP4 records |
-| **1a. Editor core ✅ (mostly)** | C++ document model + undo (ported from the web prototype, same `.lobs.json` format); reconciler doc → libobs; QML scenes list, Media Pool, layers, inspector; canvas select/move/resize drawn by libobs; Take to program | Build a 3-scene show in LOBS.exe from a blank doc; every edit undoable; save and reopen |
+| **1a. Editor core ✅ (mostly)** | C++ document model + undo (ported from the web prototype, same `.lobs.json` format); reconciler doc → libobs; QML scenes list, Sources, layers, inspector; canvas select/move/resize drawn by libobs; Take to program | Build a 3-scene show in LOBS.exe from a blank doc; every edit undoable; save and reopen |
 | **1b. Editor depth (in progress)** | Add-source dialog with device pickers (camera, display, window, game, audio); filters panel; scene grid with live thumbnails; snapping and guides; history panel | No source needs settings outside LOBS; layout feels as quick as the prototype |
 | **2. Linking & groups** | Copy to scenes as linked/independent; per-property link toggles; real groups; select all instances of a source | Round-trip linked edits across scenes; undo works across linked edits |
 | **3. Go live (MVP, streaming done)** | Stream (RTMP services + key) and record settings screens; encoder picker (x264/NVENC/QSV); studio mode + transitions; live lock; audio mixer + signal-flow view; browser source (CEF) bundled; OBS collection import; libobs built from source; installer | Someone uninstalls OBS and does a real stream with LOBS |
@@ -198,10 +198,10 @@ Taken from OBS forum threads and feature-request posts (see Sources). These are 
 - **Live lock:** while streaming or recording, a red banner says layers are locked; moving or resizing needs Alt, nudging needs Unlock.
 - **Audio tab:** per-source stereo peak meters (libobs volmeters, 20 Hz), a dB fader (-60 to 0 dB), mute, monitoring mode, the six tracks, and warnings (echo risk, monitor only, not in stream).
 - **Verified:** `LOBS.exe --streamtest rtmp://127.0.0.1/live` against a local RTMP server (node-media-server): it received H.264 1920×1080 at 60 fps with AAC audio from NVENC at ~5.7 Mbps for 11 s, 0 dropped frames, while recording to MP4 from the same encoder (8.8 MB). Meters respond to a test tone (Desktop Audio around -10 dB). Live lock blocks drags while recording. **Real platform verified (2026-10-19):** you streamed for about a minute with your own key, with no dropped frames.
-- **Resolution-independent text** (an OBS gripe fixed): each text layer redraws the text at the pixel height it occupies on the canvas, so resizing a text layer re-renders it sharply instead of scaling a bitmap whose resolution is set by font size. Content, color and font stay on the Media Pool source; there's no separate size setting. Also fixed: layer edges were blended as straight alpha, which gave text and other soft edges a harsh fringe.
+- **Resolution-independent text** (an OBS gripe fixed): each text layer redraws the text at the pixel height it occupies on the canvas, so resizing a text layer re-renders it sharply instead of scaling a bitmap whose resolution is set by font size. Content, color and font stay on the Sources source; there's no separate size setting. Also fixed: layer edges were blended as straight alpha, which gave text and other soft edges a harsh fringe.
 - **Browser source (done 2026-10-20):** OBS's obs-browser 2.26.9 plugin and CEF 127 are copied into `runtime/obs-plugins/64bit`. The plugin is built against Qt 6.11, so LOBS moved from Qt 6.8.3 to **Qt 6.11.1**. aqtinstall 3.3 can't read Qt 6.11's per-compiler repository layout, so the archives were fetched from download.qt.io directly, checked against their SHA-1 files, and unpacked to `C:\Qt\6.11.1\msvc2022_64`. KDDockWidgets was rebuilt against 6.11.1. LOBS ships its own Qt6Widgets.dll, which obs-browser links. Sources have a URL, an optional page size (defaults to the canvas), and a Reload button; page audio is routed into the mixer. Verified with `LOBS.exe --browsertest <url> <png>`, which rendered CSS, JavaScript and a transparent background.
 - **OBS import (done 2026-10-20):** the top bar's Import menu lists the collections in `%APPDATA%/obs-studio/basic/scenes`, and Open also accepts an OBS `.json`. The OBS file is only read, never written, and the import becomes a new LOBS document (one undo step).
-  - **What comes over:** scenes in OBS order, and each input once in the Media Pool (camera, display, window, game, image, media, browser, color, text, mic, desktop audio) with its device, volume, mute, monitoring and tracks.
+  - **What comes over:** scenes in OBS order, and each input once in Sources (camera, display, window, game, image, media, browser, color, text, mic, desktop audio) with its device, volume, mute, monitoring and tracks.
   - **Layers:** OBS position, scale, alignment, bounding boxes, crop (plus Crop/Pad filters), rotation, visibility and lock. OBS stores scale factors rather than pixels, so layer sizes are resolved once each source reports its natural size; until then a capture uses the canvas size and other kinds their typical size.
   - **Filters:** Color Correction, Chroma Key, Sharpen and LUT. A source's filters are linked across all of its layers, matching OBS's per-source behavior.
   - **Fallbacks:** monitors and cameras that aren't connected fall back to this PC's default device.
@@ -236,7 +236,7 @@ Taken from OBS forum threads and feature-request posts (see Sources). These are 
   - **Virtual camera:** OBS's DirectShow driver. LOBS uses an existing registration; otherwise it copies the driver to a stable folder and registers it once with admin.
   - **Verified:** `--featuretest` (replay saves a file, an injected hotkey fires, push-to-talk, virtual camera start/stop, stats), with settings and documents untouched. The engine smoke test still passes.
 - **Sources and Asset Library (done 2026-10-20):**
-  - **Sources** (was Media Pool) lists live inputs only (cameras, capture, browser, audio), grouped under labeled sections, with "N layers", "Not placed" or "Always mixed in" on each row.
+  - **Sources** lists live inputs only (cameras, capture, browser, audio), grouped under labeled sections, with "N layers", "Not placed" or "Always mixed in" on each row.
   - **Assets**, a new panel under Sources, shows the project's `assets` folder, which sits next to the saved show (LOBS's data folder for an unsaved one), as a grid with thumbnails or a list.
     - **Adding files:** drag them in from File Explorer, where files and folders are copied in (a re-drop isn't duplicated), or use + Asset.
     - **Using them:** drag one onto the canvas, or double-click to place it at the file's size, fitted to the canvas. Each file is one shared source.
@@ -275,11 +275,11 @@ The UI follows [Fluid Functionalism](https://www.fluidfunctionalism.com) (React/
 - **Fluid hover** (`FluidList`): one highlight that glides to the nearest row; no dead zones, no blinking. Also on the x axis in `FTabs`.
 - **Sizes and type:** compact step (28 px controls, 12 px body, 14 px icons); Inter Variable 4.1 bundled (`native/fonts`, OFL); weights 400/550/700; no uppercase or letter-spacing.
 - **Icons:** Lucide (ISC), bundled as SVGs in `native/icons` and drawn by a C++ image provider (`image://icon/<name>?c=<color>`) that recolors and renders each one at the exact pixel size, so icons stay sharp at any DPI. `FIcon` is the QML wrapper; `FButton` takes `iconName` (icon-only or icon + label). No emoji remain in the UI.
-- **Dockable panels** (KDDockWidgets 2.4.1, KDAB, GPL-2.0-only or GPL-3.0; built from source into `native/deps/kddw`): Scenes, Media Pool, Layers, Inspector, History and Audio Mixer are panels around a fixed canvas. Drag a tab to move or float a panel, drop it on another panel to tab them together, reorder tabs, close panels; the **Window** menu shows/hides each one, shows all, or resets the layout. The layout autosaves every 3 s to `layout.json` (a save with no open panels falls back to the default). Tabs, groups, separators and floating windows are restyled in `native/qml/dock/`. Moving panels is direct and keeps the layout still: docked panels use LOBS's own drag (`qml/dock/PanelDragController.qml`). The panel stays in its slot (dimmed, "Moving…") until you drop, a chip follows the cursor, and a blue zone shows where it lands: half of the hovered panel near its edges, the whole panel near its middle or tab strip (to tab them together), or a full-side strip near the layout's outer edges. The move happens once, on release, through KDDockWidgets' addDockWidget/addDockWidgetAsTab. Floating windows keep KDDockWidgets' drag (35% ghost, restyled tile targets). Not yet: reordering tabs by dragging along the strip. Double-click a tab to float it. The drop targets and preview are restyled in `native/deps/kddw-patches/` (applied by `build-kddw.bat`, since KDDockWidgets loads those two files from fixed paths). The Audio Mixer is its own panel and reflows into columns when wide. Menus and dialogs now hide the native preview while open, so nothing is covered.
+- **Dockable panels** (KDDockWidgets 2.4.1, KDAB, GPL-2.0-only or GPL-3.0; built from source into `native/deps/kddw`): Scenes, Sources, Layers, Inspector, History and Audio Mixer are panels around a fixed canvas. Drag a tab to move or float a panel, drop it on another panel to tab them together, reorder tabs, close panels; the **Window** menu shows/hides each one, shows all, or resets the layout. The layout autosaves every 3 s to `layout.json` (a save with no open panels falls back to the default). Tabs, groups, separators and floating windows are restyled in `native/qml/dock/`. Moving panels is direct and keeps the layout still: docked panels use LOBS's own drag (`qml/dock/PanelDragController.qml`). The panel stays in its slot (dimmed, "Moving…") until you drop, a chip follows the cursor, and a blue zone shows where it lands: half of the hovered panel near its edges, the whole panel near its middle or tab strip (to tab them together), or a full-side strip near the layout's outer edges. The move happens once, on release, through KDDockWidgets' addDockWidget/addDockWidgetAsTab. Floating windows keep KDDockWidgets' drag (35% ghost, restyled tile targets). Not yet: reordering tabs by dragging along the strip. Double-click a tab to float it. The drop targets and preview are restyled in `native/deps/kddw-patches/` (applied by `build-kddw.bat`, since KDDockWidgets loads those two files from fixed paths). The Audio Mixer is its own panel and reflows into columns when wide. Menus and dialogs now hide the native preview while open, so nothing is covered.
 - **Settings** is a full page (Ctrl+,): sidebar with Stream, Recording, Video, Audio and About; grouped cards; every change saves immediately (the stream key has its own Save and Remove).
 - Components: `FButton` (primary/secondary/tertiary/ghost/danger), `FInput`, `FNumField` (math), `FFillSlider` (the "Volume" fill slider), `FSwitch`, `FCheckbox`, `FTabs`, `FSelect`, `FMenu`/`FMenuItem`, `FDialog`, `FBadge`, `FSection`, `FPanelHeader`, `FluidList`. Tokens come from C++ as the `Pal` context property.
 
-Also in 1b so far: drag a Media Pool source onto the canvas (the engine draws the drop target; it lands where dropped), scene grid with live engine-rendered thumbnails, window picker for window capture, game capture modes (any fullscreen / specific window / hotkey). Fixed: layers created after a scene was showing didn't activate their input. The native preview hides while a dialog is open, since it sits above QML popups.
+Also in 1b so far: drag a source from Sources onto the canvas (the engine draws the drop target; it lands where dropped), scene grid with live engine-rendered thumbnails, window picker for window capture, game capture modes (any fullscreen / specific window / hotkey). Fixed: layers created after a scene was showing didn't activate their input. The native preview hides while a dialog is open, since it sits above QML popups.
 
 Still open in 1b: snapping guides polish, history panel styling details, Combobox/CommandMenu (Ctrl+K), menus that overlap the preview are still covered by it.
 
@@ -287,10 +287,10 @@ Still open in 1b: snapping guides polish, history panel styling details, Combobo
 
 - `native/src/model/` — C++ port of the document model (sources, instances, per-property links, groups, copy linked/independent) and the undo store; reads and writes the prototype's `.lobs.json` format.
 - `native/src/engine.cpp` — incremental reconciler: inputs named by source id, one private scene per LOBS scene, one `lobs_instance` per layer with its own filters (opacity is a final color filter). The edited scene renders in the preview; **Take** sends it to program.
-- `native/src/app.cpp` + `native/qml/` — scenes list, Media Pool (bins, usage counts), layers (reorder, lock, hide, group), inspector (transform with math, crop, filters with live sliders, visibility, link status + Unlink, device picker), history tab, add-source dialog, autosave to `%APPDATA%/LOBS/LOBS/current.lobs.json`.
+- `native/src/app.cpp` + `native/qml/` — scenes list, Sources (bins, usage counts), layers (reorder, lock, hide, group), inspector (transform with math, crop, filters with live sliders, visibility, link status + Unlink, device picker), history tab, add-source dialog, autosave to `%APPDATA%/LOBS/LOBS/current.lobs.json`.
 - Canvas: click to select (groups first, double-click to go inside), drag to move with snapping to canvas and layer edges, corner handles to resize (aspect kept, Shift for free), arrow nudges. Boxes and handles are drawn by libobs over the preview.
 - Verified by hand: live camera and display capture; move, resize and undo; editing a linked filter in one scene changes the other; the show survives a restart. `--autotest` builds a 2-scene show from a blank document through the editor commands and records 5 s (3.7 MB, 60 fps).
-- Known rough edges: the inspector scrolls back on some edits; Basic-style checkboxes look off in the dark theme; 3-scene build-from-blank done via autotest commands, not yet by hand; no drag-and-drop from the Media Pool onto the canvas yet (double-click places).
+- Known rough edges: the inspector scrolls back on some edits; Basic-style checkboxes look off in the dark theme; 3-scene build-from-blank done via autotest commands, not yet by hand; no drag-and-drop from the Sources onto the canvas yet (double-click places).
 
 ### Native spike (Phase 0b, `native/`) — passed 2026-10-19
 
@@ -306,8 +306,8 @@ Still open in 1b: snapping guides polish, history panel styling details, Combobo
 
 The React prototype drove a running OBS over obs-websocket. It stays as the reference for layouts and interactions; the native app ports its document model and follows its screens.
 
-- Document model with Sources (Media Pool) → Instances, per-property link groups (Transform · Crop · Filters · Visibility), linked/independent copy, groups, full undo/redo history, live lock.
-- UI: Media Pool, canvas with drag/resize, layer list, inspector, scene grid/list, history panel, audio signal-flow view.
+- Document model with Sources → Instances, per-property link groups (Transform · Crop · Filters · Visibility), linked/independent copy, groups, full undo/redo history, live lock.
+- UI: Sources, canvas with drag/resize, layer list, inspector, scene grid/list, history panel, audio signal-flow view.
 - **Phase 0 passed (2026-10-19)** on OBS 32.2.2: one live 1080p camera as 20 instances, each with its own crop and color filter, on a 1080p60 canvas:
 
   | | Avg render time | FPS | Skipped frames | CPU | Memory |
