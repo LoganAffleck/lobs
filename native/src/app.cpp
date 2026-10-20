@@ -69,7 +69,17 @@ static Doc loadDoc(const QString &path)
 		if (j.isObject() && j["version"].toInt() == 1)
 			return Doc::fromJson(j.object());
 	}
-	return Doc::sample();
+	// Self-tests (temp shows named "...test...") build on the sample show.
+	if (QFileInfo(path).fileName().contains("test", Qt::CaseInsensitive))
+		return Doc::sample();
+	// First run: one empty scene on a black background, with the mic and desktop audio ready.
+	Doc d;
+	const QString scene = d.addScene("Scene").id;
+	const QString bg = d.addSource("color", "Background", {{"color", "#000000"}, {"background", true}}).id;
+	d.placeSource(scene, bg);
+	d.addSource("mic", "Mic");
+	d.addSource("desktop_audio", "Desktop Audio");
+	return d;
 }
 
 static QString firstRealDevice(Engine *engine, const QString &kind)

@@ -31,6 +31,8 @@ Menu {
     onWidthChanged: recheck()
     onHeightChanged: recheck()
     onAboutToHide: if (coversPreview) { coversPreview = false; app.popupClosed() }
+    // Tells the canvas watchdog a menu is up, however the menu is shown or closed.
+    onVisibleChanged: app.menuVisible(visible)
     enter: Transition {
         // A plain fade: scaling made menus wider than their field look like they slide in.
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Pal.fast }

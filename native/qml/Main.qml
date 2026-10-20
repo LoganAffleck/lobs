@@ -95,7 +95,7 @@ ApplicationWindow {
         onTriggered: {
             if (!app.previewHidden || win.dialogOpen) { idleChecks = 0; return }
             const kids = Overlay.overlay ? Overlay.overlay.children : []
-            let open = false
+            let open = app.visibleMenus > 0
             for (let i = 0; i < kids.length; ++i) if (kids[i].visible && kids[i].opacity > 0) open = true
             idleChecks = open ? 0 : idleChecks + 1
             if (idleChecks >= 2) { idleChecks = 0; app.resetCovering() }
@@ -356,7 +356,7 @@ ApplicationWindow {
                             tip: "Search sources"
                             onClicked: { poolGuest.searching = !poolGuest.searching; if (poolGuest.searching) poolSearch.forceActiveFocus(); else poolSearch.text = "" }
                         }
-                        FButton { iconName: "plus"; text: "Source"; variant: "secondary"; onClicked: addDialog.open(); tip: "Add a source" }
+                        FButton { iconName: "plus"; text: poolGuest.width < 330 ? "" : "Source"; variant: "secondary"; onClicked: addDialog.open(); tip: "Add a source" }
                     }
                     FSearchField {
                         id: poolSearch
@@ -708,6 +708,7 @@ ApplicationWindow {
                         // The path: earlier folders are links, the current one is plain text. At the top, nothing (the tab says Assets).
                         // It gets whatever width is left and clips from the left, so the current folder stays in view.
                         Item {
+                          visible: app.assetPath !== ""
                           Layout.fillWidth: true
                           Layout.minimumWidth: 0
                           implicitHeight: 28
@@ -1051,7 +1052,7 @@ ApplicationWindow {
                             text: assetSearch.query ? "Nothing in assets matches \u201c" + assetSearch.text + "\u201d."
                                 : assetsGuest.raw.length ? "No " + ["", "images", "videos", "audio files"][assetsGuest.typeFilter] + " here."
                                 : app.assetPath ? "This folder is empty. Drag files here, or paste with Ctrl+V."
-                                : "Drag images, videos or audio here from File Explorer. They're copied into this project's assets folder. Make folders to organize them by scene or type."
+                                : "Drop images, video or audio here."
                         }
                         // Drop from File Explorer: files are copied into the current folder.
                         DropArea {
@@ -1347,14 +1348,15 @@ ApplicationWindow {
 
         Component.onCompleted: Qt.callLater(buildLayout)
         function buildLayout() {
-            addDockWidget(scenesDock, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(270, 0))
+            addDockWidget(scenesDock, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(320, 0))
             addDockWidget(poolDock, KDDW.KDDockWidgets.Location_OnBottom, scenesDock, Qt.size(0, 300))
             addDockWidget(assetsDock, KDDW.KDDockWidgets.Location_OnBottom, poolDock, Qt.size(0, 300))
             addDockWidget(layersDock, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(340, 0))
             addDockWidget(inspectorDock, KDDW.KDDockWidgets.Location_OnBottom, layersDock, Qt.size(0, 520))
             inspectorDock.addDockWidgetAsTab(historyDock)
             inspectorDock.dockWidget.setAsCurrentTab()
-            addDockWidget(audioDock, KDDW.KDDockWidgets.Location_OnBottom, null, Qt.size(0, 220))
+            poolDock.addDockWidgetAsTab(audioDock) // Audio Mixer as a tab next to Sources
+            poolDock.dockWidget.setAsCurrentTab()
             // Remember this arrangement for "Reset layout", then bring back the user's own.
             layoutSaver.saveToFile(win.defaultLayoutFile)
             layoutSaver.restoreFromFile(win.layoutFile)

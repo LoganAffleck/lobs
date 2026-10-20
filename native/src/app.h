@@ -180,6 +180,9 @@ public:
 	// Keyed version for things that can hide without a close signal (the shared tooltip).
 	Q_INVOKABLE void setCovering(const QString &key, bool on) { on ? (void)m_coverers.insert(key) : (void)m_coverers.remove(key); updatePreviewHidden(); }
 	// Safety net: nothing is actually open, so any leftover "covering" state is stale.
+	Q_PROPERTY(int visibleMenus READ visibleMenus NOTIFY visibleMenusChanged)
+	int visibleMenus() const { return m_visibleMenus; }
+	Q_INVOKABLE void menuVisible(bool on) { m_visibleMenus = std::max(0, m_visibleMenus + (on ? 1 : -1)); emit visibleMenusChanged(); }
 	Q_INVOKABLE void resetCovering() { if (m_openPopups || !m_coverers.isEmpty()) { m_openPopups = 0; m_coverers.clear(); updatePreviewHidden(); } }
 	Q_PROPERTY(bool previewHidden READ previewHidden NOTIFY previewHiddenChanged)
 	Q_PROPERTY(int freezeTick READ freezeTick NOTIFY previewHiddenChanged)
@@ -376,6 +379,7 @@ signals:
 	void assetsChanged();
 	void previewScaleChanged();
 	void projectChanged();
+	void visibleMenusChanged();
 	void canvasMenuRequested(double x, double y); // right-click on the preview (preview coords)
 	void serverPings(const QVariantList &servers);
 	void bandwidthProgress(const QVariantMap &p);
@@ -445,6 +449,7 @@ private:
 	int m_toolStrokeWidth = 6;
 	int m_laserTrailMs = 500;
 	Eyedropper m_eyedropper;
+	int m_visibleMenus = 0;
 	QList<QPointer<QWindow>> m_projectors;
 	QString m_toolFont = "Segoe UI";
 	bool m_toolBold = true, m_toolItalic = false;
