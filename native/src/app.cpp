@@ -24,6 +24,7 @@
 #include <QGuiApplication>
 #include <QMimeData>
 #include <QDirIterator>
+#include <QSaveFile>
 #include <QTcpSocket>
 #include <QHostInfo>
 #include <functional>
@@ -192,12 +193,26 @@ void App::onStoreChanged()
 	m_perfQmlUs += pt.nsecsElapsed() / 1000;
 }
 
+// Writes the show to a file atomically: a temp file next to it, renamed over the old one only
+// once the write succeeded, so a crash or a full disk never leaves a half-written show.
+static bool writeShowFile(const QString &path, const Doc &d)
+{
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly))
+		return false;
+	const QByteArray data = QJsonDocument(d.toJson()).toJson();
+	if (f.write(data) != data.size())
+		return f.cancelWriting(), false;
+	return f.commit();
+}
+
 void App::autosave()
 {
 	QDir().mkpath(QFileInfo(m_docPath).absolutePath());
-	QFile f(m_docPath);
-	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		f.write(QJsonDocument(doc().toJson()).toJson());
+	const bool ok = writeShowFile(m_docPath, doc());
+	if (!ok && !m_autosaveFailed)
+		showToast("Couldn't autosave. Check that there's space on the drive.");
+	m_autosaveFailed = !ok;
 }
 
 void App::showToast(const QString &msg)
@@ -1523,10 +1538,8 @@ bool App::saveProject()
 {
 	if (m_projectFile.isEmpty())
 		return false;
-	QFile f(m_projectFile);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	if (!writeShowFile(m_projectFile, doc()))
 		return showToast("Couldn't save " + m_projectFile), false;
-	f.write(QJsonDocument(doc().toJson()).toJson());
 	return true;
 }
 
@@ -1578,10 +1591,8 @@ bool App::createProject(const QString &name, const QString &folder)
 bool App::saveAs(const QUrl &url)
 {
 	const QString path = url.toLocalFile();
-	QFile f(path);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(QJsonDocument(doc().toJson()).toJson()) < 0)
+	if (!writeShowFile(path, doc()))
 		return showToast("Couldn't save " + path), false;
-	f.close();
 	// Only now does the show's folder become the project (its assets folder sits next to it),
 	// so a failed Save As leaves the current project as it was.
 	m_projectFile = path;

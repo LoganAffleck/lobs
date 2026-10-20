@@ -449,6 +449,7 @@ private:
 	int m_toolStrokeWidth = 6;
 	int m_laserTrailMs = 500;
 	Eyedropper m_eyedropper;
+	bool m_autosaveFailed = false; // toast once per failing streak
 	int m_visibleMenus = 0;
 	QList<QPointer<QWindow>> m_projectors;
 	QString m_toolFont = "Segoe UI";
