@@ -889,7 +889,14 @@ void App::placeSource(const QString &id)
 void App::renameSource(const QString &id, const QString &name)
 {
 	if (!name.trimmed().isEmpty())
-		m_store.commit("Rename source", [&](Doc &d) { d.sources[id].name = name.trimmed(); });
+		m_store.commit("Rename source", [&](Doc &d) {
+			// LOBS-015: layers still named after the source follow it; a layer renamed by hand keeps its name.
+			const QString old = d.sources[id].name;
+			for (Instance &i : d.instances)
+				if (i.sourceId == id && i.name == old)
+					i.name = name.trimmed();
+			d.sources[id].name = name.trimmed();
+		});
 }
 
 void App::deleteSource(const QString &id)

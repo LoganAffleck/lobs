@@ -280,7 +280,10 @@ story("MP-03", "Rename and delete a source used in several scenes", () => {
 	const src = t.doc().instances[a].sourceId;
 	const B = mkScene("B"), C = mkScene("C");
 	copyTo(a, B, true); copyTo(a, C, false);
+	const inC = Object.keys(t.doc().instances).filter(i => t.doc().instances[i].sceneId === C && t.doc().instances[i].sourceId === src)[0];
+	app.renameLayer(inC, "My logo");
 	app.renameSource(src, "Brand Logo");
+	eq("a layer renamed by hand keeps its name", t.doc().instances[inC].name, "My logo");
 	sel(a);
 	t.note("layer name after source rename: '" + t.doc().instances[a].name + "', inspector sourceName: '" + app.inspector.sourceName + "'");
 	const shown = app.layers.filter(l => l.id === a)[0].name;
