@@ -120,6 +120,12 @@ public:
 	Q_INVOKABLE void groupSelected();
 	Q_INVOKABLE void ungroupSelected();
 	Q_INVOKABLE void duplicateSelected();
+	// Clipboard for layers (Ctrl+C / Ctrl+X / Ctrl+V; Ctrl+Shift+V pastes linked copies).
+	Q_INVOKABLE void copyLayers();
+	Q_INVOKABLE void cutLayers();
+	Q_INVOKABLE void pasteLayers(bool linked = false);
+	Q_PROPERTY(bool canPaste READ canPaste NOTIFY clipboardChanged)
+	bool canPaste() const { return !m_clipIds.isEmpty(); }
 	Q_INVOKABLE void copySelectedTo(const QString &sceneId, bool linked);
 	// inspector
 	Q_INVOKABLE void setTransform(const QString &field, double value);
@@ -398,6 +404,7 @@ public:
 
 signals:
 	void docChanged();
+	void clipboardChanged();
 	// The big lists, each emitted only when its contents changed (so QML rebuilds only those).
 	void scenesChanged();
 	void poolChanged();
@@ -446,7 +453,9 @@ private:
 	QString m_docPath;
 	Hotkeys *m_hotkeys = nullptr;
 	QString m_projectFile; // the saved show this session belongs to ("" = unsaved)
-	lobs::Doc m_cleanDoc; // an untitled show matching this has nothing to lose (see unsavedShow)
+	lobs::Doc m_cleanDoc;
+	QStringList m_clipIds; // copied or cut layers (top-level ones of the selection)
+	lobs::Doc m_clipDoc;   // the show when they were copied, so a cut layer can still be pasted // an untitled show matching this has nothing to lose (see unsavedShow)
 	QFileSystemWatcher m_assetWatch;
 	QVariantMap m_sourceStatus;
 	int m_sourceTick = 0;

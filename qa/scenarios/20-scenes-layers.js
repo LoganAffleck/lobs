@@ -361,3 +361,46 @@ story("UH-03", "A normal show keeps the full 200 undo steps (LOBS-036 caps only 
 	while (app.canUndo && n < 300) { app.undo(); ++n; }
 	eq("undo goes back 200 steps", n, 200);
 });
+
+story("CP-01", "Copy, cut and paste layers (same scene, other scene, linked, after a cut)", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const r = placeColor("Logo", "#ff0000");
+	setT(r, "x", 100); setT(r, "y", 50);
+	sel(r); app.setCrop("l", 30); app.addFilter("color");
+	const count = s => t.doc().scenes[s].layers.length;
+	const n0 = count(A);
+	const x0 = eff(r, "transform").x, y0 = eff(r, "transform").y; // the crop moved it a little
+	sel(r); app.copyLayers();
+	check("Paste is offered after Copy", app.canPaste);
+	app.pasteLayers(false);
+	eq("paste adds a layer", count(A), n0 + 1);
+	const p = app.inspector.id;
+	check("the pasted copy is selected and new", p && p !== r, p);
+	eq("pasted beside the original (20 px down and right)", [eff(p, "transform").x, eff(p, "transform").y], [x0 + 20, y0 + 20]);
+	eq("keeps crop", eff(p, "crop").l, 30);
+	eq("keeps filters", eff(p, "filters").length, 1);
+	check("an independent copy", !linkedTogether(r, p, "transform"));
+	app.undo();
+	eq("paste is one undo step", count(A), n0);
+	const B = mkScene("Other");
+	app.editScene(B);
+	const nb = count(B);
+	app.pasteLayers(false);
+	eq("paste into another scene", count(B), nb + 1);
+	eq("at the same position there", eff(app.inspector.id, "transform").x, x0);
+	app.pasteLayers(true);
+	check("Ctrl+Shift+V pastes a linked copy", linkedTogether(r, app.inspector.id, "transform"));
+	// Cut, then paste back: same settings, even though the original is gone.
+	app.editScene(A); sel(r); app.cutLayers();
+	check("cut removes it", !t.doc().instances[r]);
+	app.pasteLayers(false);
+	const back = app.inspector.id;
+	check("paste after cut brings it back", !!back && t.doc().scenes[A].layers.indexOf(back) >= 0);
+	eq("with its position, crop and filters", [eff(back, "transform").x, eff(back, "crop").l, eff(back, "filters").length], [x0, 30, 1]);
+	// The protected background layer isn't copied.
+	const bg = t.doc().scenes[A].layers[t.doc().scenes[A].layers.length - 1];
+	sel(bg); app.copyLayers(); app.pasteLayers(false);
+	check("the background layer isn't copied", t.doc().scenes[A].layers.filter(id => t.doc().instances[id].name === t.doc().instances[bg].name).length === 1);
+});

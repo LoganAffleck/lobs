@@ -1162,6 +1162,84 @@ void App::duplicateSelected()
 	emit docChanged();
 }
 
+void App::copyLayers()
+{
+	// Copying a group copies its children with it, so drop any selected child of a selected group.
+	QStringList ids;
+	for (const QString &id : m_selection) {
+		bool inSelectedGroup = false;
+		for (const QString &other : m_selection)
+			inSelectedGroup |= other != id && doc().descendants(other).contains(id);
+		if (doc().instances.contains(id) && !inSelectedGroup && !isBackgroundLayer(doc(), id))
+			ids << id;
+	}
+	if (ids.isEmpty())
+		return;
+	m_clipIds = ids;
+	m_clipDoc = doc();
+	emit clipboardChanged();
+	showToast(ids.size() == 1 ? "Copied " + doc().instances[ids[0]].name : QString("Copied %1 layers").arg(ids.size()));
+}
+
+void App::cutLayers()
+{
+	if (m_selection.isEmpty() || !liveEditAllowed(m_selection))
+		return;
+	copyLayers();
+	if (m_clipIds.isEmpty())
+		return;
+	deleteSelected();
+	showToast(m_clipIds.size() == 1 ? "Cut " + m_clipDoc.instances[m_clipIds[0]].name : QString("Cut %1 layers").arg(m_clipIds.size()));
+}
+
+void App::pasteLayers(bool linked)
+{
+	if (m_clipIds.isEmpty() || !doc().scenes.contains(m_editScene) || !liveSceneEditAllowed(m_editScene))
+		return;
+	QStringList made;
+	const QString scene = m_editScene;
+	m_store.commit(linked ? "Paste linked" : "Paste", [&](Doc &d) {
+		// Layers that were cut (or deleted since) come back from the snapshot, with their own
+		// settings and, if needed, their source.
+		QStringList ids, temps;
+		std::function<void(const QString &)> restore = [&](const QString &id) {
+			Instance i = m_clipDoc.instances.value(id);
+			i.props.transform = m_clipDoc.transform(i), i.props.crop = m_clipDoc.crop(i);
+			i.props.filters = m_clipDoc.filters(i), i.props.visibility = m_clipDoc.visibility(i);
+			i.links.clear();
+			d.instances[id] = i;
+			temps << id;
+			if (i.kind != "group" && !d.sources.contains(i.sourceId) && m_clipDoc.sources.contains(i.sourceId)) {
+				d.sources[i.sourceId] = m_clipDoc.sources[i.sourceId];
+				d.sourceOrder << i.sourceId;
+			}
+			for (const QString &c : i.children)
+				restore(c);
+		};
+		for (const QString &id : m_clipIds) {
+			if (!d.instances.contains(id)) {
+				if (!m_clipDoc.instances.contains(id))
+					continue;
+				restore(id);
+			}
+			ids << id;
+		}
+		made = d.copyToScene(ids, scene, linked && temps.isEmpty());
+		for (const QString &t : temps)
+			d.instances.remove(t);
+		// Pasted where the originals are, the copies sit 20 px down and right so they show.
+		QSet<QString> seen;
+		for (int k = 0; k < made.size(); ++k)
+			if (d.instances.value(ids.value(k)).sceneId == scene)
+				d.moveBy(made[k], 20, 20, seen);
+	});
+	if (made.isEmpty())
+		return;
+	m_selection = made;
+	updateOverlay();
+	emit docChanged();
+}
+
 void App::copySelectedTo(const QString &sceneId, bool linked)
 {
 	if (!liveSceneEditAllowed(sceneId))

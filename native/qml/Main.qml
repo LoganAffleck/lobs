@@ -32,6 +32,11 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Undo]; onActivated: app.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
     Shortcut { sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
+    // Layers clipboard. Text fields keep their own copy and paste (they take these keys first).
+    Shortcut { sequence: StandardKey.Copy; onActivated: app.copyLayers() }
+    Shortcut { sequence: StandardKey.Cut; onActivated: app.cutLayers() }
+    Shortcut { sequence: StandardKey.Paste; onActivated: app.pasteLayers(false) }
+    Shortcut { sequence: "Ctrl+Shift+V"; onActivated: app.pasteLayers(true) }
     Shortcut { sequence: "Ctrl+G"; onActivated: app.groupSelected() }
     Shortcut { sequence: "Ctrl+Shift+G"; onActivated: app.ungroupSelected() }
     // Layer order, like design tools: Ctrl ] forward, Ctrl [ backward, with Shift to the front/back.
@@ -1288,6 +1293,11 @@ ApplicationWindow {
                             id: layerMenu
                             property var row: ({}) // the row it was opened on
                             FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", layerMenu.row.id, layerMenu.row.name) }
+                            FMenuItem { text: "Copy    Ctrl C"; onTriggered: app.copyLayers() }
+                            FMenuItem { text: "Cut    Ctrl X"; visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; onTriggered: app.cutLayers() }
+                            FMenuItem { text: "Paste    Ctrl V"; enabled: app.canPaste; onTriggered: app.pasteLayers(false) }
+                            FMenuItem { text: "Paste linked    Ctrl Shift V"; enabled: app.canPaste; onTriggered: app.pasteLayers(true) }
+                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
                             FCopyToMenu {}
                             FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
@@ -1544,7 +1554,7 @@ ApplicationWindow {
             { help: ["Click: edit a scene without showing it.", "Show or double-click: switch to the scene.", "Grid: shows live thumbnails of every scene.", "Right-click: rename, duplicate with linked or independent layers, or delete."], dock: scenesDock, guest: scenesGuest, icon: "clapperboard" },
             { help: ["Inputs: added once, shared by every scene.", "Place it: drag onto the canvas or double-click.", "Per scene: size, crop and filters.", "Files are in Assets. Add text and color from Layers."], dock: poolDock, guest: poolGuest, icon: "folder" },
             { help: ["Project files: this project's assets folder.", "Add files: drag in from File Explorer or use + Asset.", "Place it: drag onto the canvas or double-click.", "Right-click: show in File Explorer or move to Recycle Bin."], dock: assetsDock, guest: assetsGuest, icon: "image" },
-            { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", "Shortcuts: Ctrl+G group, Ctrl+Shift+G ungroup, Ctrl+D duplicate, Delete remove.", "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
+            { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", "Shortcuts: Ctrl+C / Ctrl+V copy and paste (Ctrl+Shift+V pastes linked), Ctrl+D duplicate, Ctrl+G group, Delete remove.", "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
             { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.", "Source: select one in Sources to edit its input."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
             { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 goes to the stream; recordings can use tracks 1-6.", "Monitor: hear it in headphones. Monitor only keeps it out of output.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
             { help: ["Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.", "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },

@@ -235,3 +235,17 @@ story("CC-01u", "Captions opens from the Window menu beside the mixer", () => {
 	check(ready ? "Start is offered" : "the one-time model download is offered", ready ? has("Start") : has("Download speech model"), captions.modelState);
 	check("the status line says captions are off", has("Captions are off"));
 });
+
+story("CP-01u", "Ctrl+C then Ctrl+V through the window copies the selected layer", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const r = placeColor("Keyboard copy", "#00ff00");
+	sel(r); t.wait(200);
+	const n = t.doc().scenes[A].layers.length;
+	t.key("Ctrl+C"); t.wait(150);
+	t.key("Ctrl+V"); t.wait(300);
+	eq("Ctrl+V pasted a copy", t.doc().scenes[A].layers.length, n + 1);
+	t.key("Ctrl+Z"); t.wait(200);
+	eq("Ctrl+Z undoes the paste", t.doc().scenes[A].layers.length, n);
+});
