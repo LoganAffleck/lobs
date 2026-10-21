@@ -40,8 +40,9 @@ Item {
     readonly property bool strips: layoutMode === "strips" || (layoutMode === "auto" && autoStrips)
     property bool searching: false
     function matches(s) { return !searchField.query || String(s.name || "").toLowerCase().includes(searchField.query) }
+    // Flips between what's showing now and the other layout (Auto is only the starting choice).
     function cycleLayout() {
-        layoutMode = layoutMode === "auto" ? "rows" : layoutMode === "rows" ? "strips" : "auto"
+        layoutMode = strips ? "rows" : "strips"
         app.setUiValue("mixer/layout", layoutMode)
     }
     function src(i) { return mix[i] || ({ id: "", name: "", icon: "", color: "#555", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 }) }
@@ -112,9 +113,10 @@ Item {
                 onClicked: { mv.searching = !mv.searching; if (mv.searching) searchField.forceActiveFocus(); else searchField.text = "" }
             }
             FButton {
-                iconName: mv.layoutMode === "rows" ? "rows-3" : mv.layoutMode === "strips" ? "columns-3" : "wand-sparkles"
-                variant: "ghost"; selected: mv.layoutMode !== "auto"
-                tip: (mv.layoutMode === "auto" ? "Layout: Auto (" + (mv.strips ? "strips" : "rows") + ")" : mv.layoutMode === "rows" ? "Layout: Rows" : "Layout: Strips") + ". Click to change."
+                // Shows the layout in use: rows, or side-by-side strips (columns).
+                iconName: mv.strips ? "columns-3" : "rows-3"
+                variant: "ghost"
+                tip: mv.strips ? "Strips. Click for rows." : "Rows. Click for strips."
                 onClicked: mv.cycleLayout()
             }
         }
