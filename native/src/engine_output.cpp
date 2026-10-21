@@ -198,6 +198,12 @@ bool Engine::startStreaming()
 		return false;
 	}
 
+	// The old output goes first: it still points at the old encoders (and service), and releasing
+	// those under it freed memory the output then touched (heap corruption on the next start).
+	if (m_streamOutput) {
+		obs_output_release(m_streamOutput);
+		m_streamOutput = nullptr;
+	}
 	if (m_service)
 		obs_service_release(m_service);
 	if (st.service == "Custom") {
@@ -233,8 +239,6 @@ bool Engine::startStreaming()
 	const char *outType = obs_service_get_preferred_output_type(m_service);
 	if (!outType)
 		outType = "rtmp_output";
-	if (m_streamOutput)
-		obs_output_release(m_streamOutput);
 	obs_data_t *od = toData({});
 	m_streamOutput = obs_output_create(outType, "LOBS stream", od, nullptr);
 	obs_data_release(od);
@@ -327,6 +331,12 @@ void Engine::startRecording()
 	m_lastRecording = dir + "/LOBS " + QDateTime::currentDateTime().toString("yyyy-MM-dd HH-mm-ss") + "." + rs.format;
 
 	// "Same as stream" shares the stream encoders while live; otherwise a quality-based encoder.
+	// The old output goes first: it still points at the old encoders (and service), and releasing
+	// those under it freed memory the output then touched (heap corruption on the next start).
+	if (m_recOutput) {
+		obs_output_release(m_recOutput);
+		m_recOutput = nullptr;
+	}
 	obs_encoder_t *venc = nullptr, *aenc = nullptr;
 	if (rs.quality == "stream" && m_streaming) {
 		venc = m_streamVenc;
@@ -342,8 +352,6 @@ void Engine::startRecording()
 		venc = m_recVenc;
 		aenc = m_recAenc;
 	}
-	if (m_recOutput)
-		obs_output_release(m_recOutput);
 	obs_data_t *os = toData({{"path", QDir::toNativeSeparators(m_lastRecording)}});
 	m_recOutput = obs_output_create("ffmpeg_muxer", "LOBS recording", os, nullptr);
 	obs_data_release(os);

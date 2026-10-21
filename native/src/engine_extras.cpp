@@ -97,6 +97,12 @@ bool Engine::startReplay()
 	const QString dir = m_settings.recordFolder();
 	QDir().mkpath(dir);
 	// Its own encoders (recording quality), so it runs whether or not you stream or record.
+	// The old output goes first: it still points at the old encoders (and service), and releasing
+	// those under it freed memory the output then touched (heap corruption on the next start).
+	if (m_replayOutput) {
+		obs_output_release(m_replayOutput);
+		m_replayOutput = nullptr;
+	}
 	obs_encoder_release(m_replayVenc);
 	obs_encoder_release(m_replayAenc);
 	m_replayVenc = makeVideoEncoder(resolveEncoder(), true, "LOBS replay video");
@@ -108,8 +114,6 @@ bool Engine::startReplay()
 		m_lastError = "Couldn't create encoders for the replay buffer";
 		return false;
 	}
-	if (m_replayOutput)
-		obs_output_release(m_replayOutput);
 	obs_data_t *os = toData({{"directory", QDir::toNativeSeparators(dir)}, {"format", "Replay %CCYY-%MM-%DD %hh-%mm-%ss"},
 				 {"extension", m_settings.record.format}, {"allow_spaces", true},
 				 {"max_time_sec", m_settings.record.replaySeconds}, {"max_size_mb", 2048}});
