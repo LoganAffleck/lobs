@@ -207,3 +207,18 @@ story("ST-01u", "Stats opens as a panel from the Window menu", () => {
 	check("the Stats panel shows render time", ui("Render time").length >= 1, ui("Render time"));
 	check("and frame rate", ui("Frame rate").length >= 1);
 });
+
+story("AU-04u", "Mixer: drag a strip by its name to reorder it", () => {
+	fresh();
+	["Mic A", "Mic B", "Mic C"].forEach(n => addKind("mic", n, "", false));
+	t.wait(500);
+	const order = () => app.mixer.map(m => m.name).filter(n => /^Mic /.test(n));
+	const c = ui("Mic C").filter(r => r.y > 600)[0], a = ui("Mic A").filter(r => r.y > 600)[0];
+	check("the mixer shows the strips", !!c && !!a, ui("Mic C"));
+	if (!c || !a) return;
+	t.grab("au04u-before.png");
+	t.dragAt(c.x + 10, c.y + c.h / 2, a.x + 10, a.y + a.h / 2, 16);
+	t.wait(400);
+	t.grab("au04u-after.png");
+	eq("Mic C moved to the front", order(), ["Mic C", "Mic A", "Mic B"]);
+});

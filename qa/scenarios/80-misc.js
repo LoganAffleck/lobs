@@ -221,3 +221,27 @@ story("MD-01", "Media controls: play, pause, restart, stop, seek, and allowed on
 	check("restart works on air while locked", r.state === "playing" && r.timeMs < 2000, r);
 	t.stopRecording(); t.waitUntil(() => !app.live, 10000);
 });
+
+story("AU-04", "Mixer: its own order, drag to reorder, pin to the front, saved and undoable", () => {
+	fresh();
+	const ids = ["Mic A", "Mic B", "Mic C"].map(n => addKind("mic", n, "", false).source);
+	const order = () => app.mixer.map(m => m.name).filter(n => /^Mic /.test(n));
+	eq("starts in Sources order", order(), ["Mic A", "Mic B", "Mic C"]);
+	const srcBefore = t.doc().sourceOrder.slice();
+	app.moveMixer(ids[2], 0);
+	eq("move C to the front", order(), ["Mic C", "Mic A", "Mic B"]);
+	check("Sources order is untouched", JSON.stringify(t.doc().sourceOrder) === JSON.stringify(srcBefore));
+	app.undo();
+	eq("one undo step", order(), ["Mic A", "Mic B", "Mic C"]);
+	app.setMixerPinned(ids[1], true);
+	eq("pinned goes first", order(), ["Mic B", "Mic A", "Mic C"]);
+	check("row says pinned", app.mixer.filter(m => m.id === ids[1])[0].pinned === true);
+	app.moveMixer(ids[2], 0);
+	eq("an unpinned strip can't jump ahead of a pinned one", order(), ["Mic B", "Mic C", "Mic A"]);
+	const d = addKind("mic", "Mic D", "", false).source;
+	eq("a new source joins at the end", order(), ["Mic B", "Mic C", "Mic A", "Mic D"]);
+	roundTrip("au04");
+	eq("order and pins survive save and reopen", order(), ["Mic B", "Mic C", "Mic A", "Mic D"]);
+	app.setMixerPinned(ids[1], false);
+	eq("unpin keeps its place among the rest", order()[0], "Mic B");
+});

@@ -401,6 +401,22 @@ public:
 		return true;
 	}
 	// Window-relative click (logical px) in the main window.
+	// Press, move in steps, release: a real mouse drag through the window (scene coordinates).
+	Q_INVOKABLE void dragAt(double x0, double y0, double x1, double y1, int steps = 12)
+	{
+		QQuickWindow *w = mainWindow();
+		if (!w)
+			return;
+		QTest::mousePress(w, Qt::LeftButton, {}, QPoint(int(x0), int(y0)));
+		for (int k = 1; k <= steps; ++k) {
+			const QPoint p(int(x0 + (x1 - x0) * k / steps), int(y0 + (y1 - y0) * k / steps));
+			QMouseEvent e(QEvent::MouseMove, p, w->mapToGlobal(p), Qt::NoButton, Qt::LeftButton, {});
+			QCoreApplication::sendEvent(w, &e);
+			QCoreApplication::processEvents();
+		}
+		QTest::mouseRelease(w, Qt::LeftButton, {}, QPoint(int(x1), int(y1)));
+		QCoreApplication::processEvents();
+	}
 	Q_INVOKABLE void clickAt(int x, int y, const QString &mods = {}, bool right = false)
 	{
 		if (QQuickWindow *w = mainWindow())

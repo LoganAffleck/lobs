@@ -16,6 +16,15 @@ Item {
     // app.mixer converts the whole list to JavaScript on every read, so read it once per change:
     // src(i) on a big show used to rebuild it per call and left seconds of garbage (LOBS-025).
     readonly property var mix: app.mixer
+    // Drag to reorder (strips sideways, rows up and down). Off while the search filters the list.
+    property string dragId: ""
+    property int dropIndex: -1
+    readonly property int dragFrom: dragId === "" ? -1 : mix.findIndex(m => m.id === dragId)
+    readonly property bool canReorder: !searchField.query
+    function finishDrag() {
+        if (dragId !== "" && dropIndex >= 0) app.moveMixer(dragId, dropIndex)
+        dragId = ""; dropIndex = -1
+    }
     readonly property int count: mix.length
     // Layout: Auto picks strips for a wide, short panel, unless the strips would scroll
     // sideways while rows would fit; Rows / Strips force one (remembered).
@@ -140,7 +149,20 @@ Item {
                             spacing: 6
                             Rectangle { width: 6; height: 6; radius: 3; color: row.s.color }
                             FIcon { name: row.s.icon; size: 13; color: row.s.muted ? Pal.muted : Pal.fg }
-                            Text { text: row.s.name; color: row.s.muted ? Pal.muted : Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text {
+                                text: row.s.name; color: row.s.muted ? Pal.muted : Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true
+                                MouseArea { // drag the name to reorder
+                                    anchors.fill: parent
+                                    enabled: mv.canReorder
+                                    cursorShape: mv.dragId === row.s.id ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                                    preventStealing: true
+                                    onPressed: mv.dragId = row.s.id
+                                    onPositionChanged: (m) => { if (pressed) mv.dropIndex = Math.max(0, Math.min(mv.count - 1, Math.floor(mapToItem(row.parent, m.x, m.y).y / row.height))) }
+                                    onReleased: mv.finishDrag()
+                                    onCanceled: { mv.dragId = ""; mv.dropIndex = -1 }
+                                }
+                            }
+                            FIcon { visible: !!row.s.pinned; name: "pin"; size: 12; color: Pal.muted }
                             Badges { s: row.s }
                             Text { text: mv.toDb(row.s.volume) + " dB"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignRight }
                             IconToggle { iconName: row.s.muted ? "volume-x" : "volume-2"; tint: row.s.muted ? Pal.danger : Pal.muted; tip: row.s.muted ? "Muted. Click to unmute." : "Mute"; onClicked: app.setAudio(row.s.id, "muted", !row.s.muted, true) }
@@ -158,6 +180,12 @@ Item {
                         }
                     }
                     Rectangle { visible: row.index < mv.count - 1; anchors.bottom: parent.bottom; x: 12; width: parent.width - 24; height: 1; color: Pal.border }
+                    opacity: mv.dragId === row.s.id ? 0.5 : 1
+                    Rectangle { // where the dragged row lands
+                        visible: mv.dragId !== "" && mv.dropIndex === row.index && mv.dragId !== row.s.id
+                        x: 8; width: parent.width - 16; height: 2; radius: 1; color: Pal.focus
+                        y: mv.dragFrom < row.index ? parent.height - 1 : -1 // below when moving down, above when moving up
+                    }
                 }
             }
         }
@@ -187,7 +215,9 @@ Item {
                     height: parent.height - 12
                     radius: Pal.radius
                     color: Pal.s3
-                    border.width: 1; border.color: Pal.border
+                    border.width: 1
+                    border.color: mv.dragId !== "" && mv.dropIndex === strip.index && mv.dragId !== strip.s.id ? Pal.focus : Pal.border // where it lands
+                    opacity: mv.dragId === strip.s.id ? 0.5 : 1
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 6
@@ -196,7 +226,20 @@ Item {
                             Layout.fillWidth: true
                             spacing: 4
                             Rectangle { width: 6; height: 6; radius: 3; color: strip.s.color }
-                            Text { text: strip.s.name; color: strip.s.muted ? Pal.muted : Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text {
+                                text: strip.s.name; color: strip.s.muted ? Pal.muted : Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true
+                                MouseArea { // drag the name to reorder
+                                    anchors.fill: parent
+                                    enabled: mv.canReorder
+                                    cursorShape: mv.dragId === strip.s.id ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                                    preventStealing: true
+                                    onPressed: mv.dragId = strip.s.id
+                                    onPositionChanged: (m) => { if (pressed) mv.dropIndex = Math.max(0, Math.min(mv.count - 1, Math.floor((mapToItem(strip.parent, m.x, m.y).x - 6) / (strip.width + 4)))) }
+                                    onReleased: mv.finishDrag()
+                                    onCanceled: { mv.dragId = ""; mv.dropIndex = -1 }
+                                }
+                            }
+                            FIcon { visible: !!strip.s.pinned; name: "pin"; size: 11; color: Pal.muted }
                         }
                         RowLayout {
                             Layout.fillWidth: true
@@ -287,6 +330,12 @@ Item {
                     FIcon { name: details.s.icon; color: Pal.fg }
                     Text { text: details.s.name; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.subtitle; font.weight: 550; Layout.fillWidth: true; elide: Text.ElideRight }
                     FBadge { text: details.s.global ? "Global" : "Scene" }
+                    FButton {
+                        iconName: details.s.pinned ? "pin-off" : "pin"; variant: "ghost"
+                        selected: !!details.s.pinned
+                        tip: details.s.pinned ? "Unpin" : "Pin to the front of the mixer"
+                        onClicked: app.setMixerPinned(details.s.id, !details.s.pinned)
+                    }
                 }
                 FFillSlider {
                     Layout.fillWidth: true

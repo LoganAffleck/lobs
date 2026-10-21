@@ -116,6 +116,9 @@ struct Doc {
 	QHash<QString, Instance> instances;
 	QHash<QString, Link> links;
 	QStringList bins;
+	// Audio Mixer arrangement, separate from Sources: pinned sources first, then this order;
+	// audio sources in neither go at the end, in Sources order.
+	QStringList mixerOrder, mixerPinned;
 	// Transitions for Show: the list you pick from, and the one in use.
 	QVector<Transition> transitions = {{"tr_fade", "Fade", "fade", 300, {}}, {"tr_cut", "Cut", "cut", 0, {}}};
 	QString currentTransition = "tr_fade";

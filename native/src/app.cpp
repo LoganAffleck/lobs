@@ -3020,10 +3020,61 @@ void App::setLiveUnlock(bool on)
 	emit engineChanged();
 }
 
+// Audio sources in mixer order: pinned first, then the mixer's own order, then any others in
+// Sources order (new sources land at the end).
+static QStringList mixerArrangement(const Doc &d)
+{
+	QStringList out;
+	auto take = [&](const QString &id) {
+		if (d.sources.value(id).hasAudio && !out.contains(id))
+			out << id;
+	};
+	for (const QString &id : d.mixerOrder)
+		if (d.mixerPinned.contains(id))
+			take(id);
+	for (const QString &id : d.mixerPinned)
+		take(id);
+	for (const QString &id : d.mixerOrder)
+		take(id);
+	for (const QString &id : d.sourceOrder)
+		take(id);
+	return out;
+}
+
+void App::moveMixer(const QString &id, int toIndex)
+{
+	QStringList order = mixerArrangement(doc());
+	const int from = int(order.indexOf(id));
+	if (from < 0)
+		return;
+	toIndex = std::clamp(toIndex, 0, int(order.size()) - 1);
+	// A strip doesn't cross the pinned/unpinned boundary by dragging; pin or unpin instead.
+	const int pinnedCount = int(std::count_if(order.begin(), order.end(), [&](const QString &s) { return doc().mixerPinned.contains(s); }));
+	toIndex = doc().mixerPinned.contains(id) ? std::min(toIndex, pinnedCount - 1) : std::max(toIndex, pinnedCount);
+	if (toIndex == from)
+		return;
+	order.move(from, toIndex);
+	m_store.commit("Reorder mixer", [&](Doc &d) { d.mixerOrder = order; });
+}
+
+void App::setMixerPinned(const QString &id, bool pinned)
+{
+	if (!doc().sources.value(id).hasAudio || doc().mixerPinned.contains(id) == pinned)
+		return;
+	const QStringList order = mixerArrangement(doc());
+	m_store.commit((pinned ? "Pin " : "Unpin ") + doc().sources.value(id).name, [&](Doc &d) {
+		d.mixerOrder = order;
+		if (pinned)
+			d.mixerPinned << id;
+		else
+			d.mixerPinned.removeAll(id);
+	});
+}
+
 QVariantList App::mixer() const
 {
 	QVariantList out;
-	for (const QString &id : doc().sourceOrder) {
+	for (const QString &id : mixerArrangement(doc())) {
 		const Source &s = doc().sources[id];
 		if (!s.hasAudio)
 			continue;
@@ -3055,7 +3106,7 @@ QVariantList App::mixer() const
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
 				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"global", global}, {"warnings", warn}, {"fx", fx},
-				   {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}};
+				   {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"pinned", doc().mixerPinned.contains(id)}};
 	}
 	return out;
 }

@@ -221,6 +221,8 @@ int Doc::repair()
 	};
 	keep(sceneOrder, [&](const QString &id) { return scenes.contains(id); });
 	keep(sourceOrder, [&](const QString &id) { return sources.contains(id); });
+	keep(mixerOrder, [&](const QString &id) { return sources.contains(id); });
+	keep(mixerPinned, [&](const QString &id) { return sources.contains(id); });
 	for (Scene &s : scenes)
 		keep(s.layers, [&](const QString &id) { return instances.contains(id); });
 	for (Instance &i : instances) {
@@ -514,7 +516,7 @@ QJsonObject Doc::toJson() const
 	for (const auto &k : links)
 		lnks[k.id] = QJsonObject{{"id", k.id}, {"group", groupKey(k.group)}, {"value", propsJson(k.value)[groupKey(k.group)]}};
 	return QJsonObject{{"version", 1}, {"canvas", QJsonObject{{"w", canvasW}, {"h", canvasH}}}, {"sources", srcs}, {"sourceOrder", QJsonArray::fromStringList(sourceOrder)},
-			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"swatches", QJsonArray::fromStringList(swatches)},
+			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"mixerOrder", QJsonArray::fromStringList(mixerOrder)}, {"mixerPinned", QJsonArray::fromStringList(mixerPinned)}, {"swatches", QJsonArray::fromStringList(swatches)},
 			   {"transitions", [&] {
 				    QJsonArray a;
 				    for (const Transition &t : transitions)
@@ -603,6 +605,8 @@ Doc Doc::fromJson(const QJsonObject &o)
 		d.links[k.id] = k;
 	}
 	d.bins = strings(o["bins"]);
+	d.mixerOrder = strings(o["mixerOrder"]);
+	d.mixerPinned = strings(o["mixerPinned"]);
 	return d;
 }
 

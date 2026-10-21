@@ -84,6 +84,9 @@ public:
 	Q_INVOKABLE void addSource(const QString &kind, const QString &name, const QString &extra, bool place);
 	Q_INVOKABLE void placeSource(const QString &id);
 	Q_INVOKABLE void renameSource(const QString &id, const QString &name);
+	// Audio Mixer arrangement (its own order, saved in the show; not live-locked).
+	Q_INVOKABLE void moveMixer(const QString &id, int toIndex);
+	Q_INVOKABLE void setMixerPinned(const QString &id, bool pinned);
 	// Media playback (a live control: allowed on air, like show/hide). See Engine::mediaInfo.
 	Q_INVOKABLE QVariantMap mediaInfo(const QString &sourceId) const { return m_engine->mediaInfo(sourceId); }
 	Q_INVOKABLE void mediaCommand(const QString &sourceId, const QString &cmd, double ms = 0) { m_engine->mediaCommand(sourceId, cmd, qint64(ms)); }
