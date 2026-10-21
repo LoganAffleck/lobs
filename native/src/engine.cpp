@@ -268,6 +268,12 @@ static QString cornerMask(double w, double h, double radiusPct)
 
 void Engine::apply(const Doc &doc)
 {
+	// apply() can switch scenes (a deleted scene was on screen), and switching unparks layers
+	// through apply(); never re-enter it while it walks the layers.
+	if (m_applying)
+		return;
+	m_applying = true;
+	struct Done { bool &f; ~Done() { f = false; } } done{m_applying};
 	m_lastDoc = doc;
 	// The show's transition: rebuilt (without playing) when it changes.
 	if (const Transition *t = doc.transition()) {
@@ -685,6 +691,8 @@ void Engine::parkHiddenFilters()
 
 void Engine::unparkScene(const QString &sceneId)
 {
+	if (m_applying || sceneId.isEmpty())
+		return; // apply() is already running and brings shown scenes back itself
 	for (const Item &it : m_items)
 		if (it.parked && it.applied.sceneId == sceneId) {
 			m_unparkTarget = sceneId;

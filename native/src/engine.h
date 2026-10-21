@@ -208,6 +208,7 @@ private:
 	QTimer m_parkTimer;
 	QHash<QString, int> m_heldScenes; // scene -> number of projectors holding it
 	QString m_unparkTarget; // the scene unparkScene() is preparing
+	bool m_applying = false; // apply() is running (it must not re-enter)
 	bool sceneWanted(const QString &sceneId) const { return sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId); }
 	lobs::Doc m_lastDoc;
 	void setStatus(const QString &s);
