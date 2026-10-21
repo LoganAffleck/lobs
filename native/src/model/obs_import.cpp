@@ -209,7 +209,8 @@ ObsImport importObsCollection(const QJsonObject &o)
 			continue;
 		QJsonArray items = sc["settings"].toObject()["items"].toArray();
 		// Expand groups into their children; positions are composed with the group's.
-		struct Item { QJsonObject it; double ox = 0, oy = 0, sx = 1, sy = 1; };
+		// A group's children carry its name and visibility so they can be regrouped in LOBS.
+		struct Item { QJsonObject it; double ox = 0, oy = 0, sx = 1, sy = 1; QString group; bool groupVisible = true; };
 		QVector<Item> flat;
 		for (const QJsonValue iv : items) {
 			const QJsonObject it = iv.toObject();
@@ -218,8 +219,7 @@ ObsImport importObsCollection(const QJsonObject &o)
 				const double gx = it["pos"].toObject()["x"].toDouble(), gy = it["pos"].toObject()["y"].toDouble();
 				const double gsx = it["scale"].toObject()["x"].toDouble(1), gsy = it["scale"].toObject()["y"].toDouble(1);
 				for (const QJsonValue cv : src["settings"].toObject()["items"].toArray())
-					flat << Item{cv.toObject(), gx, gy, gsx, gsy};
-				note(QString("Group \"%1\" in %2 was flattened into separate layers").arg(it["name"].toString(), sceneName));
+					flat << Item{cv.toObject(), gx, gy, gsx, gsy, it["name"].toString(), it["visible"].toBool(true)};
 			} else {
 				flat << Item{it};
 			}
@@ -237,6 +237,8 @@ ObsImport importObsCollection(const QJsonObject &o)
 		Scene &scene = d.addScene(sceneName);
 		const QString sceneId = scene.id;
 		sceneIdFor[sceneName] = sceneId;
+		QList<QPair<QString, QStringList>> groupMembers; // OBS group name -> its placed layers, in order
+		QHash<QString, bool> groupVisible;
 		// OBS lists items bottom-first; placeSource puts each new layer on top.
 		for (const Item &x : flat) {
 			const QJsonObject &it = x.it;
@@ -254,6 +256,12 @@ ObsImport importObsCollection(const QJsonObject &o)
 			if (!kindInfo(d.sources[sid].kind).video)
 				continue; // audio inputs are pool-wide in LOBS: always in the mix, never placed
 			Instance &inst = d.placeSource(sceneId, sid);
+			if (!x.group.isEmpty()) {
+				if (groupMembers.isEmpty() || groupMembers.last().first != x.group)
+					groupMembers.append({x.group, {}});
+				groupMembers.last().second << inst.id;
+				groupVisible[x.group] = x.groupVisible;
+			}
 			inst.locked = it["locked"].toBool();
 			const Crop cf = cropFilterFor.value(sid);
 			inst.props.crop = {it["crop_left"].toInt() + cf.l, it["crop_top"].toInt() + cf.t, it["crop_right"].toInt() + cf.r, it["crop_bottom"].toInt() + cf.b};
@@ -289,6 +297,14 @@ ObsImport importObsCollection(const QJsonObject &o)
 				firstInstanceOf[sid] = inst.id;
 			else if (!inst.props.filters.isEmpty())
 				d.linkTo(inst.id, first, Group::Filters, false);
+		}
+		// OBS groups become LOBS groups: same name, same children, hidden if the group was.
+		for (const auto &[name, ids] : groupMembers) {
+			const QString gid = d.groupLayers(ids);
+			if (gid.isEmpty())
+				continue;
+			d.instances[gid].name = name;
+			d.instances[gid].props.visibility.visible = groupVisible.value(name, true);
 		}
 	}
 
