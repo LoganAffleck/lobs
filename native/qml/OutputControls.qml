@@ -105,6 +105,8 @@ RowLayout {
     // ---- primary: Go live / LIVE ----
     AbstractButton {
         id: live
+        Accessible.role: Accessible.Button
+        Accessible.name: app.streaming ? "Stop streaming" : "Go live"
         property bool confirming: false
         hoverEnabled: true
         implicitHeight: Pal.ctl + 6

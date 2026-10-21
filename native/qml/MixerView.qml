@@ -165,6 +165,8 @@ Item {
         visible: mv.strips
         anchors { left: parent.left; right: parent.right; top: toolbar.bottom; bottom: parent.bottom }
         clip: true
+        Accessible.role: Accessible.Pane
+        Accessible.name: "Audio mixer"
         ScrollBar.vertical.policy: ScrollBar.AlwaysOff
         contentHeight: availableHeight
         Row {

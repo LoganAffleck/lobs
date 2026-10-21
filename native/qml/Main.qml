@@ -301,6 +301,8 @@ ApplicationWindow {
                         }
                         GridView {
                             id: sceneGrid
+                            Accessible.role: Accessible.List
+                            Accessible.name: "Scenes"
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
                             boundsMovement: Flickable.StopAtBounds
@@ -926,6 +928,8 @@ ApplicationWindow {
                             visible: assetsGuest.view === 1
                             anchors.fill: parent
                             anchors.leftMargin: 6; anchors.rightMargin: 6; anchors.topMargin: 2; anchors.bottomMargin: 6
+                            Accessible.role: Accessible.List
+                            Accessible.name: "Assets"
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
                             readonly property int cols: Math.max(2, Math.floor(width / 120))
