@@ -400,8 +400,11 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         // Video first, then audio, with a divider between; the filter narrows it.
                         model: RowsModel { rows: poolList.poolRowsFn() } // rows stay alive across changes
+                        // app.sourceStatus converts the whole map on every read: read it once, not per row.
+                        readonly property var status: app.sourceStatus
                         function poolRowsFn() {
-                            const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (app.sourceStatus[r.id] || {}).detail, r.kindLabel))
+                            const st = poolList.status
+                            const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (st[r.id] || {}).detail, r.kindLabel))
                             const video = rows.filter(r => r.video), audio = rows.filter(r => !r.video)
                             if (poolGuest.filter === 1) return video
                             if (poolGuest.filter === 2) return audio
@@ -413,7 +416,7 @@ ApplicationWindow {
                             required property var modelData
                             required property int index
                             property bool hoverable: !modelData.divider
-                            readonly property var st: modelData.divider ? ({}) : (app.sourceStatus[modelData.id] || ({}))
+                            readonly property var st: modelData.divider ? ({}) : (poolList.status[modelData.id] || ({}))
                             readonly property bool problem: !!st.status
                             readonly property bool inScene: !!modelData.inScene
                             width: ListView.view.width
@@ -925,11 +928,11 @@ ApplicationWindow {
                         }
                         GridView {
                             id: assetGrid
+                            Accessible.role: Accessible.List
+                            Accessible.name: "Assets"
                             visible: assetsGuest.view === 1
                             anchors.fill: parent
                             anchors.leftMargin: 6; anchors.rightMargin: 6; anchors.topMargin: 2; anchors.bottomMargin: 6
-                            Accessible.role: Accessible.List
-                            Accessible.name: "Assets"
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
                             readonly property int cols: Math.max(2, Math.floor(width / 120))
@@ -1217,6 +1220,9 @@ ApplicationWindow {
                         }
                     FluidList {
                         id: layerList
+                        // Switching scenes replaces every row; recycling them instead of building new
+                        // ones each time was most of a scene switch on a big show (LOBS-025).
+                        reuseItems: true
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         model: RowsModel { rows: app.layers } // rows stay alive across clicks
@@ -1294,6 +1300,9 @@ ApplicationWindow {
                             width: ListView.view.width
                             height: Pal.ctl + 2
                             readonly property bool showTools: layerList.hoverIndex === index || modelData.selected
+                            // A recycled row waiting in the pool is hidden and gives up focus.
+                            ListView.onPooled: { visible = false; focus = false }
+                            ListView.onReused: visible = true
                             Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.selected }
                             opacity: layerList.dragId === modelData.id ? 0.45 : 1
                             MouseArea {

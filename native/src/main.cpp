@@ -45,6 +45,7 @@
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QThreadPool>
 #include <QTimer>
 #include <QWindow>
 
@@ -1198,6 +1199,7 @@ int main(int argc, char *argv[])
 	}
 
 	const int rc = app.exec();
+	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
 	engine.shutdown();
 	g_log = nullptr;
 	return rc;

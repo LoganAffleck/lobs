@@ -21,11 +21,11 @@
 
 class App : public QObject {
 	Q_OBJECT
-	Q_PROPERTY(QVariantList scenes READ scenes NOTIFY scenesChanged)
-	Q_PROPERTY(QVariantList pool READ pool NOTIFY poolChanged)
-	Q_PROPERTY(QVariantList layers READ layers NOTIFY layersChanged)
-	Q_PROPERTY(QVariantMap inspector READ inspector NOTIFY inspectorChanged)
-	Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
+	Q_PROPERTY(QVariantList scenes READ scenesCached NOTIFY scenesChanged)
+	Q_PROPERTY(QVariantList pool READ poolCached NOTIFY poolChanged)
+	Q_PROPERTY(QVariantList layers READ layersCached NOTIFY layersChanged)
+	Q_PROPERTY(QVariantMap inspector READ inspectorCached NOTIFY inspectorChanged)
+	Q_PROPERTY(QVariantList history READ historyCached NOTIFY historyChanged)
 	Q_PROPERTY(int historyIndex READ historyIndex NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneId READ editSceneId NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneName READ editSceneName NOTIFY docChanged)
@@ -48,7 +48,7 @@ class App : public QObject {
 	Q_PROPERTY(QVariantMap settings READ settings NOTIFY settingsChanged)
 	Q_PROPERTY(QVariantList encoders READ encoders CONSTANT)
 	Q_PROPERTY(QStringList services READ services CONSTANT)
-	Q_PROPERTY(QVariantList mixer READ mixer NOTIFY mixerChanged)
+	Q_PROPERTY(QVariantList mixer READ mixerCached NOTIFY mixerChanged)
 	Q_PROPERTY(QVariantMap levels READ levels NOTIFY levelsChanged)
 
 public:
@@ -260,6 +260,10 @@ public:
 	Q_INVOKABLE void setFolderColor(const QString &folder, const QString &color);
 	static QString folderColor(const QString &folder);
 	QVariantList missingAssets() const;
+	mutable QVariantList m_missingCache;
+	mutable lobs::Doc m_missingDoc;
+	mutable QElapsedTimer m_missingAge;
+	mutable bool m_missingValid = false;
 	Q_INVOKABLE void findMissingAssets();
 	Q_INVOKABLE void relinkAsset(const QString &sourceId, const QString &file);
 	Q_INVOKABLE void revealAsset(const QString &path);       // Explorer, with the file selected
@@ -280,7 +284,7 @@ public:
 	Q_INVOKABLE void closeProjectors(); // before the engine shuts down
 	void requestCanvasMenu(QPointF windowPos) { emit canvasMenuRequested(windowPos.x(), windowPos.y()); }
 	// Transitions (stored in the show): the list, the one Show uses, and editing them.
-	Q_PROPERTY(QVariantList transitions READ transitions NOTIFY transitionsChanged)
+	Q_PROPERTY(QVariantList transitions READ transitionsCached NOTIFY transitionsChanged)
 	Q_PROPERTY(QString currentTransition READ currentTransition NOTIFY docChanged)
 	QVariantList transitions() const;
 	QString currentTransition() const { const lobs::Transition *t = doc().transition(); return t ? t->id : QString(); }
@@ -332,7 +336,7 @@ public:
 	Q_PROPERTY(bool vcamActive READ vcamActive NOTIFY engineChanged)
 	Q_PROPERTY(bool vcamAvailable READ vcamAvailable NOTIFY engineChanged)
 	Q_PROPERTY(QVariantMap liveStats READ liveStats NOTIFY engineChanged)
-	Q_PROPERTY(QVariantList hotkeyActions READ hotkeyActions NOTIFY hotkeyActionsChanged)
+	Q_PROPERTY(QVariantList hotkeyActions READ hotkeyActionsCached NOTIFY hotkeyActionsChanged)
 	bool replayActive() const { return m_engine->replayActive(); }
 	bool vcamActive() const { return m_engine->vcamActive(); }
 	bool vcamAvailable() const { return m_engine->vcamAvailable(); }
@@ -480,6 +484,7 @@ private:
 	void refreshModels();
 	QString m_hotkeySig; // scenes and sources the global hotkeys were built for
 	bool m_autosaveFailed = false; // toast once per failing streak
+	bool m_autosaveBusy = false, m_autosaveAgain = false; // a background autosave is writing
 	int m_visibleMenus = 0;
 	QList<QPointer<QWindow>> m_projectors;
 	QString m_toolFont = "Segoe UI";
@@ -509,6 +514,22 @@ private:
 	int m_perfMoves = 0;
 	qint64 m_perfTotalUs = 0, m_perfMaxUs = 0;
 	qint64 m_perfApplyUs = 0, m_perfEditUs = 0, m_perfHotkeyUs = 0, m_perfQmlUs = 0; // drag timing, logged on release
+	qint64 m_perfCommitUs = 0, m_perfChanges = 0;
+	bool m_modelsStale = false; // a drag skipped some list refreshes; refreshModels() catches up after
+public:
+	// Time spent per phase of applying changes since the last call (ms), then reset. For profiling.
+	// QML reads these lists many times per change. Each read returns the copy refreshModels()
+	// last pushed instead of rebuilding it (LOBS-025).
+	QVariantList scenesCached() const { const QVariant v = m_modelCache.value(QStringLiteral("scenes")); return v.isValid() ? v.toList() : scenes(); }
+	QVariantList poolCached() const { const QVariant v = m_modelCache.value(QStringLiteral("pool")); return v.isValid() ? v.toList() : pool(); }
+	QVariantList layersCached() const { const QVariant v = m_modelCache.value(QStringLiteral("layers")); return v.isValid() ? v.toList() : layers(); }
+	QVariantMap inspectorCached() const { const QVariant v = m_modelCache.value(QStringLiteral("inspector")); return v.isValid() ? v.toMap() : inspector(); }
+	QVariantList historyCached() const { const QVariant v = m_modelCache.value(QStringLiteral("history")); return v.isValid() ? v.toList() : history(); }
+	QVariantList mixerCached() const { const QVariant v = m_modelCache.value(QStringLiteral("mixer")); return v.isValid() ? v.toList() : mixer(); }
+	QVariantList transitionsCached() const { const QVariant v = m_modelCache.value(QStringLiteral("transitions")); return v.isValid() ? v.toList() : transitions(); }
+	QVariantList hotkeyActionsCached() const { const QVariant v = m_modelCache.value(QStringLiteral("hotkeyActions")); return v.isValid() ? v.toList() : hotkeyActions(); }
+	Q_INVOKABLE QVariantMap takePerfCounters();
+private:
 	QVector<QPointF> m_createPts; // canvas px while drawing with a graphic tool
 	void finishCreate();
 	QPointF m_dragStart;

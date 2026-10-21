@@ -11,6 +11,7 @@
 
 #include <obs.h>
 
+#include <QMutex>
 #include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
@@ -94,8 +95,21 @@ public:
 		connect(&m_e, &Engine::replaySaved, this, [this](const QString &path) { m_lastReplay = path; ++m_replayCount; });
 		connect(&m_e, &Engine::streamError, this, [this](const QString &m) { m_streamErrors << m; });
 		if (QQuickWindow *w = mainWindow())
+		{
 			connect(w, &QQuickWindow::frameSwapped, this, [this]() { ++m_frames; m_frameTimes << m_clock.nsecsElapsed() / 1e6; }, Qt::DirectConnection);
+			// Per-frame phases (ms), for profiling where a slow frame goes.
+			auto mark = [this](int k) { return [this, k]() { QMutexLocker l(&m_phaseLock); m_mark[k] = m_clock.nsecsElapsed() / 1e6; if (k == 5) {
+				m_phases << QVariantMap{{"polish", m_mark[1] - m_mark[0]}, {"sync", m_mark[2] - m_mark[1]}, {"render", m_mark[4] - m_mark[3]}, {"swap", m_mark[5] - m_mark[4]}, {"total", m_mark[5] - m_mark[0]}, {"start", m_mark[0]}};
+				if (m_phases.size() > 2000) m_phases.removeFirst(); } }; };
+			connect(w, &QQuickWindow::afterAnimating, this, mark(0), Qt::DirectConnection);
+			connect(w, &QQuickWindow::beforeSynchronizing, this, mark(1), Qt::DirectConnection);
+			connect(w, &QQuickWindow::afterSynchronizing, this, mark(2), Qt::DirectConnection);
+			connect(w, &QQuickWindow::beforeRendering, this, mark(3), Qt::DirectConnection);
+			connect(w, &QQuickWindow::afterRendering, this, mark(4), Qt::DirectConnection);
+			connect(w, &QQuickWindow::frameSwapped, this, mark(5), Qt::DirectConnection);
+		}
 	}
+	Q_INVOKABLE QVariantList takeFramePhases() { QMutexLocker l(&m_phaseLock); QVariantList out = m_phases; m_phases.clear(); return out; }
 
 	int failures() const { return m_failures; }
 
@@ -206,6 +220,17 @@ public:
 		return mb() - m0;
 	}
 	Q_INVOKABLE void gc() { m_js.collectGarbage(); m_qml.collectGarbage(); }
+	// Which heap a long collection is in: the test script's own, or the app's QML engine.
+	Q_INVOKABLE QVariantMap gcTimed()
+	{
+		QElapsedTimer c;
+		c.start();
+		m_js.collectGarbage();
+		const double js = c.nsecsElapsed() / 1e6;
+		c.restart();
+		m_qml.collectGarbage();
+		return {{"scriptMs", js}, {"appQmlMs", c.nsecsElapsed() / 1e6}};
+	}
 	Q_INVOKABLE QString tempDir() const { return QDir::tempPath(); }
 	Q_INVOKABLE QString appDataDir() const { return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation); }
 	Q_INVOKABLE bool include(const QString &file)
@@ -655,6 +680,9 @@ private:
 	int m_timeoutS = 1800;
 	qint64 m_frames = 0;
 	QVector<double> m_frameTimes;
+	QMutex m_phaseLock;
+	double m_mark[6] = {};
+	QVariantList m_phases;
 	QVariantMap m_lastRec;
 	int m_recCount = 0, m_replayCount = 0;
 	QString m_lastReplay;

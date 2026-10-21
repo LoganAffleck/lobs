@@ -40,6 +40,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
+#include <QThreadPool>
 #include <QUrl>
 #include <cmath>
 
@@ -178,8 +179,17 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	}
 }
 
+QVariantMap App::takePerfCounters()
+{
+	const QVariantMap m{{"changes", m_perfChanges}, {"applyMs", m_perfApplyUs / 1000.0}, {"editSceneMs", m_perfEditUs / 1000.0},
+			    {"hotkeysMs", m_perfHotkeyUs / 1000.0}, {"qmlMs", m_perfQmlUs / 1000.0}};
+	m_perfApplyUs = m_perfEditUs = m_perfHotkeyUs = m_perfQmlUs = m_perfChanges = 0;
+	return m;
+}
+
 void App::onStoreChanged()
 {
+	++m_perfChanges;
 	const Doc &d = doc();
 	QElapsedTimer pt;
 	pt.start();
@@ -237,8 +247,16 @@ void App::refreshModels()
 		old = v;
 		emit (this->*signal)();
 	};
-	push("scenes", QVariant::fromValue(scenes()), &App::scenesChanged);
-	push("pool", QVariant::fromValue(pool()), &App::poolChanged);
+	// A canvas drag only moves layers: scenes, Sources, the mixer, transitions and hotkeys can't
+	// change, so they wait for the drag to end (LOBS-025).
+	const bool dragging = m_drag != Drag::None;
+	if (dragging)
+		m_modelsStale = true;
+	if (!dragging) {
+		m_modelsStale = false;
+		push("scenes", QVariant::fromValue(scenes()), &App::scenesChanged);
+		push("pool", QVariant::fromValue(pool()), &App::poolChanged);
+	}
 	push("layers", QVariant::fromValue(layers()), &App::layersChanged);
 	// While dragging on the canvas, the Inspector follows at most once a frame: rebuilding it on
 	// every mouse move cost more than the move itself on big shows (LOBS-024).
@@ -249,6 +267,8 @@ void App::refreshModels()
 		push("inspector", QVariant::fromValue(inspector()), &App::inspectorChanged);
 	}
 	push("history", QVariant::fromValue(history()), &App::historyChanged);
+	if (dragging)
+		return;
 	push("mixer", QVariant::fromValue(mixer()), &App::mixerChanged);
 	push("transitions", QVariant::fromValue(transitions()), &App::transitionsChanged);
 	push("hotkeyActions", QVariant::fromValue(hotkeyActions()), &App::hotkeyActionsChanged);
@@ -256,11 +276,28 @@ void App::refreshModels()
 
 void App::autosave()
 {
-	QDir().mkpath(QFileInfo(m_docPath).absolutePath());
-	const bool ok = writeShowFile(m_docPath, doc());
-	if (!ok && !m_autosaveFailed)
-		showToast("Couldn't autosave. Check that there's space on the drive.");
-	m_autosaveFailed = !ok;
+	// Turning a big show into JSON takes seconds, so the UI thread only takes a snapshot (the doc
+	// is copy-on-write) and a worker serializes and writes it (LOBS-025). One write at a time; an
+	// edit during a write saves again right after.
+	if (m_autosaveBusy) {
+		m_autosaveAgain = true;
+		return;
+	}
+	m_autosaveBusy = true;
+	const Doc snapshot = doc();
+	const QString path = m_docPath;
+	QThreadPool::globalInstance()->start([this, snapshot, path] {
+		QDir().mkpath(QFileInfo(path).absolutePath());
+		const bool ok = writeShowFile(path, snapshot);
+		QMetaObject::invokeMethod(this, [this, ok] {
+			m_autosaveBusy = false;
+			if (!ok && !m_autosaveFailed)
+				showToast("Couldn't autosave. Check that there's space on the drive.");
+			m_autosaveFailed = !ok;
+			if (std::exchange(m_autosaveAgain, false))
+				autosave();
+		});
+	});
 }
 
 void App::showToast(const QString &msg)
@@ -2544,19 +2581,24 @@ void App::setFolderColor(const QString &folder, const QString &color)
 // Layers whose file is gone (moved or deleted outside LOBS): [{sourceId, name, file, layers}].
 QVariantList App::missingAssets() const
 {
+	// Read by several bindings on every change; checking the disk for every file each time cost
+	// ~30 ms per read on a big show (LOBS-025). Same doc and under 2 s old: reuse the answer.
+	if (m_missingValid && m_missingAge.elapsed() < 2000 && m_missingDoc == doc())
+		return m_missingCache;
+	QHash<QString, int> layers;
+	for (const Instance &i : doc().instances)
+		++layers[i.sourceId];
 	QVariantList out;
 	for (const Source &s : doc().sources) {
 		if (s.kind != "image" && s.kind != "media")
 			continue;
 		const QString f = s.settings.value("file").toString();
-		if (f.isEmpty() || QFile::exists(f))
+		if (f.isEmpty() || !layers.value(s.id) || QFile::exists(f))
 			continue;
-		int layers = 0;
-		for (const Instance &i : doc().instances)
-			layers += i.sourceId == s.id;
-		if (layers)
-			out << QVariantMap{{"sourceId", s.id}, {"name", QFileInfo(f).fileName()}, {"file", f}, {"layers", layers}};
+		out << QVariantMap{{"sourceId", s.id}, {"name", QFileInfo(f).fileName()}, {"file", f}, {"layers", layers.value(s.id)}};
 	}
+	m_missingCache = out, m_missingDoc = doc(), m_missingValid = true;
+	m_missingAge.start();
 	return out;
 }
 
@@ -3444,6 +3486,8 @@ void App::canvasRelease()
 	else if (m_drag == Drag::Crop)
 		m_store.endGesture("Crop " + doc().instances.value(m_dragIds.value(0)).name);
 	m_drag = Drag::None;
+	if (m_modelsStale) // the lists the drag skipped
+		refreshModels();
 	m_guides.clear();
 	updateOverlay();
 }
