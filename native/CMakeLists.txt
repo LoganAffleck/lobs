@@ -38,6 +38,7 @@ qt_add_executable(LOBS WIN32
     src/browser_view.cpp
     src/projector.cpp
     src/rows_model.cpp
+    src/window_chrome.cpp src/window_chrome.h
     src/rows_model.h
     src/projector.h
     src/browser_view.h
@@ -60,11 +61,12 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
         qml/NewProjectDialog.qml
         qml/SetupWizard.qml
         qml/TwitchPanel.qml
-    qml/dock/DockTabBar.qml qml/dock/DockTitleBar.qml qml/dock/DockGroup.qml qml/dock/DockFloatingWindow.qml qml/dock/DockSeparator.qml qml/dock/DockWidgetBg.qml qml/dock/PanelDragController.qml)
+    qml/dock/DockTabBar.qml qml/dock/DockTitleBar.qml qml/dock/DockGroup.qml qml/dock/DockFloatingWindow.qml qml/dock/DockSeparator.qml qml/dock/DockWidgetBg.qml qml/dock/PanelDragController.qml
+    RESOURCES resources/icon/lobs-32.png resources/icon/lobs-64.png)
 
 target_include_directories(LOBS PRIVATE ${LIBOBS_INCLUDE})
 target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys)
+target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys dwmapi)
 # libobs is loaded from the engine folder chosen at startup (<app>/engine/<version>), so it
 # must not be resolved before main() runs.
 target_link_options(LOBS PRIVATE "/DELAYLOAD:obs.dll")

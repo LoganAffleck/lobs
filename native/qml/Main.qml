@@ -16,6 +16,10 @@ ApplicationWindow {
     visible: true
     title: "LOBS"
     color: Pal.s1
+    // The top bar is the title bar (see window_chrome.cpp): Windows still snaps, resizes and
+    // maximizes the window, but draws no title bar of its own.
+    flags: Qt.Window | Qt.FramelessWindowHint
+    readonly property bool maximized: visibility === Window.Maximized
     font.family: Pal.font
     font.pixelSize: Pal.body
 
@@ -143,16 +147,54 @@ ApplicationWindow {
 
     // ---------------- header ----------------
     header: Rectangle {
+        id: topBar
         height: 44
         color: Pal.s1
+        Component.onCompleted: { chrome.captionItem = topBar; chrome.captionHeight = height }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Pal.border }
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 14
             anchors.rightMargin: 10
             spacing: 2
-            Text { text: "LOBS"; color: Pal.fg; font.family: Pal.font; font.pixelSize: 15; font.weight: 700; Layout.rightMargin: 4 }
-            FButton { iconName: "settings"; variant: "ghost"; onClicked: settingsPage.show(); tip: "Settings  Ctrl ,"; Layout.rightMargin: 8 }
+            // The app's mark, name and Settings in one button.
+            AbstractButton {
+                id: brand
+                Accessible.role: Accessible.Button
+                Accessible.name: "Settings"
+                hoverEnabled: true
+                focusPolicy: Qt.TabFocus
+                Layout.leftMargin: -6
+                Layout.rightMargin: 8
+                implicitHeight: Pal.ctl + 4
+                implicitWidth: brandRow.implicitWidth + 16
+                onClicked: settingsPage.show()
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: "Settings  Ctrl ,"
+                background: Rectangle {
+                    radius: Pal.radius
+                    color: "#ffffff"
+                    opacity: brand.down ? 0.10 : brand.hovered ? 0.06 : 0
+                    Behavior on opacity { NumberAnimation { duration: Pal.fast } }
+                }
+                contentItem: Item {
+                    Row {
+                        id: brandRow
+                        anchors.centerIn: parent
+                        spacing: 7
+                        Image {
+                            source: "qrc:/qt/qml/LOBS/resources/icon/lobs-64.png"
+                            width: 20; height: 20
+                            sourceSize: Qt.size(40, 40)
+                            smooth: true; mipmap: true
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text { text: "LOBS"; color: Pal.fg; font.family: Pal.font; font.pixelSize: 15; font.weight: 700; anchors.verticalCenter: parent.verticalCenter }
+                        FIcon { name: "settings"; size: 14; color: brand.hovered ? Pal.fg : Pal.muted; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                }
+            }
             FButton { text: "New"; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "Start a new project in its own folder" }
             FButton { text: "Open"; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : "Open a show (Ctrl+O)"; onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
@@ -225,6 +267,34 @@ ApplicationWindow {
             FButton { iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: "Redo  Ctrl Shift Z" }
             Item { Layout.fillWidth: true }
             OutputControls {}
+            // Window buttons, in Windows' order.
+            Row {
+                Layout.leftMargin: 8
+                Layout.rightMargin: -10
+                Layout.fillHeight: true
+                WindowButton { iconName: "minus"; label: "Minimize"; onClicked: chrome.minimize() }
+                WindowButton { iconName: win.maximized ? "copy" : "square"; label: win.maximized ? "Restore" : "Maximize"; onClicked: chrome.toggleMaximize() }
+                WindowButton { iconName: "x"; label: "Close"; danger: true; onClicked: win.close() }
+            }
+        }
+    }
+    component WindowButton: AbstractButton {
+        id: wb
+        property string iconName
+        property string label
+        property bool danger: false
+        Accessible.role: Accessible.Button
+        Accessible.name: label
+        hoverEnabled: true
+        focusPolicy: Qt.NoFocus
+        width: 46
+        height: parent ? parent.height : 44
+        background: Rectangle {
+            color: wb.danger && wb.hovered ? "#c42b1c" : "#ffffff"
+            opacity: wb.danger && wb.hovered ? (wb.down ? 0.85 : 1) : wb.down ? 0.10 : wb.hovered ? 0.07 : 0
+        }
+        contentItem: Item {
+            FIcon { anchors.centerIn: parent; name: wb.iconName; size: 15; color: wb.danger && wb.hovered ? "#ffffff" : Pal.muted }
         }
     }
 

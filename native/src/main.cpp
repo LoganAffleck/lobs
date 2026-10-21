@@ -1,5 +1,6 @@
 // LOBS.exe — native shell. QML draws the UI; a native child window over the "preview"
 // item is where libobs renders the edited scene, and where canvas mouse input lands.
+#include "window_chrome.h"
 #include "app.h"
 
 #include <kddockwidgets/Config.h>
@@ -554,12 +555,16 @@ int main(int argc, char *argv[])
 			palMap->insert(it.key(), it.value());
 	}
 	qml.rootContext()->setContextProperty("Pal", palMap);
+	WindowChrome chrome;
+	qml.rootContext()->setContextProperty("chrome", &chrome);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
 	qml.addImageProvider("icon", new IconProvider(root + "/icons"));
 	qml.loadFromModule("LOBS", "Main");
 	if (qml.rootObjects().isEmpty())
 		return 1;
+	if (auto *mainWindow = qobject_cast<QQuickWindow *>(qml.rootObjects().first()))
+		chrome.attach(mainWindow); // the top bar is the title bar
 #ifdef LOBS_TESTS
 	if (scenario)
 		lobs_test::startScenario(app, controller, engine, qml, app.arguments()[scenarioAt + 1], app.arguments()[scenarioAt + 2]);
