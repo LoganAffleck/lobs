@@ -122,6 +122,12 @@ Rectangle {
                 id: tools
                 anchors { horizontalCenter: parent.horizontalCenter; top: preview.bottom; topMargin: 4 }
             }
+            MediaControls {
+                // The selected layer plays a video or audio file.
+                visible: sourceId !== ""
+                sourceId: app.inspector && app.inspector.sourceKind === "media" ? app.inspector.sourceId : ""
+                anchors { left: tools.right; leftMargin: 10; verticalCenter: tools.verticalCenter }
+            }
             Caption {
                 anchors { left: parent.left; leftMargin: 14; right: tools.left; rightMargin: 12; verticalCenter: tools.verticalCenter }
                 text: app.toast; color: Pal.fg; elide: Text.ElideRight

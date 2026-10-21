@@ -103,6 +103,10 @@ public:
 	// A scene projector keeps its scene showing (and its layers' filters attached) while open.
 	void holdScene(const QString &sceneId, bool on); // keep every scene's sources active (for live thumbnails)
 	QSize sourceSize(const QString &sourceId) const; // natural size, or 0x0 if unknown
+	// Media sources (video and audio files): {state: playing|paused|stopped|ended|none, timeMs, durationMs}.
+	QVariantMap mediaInfo(const QString &sourceId) const;
+	// cmd: playPause, restart, stop, seek (to ms).
+	void mediaCommand(const QString &sourceId, const QString &cmd, qint64 ms = 0);
 	QVariantList listDevices(const QString &sourceId, const QString &kind) const;
 
 	// Preview

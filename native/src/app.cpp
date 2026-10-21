@@ -474,6 +474,7 @@ QVariantMap App::inspector() const
 			m["cl"] = c.l, m["ct"] = c.t, m["cr"] = c.r, m["cb"] = c.b, m["radius"] = c.radius;
 			m["sourceId"] = s.id;
 			m["sourceName"] = s.name;
+			m["sourceKind"] = s.kind;
 			m["sourceIcon"] = kindInfo(s.kind).icon;
 			int uses = 0;
 			QSet<QString> scenesUsing;

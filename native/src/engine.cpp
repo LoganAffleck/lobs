@@ -994,6 +994,37 @@ void Engine::setAllScenesShowing(bool on)
 	}
 }
 
+QVariantMap Engine::mediaInfo(const QString &sourceId) const
+{
+	obs_source_t *in = m_inputs.value(sourceId);
+	if (!in)
+		return {{"state", "none"}};
+	const char *names[] = {"none", "playing", "opening", "buffering", "paused", "stopped", "ended", "error"};
+	const int st = int(obs_source_media_get_state(in));
+	return {{"state", st >= 0 && st < 8 ? names[st] : "none"}, {"timeMs", qint64(obs_source_media_get_time(in))},
+		{"durationMs", qint64(obs_source_media_get_duration(in))}};
+}
+
+void Engine::mediaCommand(const QString &sourceId, const QString &cmd, qint64 ms)
+{
+	obs_source_t *in = m_inputs.value(sourceId);
+	if (!in)
+		return;
+	if (cmd == "playPause") {
+		const obs_media_state st = obs_source_media_get_state(in);
+		if (st == OBS_MEDIA_STATE_STOPPED || st == OBS_MEDIA_STATE_ENDED)
+			obs_source_media_restart(in);
+		else
+			obs_source_media_play_pause(in, st == OBS_MEDIA_STATE_PLAYING);
+	} else if (cmd == "restart") {
+		obs_source_media_restart(in);
+	} else if (cmd == "stop") {
+		obs_source_media_stop(in);
+	} else if (cmd == "seek") {
+		obs_source_media_set_time(in, std::max<qint64>(0, ms));
+	}
+}
+
 QSize Engine::sourceSize(const QString &sourceId) const
 {
 	obs_source_t *in = m_inputs.value(sourceId);

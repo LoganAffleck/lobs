@@ -188,3 +188,36 @@ story("PJ-03", "Assets: import, folder, rename, in-use protection", () => {
 		check("an asset used by a layer isn't silently trashed", t.exists(a.path) || /use|layer/i.test(app.toast), app.toast);
 	}
 });
+
+story("MD-01", "Media controls: play, pause, restart, stop, seek, and allowed on air", () => {
+	fresh();
+	app.addSource("color", "Bg", "#203040", true);
+	const n = t.recordingsFinished();
+	t.recordClip(4);
+	check("a clip to play", t.waitUntil(() => t.recordingsFinished() > n, 20000));
+	const clip = String(t.lastRecording().path);
+	const m = addKind("media", "Clip", clip);
+	sel(m.inst);
+	check("the Inspector knows it's a media layer", app.inspector.sourceKind === "media", app.inspector.sourceKind);
+	t.waitUntil(() => app.mediaInfo(m.source).durationMs > 0, 5000);
+	const i0 = app.mediaInfo(m.source);
+	t.metric("start", i0);
+	check("duration is known", i0.durationMs > 2000, i0);
+	app.mediaCommand(m.source, "stop"); t.wait(300);
+	eq("stop", app.mediaInfo(m.source).state, "stopped");
+	app.mediaCommand(m.source, "playPause"); t.waitUntil(() => app.mediaInfo(m.source).state === "playing", 3000);
+	eq("play after stop starts it", app.mediaInfo(m.source).state, "playing");
+	app.mediaCommand(m.source, "playPause"); t.wait(300);
+	eq("pause", app.mediaInfo(m.source).state, "paused");
+	app.mediaCommand(m.source, "seek", 2000); t.wait(400);
+	const s = app.mediaInfo(m.source).timeMs;
+	check("seek lands near 2 s", s >= 1500 && s <= 2600, s);
+	// Live control: works on the on-air scene with live lock on.
+	app.take();
+	t.startRecording(); t.waitUntil(() => app.live, 10000);
+	check("live and locked", app.liveLocked);
+	app.mediaCommand(m.source, "restart"); t.waitUntil(() => app.mediaInfo(m.source).state === "playing", 3000);
+	const r = app.mediaInfo(m.source);
+	check("restart works on air while locked", r.state === "playing" && r.timeMs < 2000, r);
+	t.stopRecording(); t.waitUntil(() => !app.live, 10000);
+});

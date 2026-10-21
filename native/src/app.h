@@ -84,6 +84,9 @@ public:
 	Q_INVOKABLE void addSource(const QString &kind, const QString &name, const QString &extra, bool place);
 	Q_INVOKABLE void placeSource(const QString &id);
 	Q_INVOKABLE void renameSource(const QString &id, const QString &name);
+	// Media playback (a live control: allowed on air, like show/hide). See Engine::mediaInfo.
+	Q_INVOKABLE QVariantMap mediaInfo(const QString &sourceId) const { return m_engine->mediaInfo(sourceId); }
+	Q_INVOKABLE void mediaCommand(const QString &sourceId, const QString &cmd, double ms = 0) { m_engine->mediaCommand(sourceId, cmd, qint64(ms)); }
 	Q_INVOKABLE void deleteSource(const QString &id);
 	Q_INVOKABLE void selectSource(const QString &id);
 	// Devices or windows a source can use. Asking Windows takes 100-500 ms, so the list is kept
