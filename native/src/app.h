@@ -391,6 +391,8 @@ public:
 	Q_INVOKABLE double previewVideoHeight(double w, double h, bool pixelPerfect) const
 	{
 		const double d = m_previewDpr;
+		if (w <= 1 || h <= 1)
+			return 0; // squeezed to nothing (never negative: that sized the native preview below zero)
 		return previewScaleFor(w * d, h * d, doc().canvasW, doc().canvasH, pixelPerfect) / d * doc().canvasH;
 	}
 

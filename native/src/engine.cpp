@@ -1382,7 +1382,9 @@ void Engine::attachPreview(void *hwnd, int width, int height)
 
 void Engine::resizePreview(int width, int height)
 {
-	if (m_display)
+	// A squeezed layout can report a zero or negative size; a negative one cast to uint32_t
+	// asked the GPU for a 4-billion-pixel swap chain and took the app down.
+	if (m_display && width > 0 && height > 0)
 		obs_display_resize(m_display, uint32_t(width), uint32_t(height));
 }
 

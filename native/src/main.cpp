@@ -248,6 +248,8 @@ private:
 		const bool show = !m_hidden && m_item->isVisible() && m_item->width() > 4 && m_item->height() > 4;
 		if (show != m_native->isVisible())
 			m_native->setVisible(show);
+		if (!show)
+			return; // too small to draw: leave the native window and the engine at their last size
 		const QRect r(m_item->mapToScene(QPointF(0, 0)).toPoint(), QSize(int(m_item->width()), int(m_item->height())));
 		if (r == m_rect)
 			return;
