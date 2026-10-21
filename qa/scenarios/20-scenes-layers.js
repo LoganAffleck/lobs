@@ -404,3 +404,33 @@ story("CP-01", "Copy, cut and paste layers (same scene, other scene, linked, aft
 	sel(bg); app.copyLayers(); app.pasteLayers(false);
 	check("the background layer isn't copied", t.doc().scenes[A].layers.filter(id => t.doc().instances[id].name === t.doc().instances[bg].name).length === 1);
 });
+
+story("SL-01", "Background starts locked; dragging from empty canvas or a locked layer draws a selection rectangle", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const layers = () => t.doc().scenes[A].layers;
+	const bg = layers()[layers().length - 1];
+	check("a new show's background is locked", t.doc().instances[bg].locked === true);
+	const mk = (name, x, y) => { const id = placeColor(name, "#3366ff"); setT(id, "w", 200); setT(id, "h", 150); setT(id, "x", x); setT(id, "y", y); return id; };
+	const a = mk("A", 100, 100), b = mk("B", 500, 100), c = mk("C", 1300, 700);
+	app.clearSelection();
+	const bg0 = JSON.stringify(eff(bg, "transform"));
+	// From empty canvas (over the locked background) across A and B.
+	t.canvasDrag(40, 40, 760, 300, 12);
+	const sel = () => app.layers.filter(l => l.selected).map(l => l.name).sort();
+	eq("the rectangle selects the layers it touches", sel(), ["A", "B"]);
+	eq("the locked background didn't move", JSON.stringify(eff(bg, "transform")), bg0);
+	// Shift adds.
+	t.canvasDrag(1250, 650, 1600, 900, 12, "shift");
+	eq("Shift + rectangle adds to the selection", sel(), ["A", "B", "C"]);
+	// A plain click on empty canvas clears it.
+	t.canvasClick(1000, 500);
+	eq("a click on empty canvas clears the selection", sel(), []);
+	// Clicking a layer still selects and drags it.
+	t.canvasDrag(150, 150, 250, 200, 8);
+	eq("dragging a layer moves it", eff(a, "transform").x, 200);
+	// Locked layers are still selectable from the Layers list.
+	app.selectLayer(bg, false);
+	eq("a locked layer can be selected in Layers", app.inspector.id, bg);
+});

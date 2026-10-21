@@ -569,7 +569,9 @@ static bool isBackgroundLayer(const Doc &d, const QString &id)
 static void placeBackground(Doc &d, const QString &sceneId)
 {
 	const QString sid = d.addSource("color", "Background", {{"color", "#000000"}, {"background", true}}).id;
-	const QString iid = d.placeSource(sceneId, sid).id;
+	Instance &bg = d.placeSource(sceneId, sid);
+	bg.locked = true; // clicks and drags on the canvas go through it (unlock it in Layers to move it)
+	const QString iid = bg.id;
 	QStringList &layers = d.scenes[sceneId].layers;
 	layers.removeAll(iid);
 	layers.append(iid); // layers are top-first
@@ -3300,13 +3302,45 @@ QString App::topAncestor(const QString &id) const
 	return cur;
 }
 
+// Locked itself, or inside a locked group.
+bool App::isLockedLayer(const QString &id) const
+{
+	if (doc().instances.value(id).locked)
+		return true;
+	for (const Instance *p = doc().parentOf(id); p; p = doc().parentOf(p->id))
+		if (p->locked)
+			return true;
+	return false;
+}
+
+// Top-level layers (or groups) touching a rectangle on the canvas, top to bottom.
+QStringList App::layersIn(const QRectF &r) const
+{
+	QStringList out;
+	const auto leaves = doc().flatten(m_editScene);
+	for (int k = leaves.size() - 1; k >= 0; k--) {
+		const Instance &i = doc().instances[leaves[k].id];
+		if (!leaves[k].visible || !kindInfo(doc().sources.value(i.sourceId).kind).video || isLockedLayer(i.id))
+			continue;
+		const Transform t = doc().transform(i);
+		if (!QRectF(t.x, t.y, t.w, t.h).intersects(r))
+			continue;
+		QString top = i.id;
+		for (const Instance *p = doc().parentOf(top); p; p = doc().parentOf(p->id))
+			top = p->id;
+		if (!out.contains(top))
+			out << top;
+	}
+	return out;
+}
+
 QString App::hitTest(QPointF c) const
 {
 	const auto leaves = doc().flatten(m_editScene);
 	for (int k = leaves.size() - 1; k >= 0; k--) { // topmost first
 		const Instance &i = doc().instances[leaves[k].id];
-		if (!leaves[k].visible || !kindInfo(doc().sources.value(i.sourceId).kind).video)
-			continue;
+		if (!leaves[k].visible || !kindInfo(doc().sources.value(i.sourceId).kind).video || isLockedLayer(i.id))
+			continue; // locked layers are picked in the Layers list; the canvas clicks through them
 		const Transform t = doc().transform(i);
 		if (QRectF(t.x, t.y, t.w, t.h).contains(c))
 			return i.id;
@@ -3406,8 +3440,12 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 	}
 	const QString leaf = hitTest(c);
 	if (leaf.isEmpty()) {
-		m_selection.clear();
-		m_drag = Drag::None;
+		// Empty canvas or a locked layer: drag out a selection rectangle (Shift adds to the
+		// selection). A plain click clears it.
+		m_marqueeBase = (mods & Qt::ShiftModifier) ? m_selection : QStringList();
+		m_selection = m_marqueeBase;
+		m_marquee = QRectF(c, c);
+		m_drag = Drag::Marquee;
 		updateOverlay();
 		emit docChanged();
 		return;
@@ -3464,6 +3502,22 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 	const QPointF c = toCanvas(p);
 	if (m_drag == Drag::Laser)
 		return m_engine->laserPoint(c, false);
+	if (m_drag == Drag::Marquee) {
+		// Everything the rectangle touches is selected while dragging, like Figma.
+		m_marquee = QRectF(m_dragStart, c).normalized();
+		QStringList sel = m_marqueeBase;
+		for (const QString &id : layersIn(m_marquee))
+			if (!sel.contains(id))
+				sel << id;
+		const bool changed = sel != m_selection;
+		m_selection = sel;
+		updateOverlay();
+		if (changed) {
+			m_poolSelection.clear();
+			emit docChanged();
+		}
+		return;
+	}
 	if (m_drag == Drag::Create) {
 		if (m_tool == "pencil") {
 			if (QLineF(m_createPts.last(), c).length() >= 1.5)
@@ -3602,6 +3656,13 @@ void App::canvasRelease()
 	m_perfMoves = 0, m_perfTotalUs = 0, m_perfMaxUs = 0;
 	if (m_drag == Drag::Laser) {
 		m_drag = Drag::None;
+		return;
+	}
+	if (m_drag == Drag::Marquee) {
+		m_drag = Drag::None;
+		m_marquee = {};
+		m_marqueeBase.clear();
+		updateOverlay();
 		return;
 	}
 	if (m_drag == Drag::Create) {
@@ -3882,5 +3943,10 @@ void App::updateOverlay()
 		boxes << ob;
 	}
 	boxes << m_dropBoxes;
+	if (m_drag == Drag::Marquee && (m_marquee.width() > 0 || m_marquee.height() > 0)) {
+		OverlayBox mb{m_marquee};
+		mb.drop = true, mb.marquee = true;
+		boxes << mb;
+	}
 	m_engine->setOverlay(boxes, m_guides);
 }

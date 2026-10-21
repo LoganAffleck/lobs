@@ -64,6 +64,7 @@ struct OverlayBox {
 	bool group = false;
 	bool linked = false;
 	bool crop = false; // crop mode: edge and corner crop handles instead of resize handles
+	bool marquee = false; // the selection rectangle being dragged out
 };
 struct OverlayGuide {
 	bool vertical;

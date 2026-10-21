@@ -443,6 +443,8 @@ private:
 	QPointF toCanvas(QPointF p) const;
 	double canvasScale() const;
 	QString hitTest(QPointF canvasPt) const;
+	bool isLockedLayer(const QString &id) const;
+	QStringList layersIn(const QRectF &r) const;
 	QString topAncestor(const QString &id) const;
 	int hitHandle(QPointF canvasPt) const; // 0..3 corner, -1 none
 	QString singleSelection() const;
@@ -526,7 +528,9 @@ private:
 	QVariantMap m_levels;
 
 	// drag state
-	enum class Drag { None, Move, Resize, Create, Laser, Crop } m_drag = Drag::None;
+	enum class Drag { None, Move, Resize, Create, Laser, Crop, Marquee } m_drag = Drag::None;
+	QRectF m_marquee;           // canvas px, while dragging out a selection rectangle
+	QStringList m_marqueeBase;  // the selection it adds to (Shift), or empty
 	bool m_cropMode = false;
 	int m_perfMoves = 0;
 	qint64 m_perfTotalUs = 0, m_perfMaxUs = 0;

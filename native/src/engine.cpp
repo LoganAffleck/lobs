@@ -1263,6 +1263,13 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 				gs_matrix_translate3f(float(-b.rect.width() / 2), float(-b.rect.height() / 2), 0.0f);
 				const float w = float(b.rect.width()), h = float(b.rect.height()), t = 2 * px;
 				const float dash = b.group ? 0.5f : 1.0f;
+				if (b.marquee) { // a faint fill inside the selection rectangle's outline
+					vec4 f;
+					vec4_set(&f, 0.42f, 0.59f, 1.0f, 0.10f);
+					gs_effect_set_vec4(color, &f);
+					fillRect(0, 0, w, h);
+					gs_effect_set_vec4(color, &c);
+				}
 				fillRect(0, 0, w, t * dash);
 				fillRect(0, h - t, w, t);
 				fillRect(0, 0, t, h);
