@@ -513,7 +513,9 @@ int main(int argc, char *argv[])
 					 : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/current.lobs.json";
 	if (selfTest) {
 		QFile::remove(docPath);
-		QFile::remove(QDir::tempPath() + "/layout.json"); // panels from an earlier test run would carry over
+		QFile::remove(QDir::tempPath() + "/layout-v2.json"); // panels from an earlier test run would carry over
+		if (const QString l = qEnvironmentVariable("LOBS_QA_LAYOUT"); !l.isEmpty()) // reproduce a user's panel layout
+			QFile::copy(l, QDir::tempPath() + "/layout-v2.json");
 		AppSettings::defaultRecordFolderOverride() = QDir::tempPath() + "/lobs-selftest-recordings"; // LOBS-003
 	}
 

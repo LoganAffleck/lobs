@@ -8,6 +8,9 @@ import LOBS
 // libobs renders into a native window that the app keeps glued to the "preview" item.
 Rectangle {
     id: canvasArea
+    // Panels around the canvas give way before the video does (a row of panels wider than its
+    // column used to crush the preview to nothing).
+    property size kddockwidgets_min_size: Qt.size(480, 320)
     anchors.fill: parent
     color: Pal.s1
     component Caption: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }

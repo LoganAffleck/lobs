@@ -303,15 +303,22 @@ ApplicationWindow {
         }
     }
 
-    // Dockable panels around a fixed canvas (KDDockWidgets). Drag a tab to move or float a
-    // panel, drop it on another panel to tab them together; the Window menu reopens closed ones.
+    // Dockable panels (KDDockWidgets). The video is a panel too, so rows of panels can sit
+    // under or over it. Drag a tab to move or float a panel, drop it on another panel to tab them
+    // together; the Window menu reopens closed ones.
     KDDW.DockingArea {
         id: dockArea
         anchors.fill: parent
         anchors.margins: 6 // same as the gaps between panels, so the edges match
         uniqueName: "LOBSMain"
-        options: KDDW.KDDockWidgets.MainWindowOption_HasCentralWidget
-        persistentCentralItemFileName: "qrc:/qt/qml/LOBS/qml/CanvasArea.qml"
+
+        KDDW.DockWidget {
+            id: videoDock
+            uniqueName: "video"
+            title: "Video"
+            options: KDDW.KDDockWidgets.DockWidgetOption_NotClosable
+            CanvasArea { id: videoGuest; anchors.fill: parent }
+        }
 
         KDDW.DockWidget {
             id: scenesDock
@@ -1493,6 +1500,7 @@ ApplicationWindow {
 
         Component.onCompleted: Qt.callLater(buildLayout)
         function buildLayout() {
+            addDockWidget(videoDock, KDDW.KDDockWidgets.Location_OnLeft, null)
             addDockWidget(scenesDock, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(320, 0))
             addDockWidget(poolDock, KDDW.KDDockWidgets.Location_OnBottom, scenesDock, Qt.size(0, 300))
             addDockWidget(assetsDock, KDDW.KDDockWidgets.Location_OnBottom, poolDock, Qt.size(0, 300))
@@ -1515,8 +1523,9 @@ ApplicationWindow {
         }
     }
     KDDW.LayoutSaver { id: layoutSaver }
-    readonly property string layoutFile: app.dataFolder + "/layout.json"
-    readonly property string defaultLayoutFile: app.dataFolder + "/layout-default.json"
+    // v2: the video became a panel; layouts saved before that don't fit, so they're left behind.
+    readonly property string layoutFile: app.dataFolder + "/layout-v2.json"
+    readonly property string defaultLayoutFile: app.dataFolder + "/layout-default-v2.json"
     // Save the arrangement while running (survives crashes). Not on close: by then the panels
     // have been closed by the shutdown itself, and that would be saved as "all panels closed".
     property bool layoutReady: false
