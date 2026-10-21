@@ -349,3 +349,15 @@ story("LY-07", "A scene that stops showing gives back its render memory and look
 	check("the filtered, faded layer looks the same after coming back", before === after, [before, after]);
 	check("where the layers overlap, the top one still draws on top", before2 === after2 && before2 !== before, [before2, after2]);
 });
+
+story("UH-03", "A normal show keeps the full 200 undo steps (LOBS-036 caps only very big shows)", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const r = placeColor("Steps", "#00ff00");
+	for (let k = 0; k < 230; ++k) { sel(r); app.setTransform("x", 10 + k); }
+	check("200 steps kept on a small show", app.historyIndex >= 200, app.historyIndex);
+	let n = 0;
+	while (app.canUndo && n < 300) { app.undo(); ++n; }
+	eq("undo goes back 200 steps", n, 200);
+});

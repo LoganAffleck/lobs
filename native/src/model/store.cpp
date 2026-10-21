@@ -1,8 +1,19 @@
 #include "store.h"
 
+#include <algorithm>
+
 namespace lobs {
 
 static const int kMaxHistory = 200;
+
+// Each undo step holds a whole Doc. Unchanged parts are shared, but editing one layer copies
+// the layer table, about 300 bytes per layer. A big show keeps fewer steps, so history stays
+// within roughly 64 MB; small shows keep all 200 (LOBS-036).
+static int maxHistory(const Doc &d)
+{
+	const qint64 perStep = std::max<qint64>(1, qint64(d.instances.size()) * 320);
+	return int(std::clamp<qint64>(64ll * 1024 * 1024 / perStep, 30, kMaxHistory));
+}
 
 Store::Store(Doc doc, QObject *parent) : QObject(parent), m_doc(std::move(doc))
 {
@@ -18,7 +29,7 @@ void Store::commit(const QString &label, const std::function<void(Doc &)> &fn)
 	if (draft == m_doc) // LOBS-017: an edit that changes nothing adds no undo step
 		return;
 	m_past.push_back(m_current);
-	if (m_past.size() > kMaxHistory)
+	while (m_past.size() > maxHistory(m_doc))
 		m_past.removeFirst();
 	m_future.clear();
 	m_doc = draft;
@@ -42,7 +53,7 @@ void Store::endGesture(const QString &label)
 		return;
 	m_gestureBase.reset();
 	m_past.push_back(m_current);
-	if (m_past.size() > kMaxHistory)
+	while (m_past.size() > maxHistory(m_doc))
 		m_past.removeFirst();
 	m_future.clear();
 	m_current = {label, m_doc, QDateTime::currentDateTime()};

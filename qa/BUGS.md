@@ -383,6 +383,7 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **LOBS-024:** heavy PF-04 drag frame p95 33.6 ms [≤ 16.7] stays failing. Moves cost 1.5 ms and frames 2.8 ms (p50); the interval is exactly 2 vsyncs because the harness injects moves on a 16 ms timer against a 16.7 ms vsync (`_probe-drag`, `runs/20261020-202948`). I think the check measures the harness, not the app; the test is unchanged.
 
 ## LOBS-036 · S3 · Each edit on a very large show keeps about 1 MB of undo history
-- **Story:** PF-06-stress · **Status:** Open (found in fix pass 2)
+- **Story:** PF-06-stress · **Status:** Worked around: history is capped by show size (see below); per-layer sharing still open
 - **Detail:** 200 edits on the stress project grow memory about 1,021 KB per edit (`runs/20261020-204324/63-perf-stress-b`). Each undo step is a whole Doc. Docs share data copy-on-write, but `instances` is one QHash of 3,270 entries: editing one layer copies the whole table.
 - **Suggested fix:** share instances individually (for example a QHash of implicitly shared instance pointers), so an edit copies one layer. A model-wide refactor, so not done in this pass.
+- **Stopgap (product owner: "we don't need to store all the history"):** undo history keeps up to 200 steps, but no more than about 64 MB worth (about 300 bytes per layer per step), with at least 30. Shows under about 1,000 layers keep all 200; the stress show keeps 64. PF-06-stress passes and UH-03 checks a normal show still keeps 200 (`runs/20261020-210508`). The per-layer sharing refactor would make each step small instead; it's still worth doing if huge shows need deep undo.
