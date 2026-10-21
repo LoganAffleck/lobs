@@ -197,3 +197,13 @@ story("PJ-07u", "Open asks to save an untitled show with changes", () => {
 	check("Cancel keeps the show", t.docJson() === before);
 	t.closeNativeDialogs();
 });
+
+story("ST-01u", "Stats opens as a panel from the Window menu", () => {
+	fresh(); t.wait(300);
+	check("Window menu opens", t.click("Window")); t.wait(300);
+	check("Window menu lists Stats", has("Stats"));
+	t.click("Stats"); t.wait(600);
+	t.grab("st01u-panel.png");
+	check("the Stats panel shows render time", ui("Render time").length >= 1, ui("Render time"));
+	check("and frame rate", ui("Frame rate").length >= 1);
+});

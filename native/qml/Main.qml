@@ -252,7 +252,11 @@ ApplicationWindow {
                             required property var modelData
                             text: modelData.title
                             selected: modelData.isOpen
-                            onTriggered: modelData.isOpen ? modelData.close() : modelData.show()
+                            onTriggered: {
+                                if (modelData.isOpen) modelData.close()
+                                else if (modelData === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
+                                else modelData.show()
+                            }
                         }
                         onObjectAdded: (i, o) => windowMenu.insertItem(i, o)
                         onObjectRemoved: (i, o) => windowMenu.removeItem(o)
@@ -1466,6 +1470,19 @@ ApplicationWindow {
             MixerView { id: audioGuest; property size kddockwidgets_min_size: Qt.size(300, 150); anchors.fill: parent }
         }
 
+        KDDW.DockWidget {
+            id: statsDock
+            uniqueName: "stats"
+            title: "Stats"
+            Item {
+                id: statsGuest
+                property size kddockwidgets_min_size: Qt.size(280, 200)
+                anchors.fill: parent
+                clip: true
+                StatsView { anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 } }
+            }
+        }
+
         Component.onCompleted: Qt.callLater(buildLayout)
         function buildLayout() {
             addDockWidget(scenesDock, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(320, 0))
@@ -1497,7 +1514,7 @@ ApplicationWindow {
     property bool layoutReady: false
     Timer { interval: 3000; repeat: true; running: win.layoutReady; onTriggered: layoutSaver.saveToFile(win.layoutFile) }
     onClosing: { layoutReady = false; app.closeProjectors() }
-    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, chatDock, infoDock]
+    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, chatDock, infoDock]
     property Item previewItem: null
 
     // Docked panels are moved with LOBS's own drag (keeps their slot until the drop).
@@ -1513,7 +1530,8 @@ ApplicationWindow {
             { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", "Shortcuts: Ctrl+G group, Ctrl+Shift+G ungroup, Ctrl+D duplicate, Delete remove.", "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
             { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.", "Source: select one in Sources to edit its input."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
             { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 goes to the stream; recordings can use tracks 1-6.", "Monitor: hear it in headphones. Monitor only keeps it out of output.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
-            { help: ["Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.", "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" }
+            { help: ["Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.", "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },
+            { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: more than 1%, worth a look."], dock: statsDock, guest: statsGuest, icon: "gauge" }
         ]
     }
 
