@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2276.7 2557.6">
+  <title>LOBS</title>
+  <defs><linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86C8FF"/><stop offset="1" stop-color="#6FA2F2"/></linearGradient></defs>
+  <path d="M1138.4,0.0L97.5,728.9L353.7,728.9Z" fill="#EDE4FA"/>
+  <path d="M97.5,728.9L353.7,728.9L0.0,1927.3Z" fill="#E3D2FA"/>
+  <path d="M353.7,728.9L1138.4,2107.4L0.0,1927.3Z" fill="#F25AC0"/>
+  <path d="M0.0,1927.3L1138.4,2107.4L1138.4,2557.6Z" fill="#C850DC"/>
+  <path d="M1138.4,2557.6L2276.7,1927.3L1138.4,2107.4Z" fill="#9C38BF"/>
+  <path d="M1138.4,2107.4L1923.0,728.9L2276.7,1927.3Z" fill="#8A2DCF"/>
+  <path d="M1923.0,728.9L2179.2,728.9L2276.7,1927.3Z" fill="#F3D2B4"/>
+  <path d="M353.7,728.9L1923.0,728.9L1138.4,2107.4Z" fill="url(#c)"/>
+  <path d="M1138.4,0.0L1923.0,728.9L353.7,728.9Z" fill="#6E46C8"/>
+  <path d="M1138.4,0.0L2179.2,728.9L1923.0,728.9Z" fill="#F6E7CF"/>
+</svg>

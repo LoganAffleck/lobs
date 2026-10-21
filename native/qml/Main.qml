@@ -5,6 +5,7 @@ import QtQuick.Dialogs
 import QtQuick.Effects
 import com.kdab.dockwidgets 2.0 as KDDW
 import LOBS
+import LOBS.Models
 
 // LOBS editor shell, built from the Fluid Functionalism component set (F*.qml).
 // Surfaces: window s1 → side panels s2 → popovers s4 → dialogs s5. Compact (28px) density.
@@ -35,10 +36,25 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+Shift+]", "Ctrl+}"]; onActivated: app.moveSelected(-1000) }
     Shortcut { sequences: ["Ctrl+Shift+[", "Ctrl+{"]; onActivated: app.moveSelected(1000) }
     Shortcut { sequence: "Delete"; onActivated: app.deleteSelected() }
-    Shortcut { sequence: "Ctrl+S"; onActivated: saveDialog.open() }
-    Shortcut { sequence: "Ctrl+O"; onActivated: openDialog.open() }
+    Shortcut { sequence: "Ctrl+S"; onActivated: { if (!app.saveProject()) saveDialog.open() } } // saves in place; Save As only for an unsaved show
+    Shortcut { sequence: "Ctrl+O"; enabled: !app.live; onActivated: win.guardUnsaved(() => openDialog.open()) }
 
-    FileDialog { id: saveDialog; fileMode: FileDialog.SaveFile; nameFilters: ["LOBS show (*.lobs.json)"]; defaultSuffix: "lobs.json"; onAccepted: app.saveAs(selectedFile) }
+    FileDialog {
+        id: saveDialog; fileMode: FileDialog.SaveFile; nameFilters: ["LOBS show (*.lobs.json)"]; defaultSuffix: "lobs.json"
+        onAccepted: {
+            app.saveAs(selectedFile)
+            const next = win.afterSave
+            win.afterSave = null
+            if (next && app.projectFile !== "") next() // saved: carry on with Open or Import
+        }
+        onRejected: win.afterSave = null
+    }
+    // An untitled show with changes asks to be saved before Open or Import replaces it.
+    property var afterSave: null
+    function guardUnsaved(next) {
+        if (app.unsavedShow) { unsavedDialog.next = next; unsavedDialog.open() }
+        else next()
+    }
     FileDialog { id: importDialog; fileMode: FileDialog.OpenFile; nameFilters: ["OBS scene collection (*.json)"]; onAccepted: app.importObs(selectedFile.toString().replace(/^file:\/{3}/, "")) }
     FileDialog { id: openDialog; fileMode: FileDialog.OpenFile; nameFilters: ["LOBS show (*.lobs.json *.json)"]; onAccepted: app.open(selectedFile) }
 
@@ -47,6 +63,8 @@ ApplicationWindow {
     TransitionsDialog { id: trDialog }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
     SetupWizard { id: setupWizard; onAddPanels: (chat, info) => win.openTwitchPanels(chat, info) }
+    // Stable models for the big lists: rows are updated in place instead of rebuilt (LOBS-022).
+    RowsModel { id: sceneRows; rows: app.scenes }
     function openSetup() { setupWizard.open() }
     // Screenshots: LOBS_DEMO=<name> stages a feature on the sample show.
     Timer {
@@ -136,33 +154,35 @@ ApplicationWindow {
             Text { text: "LOBS"; color: Pal.fg; font.family: Pal.font; font.pixelSize: 15; font.weight: 700; Layout.rightMargin: 4 }
             FButton { iconName: "settings"; variant: "ghost"; onClicked: settingsPage.show(); tip: "Settings  Ctrl ,"; Layout.rightMargin: 8 }
             FButton { text: "New"; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "Start a new project in its own folder" }
-            FButton { text: "Open"; variant: "ghost"; onClicked: openDialog.open() }
+            FButton { text: "Open"; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : "Open a show (Ctrl+O)"; onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
                 id: importButton
                 text: "Import"
                 variant: "ghost"
-                tip: "Import scenes and sources from OBS"
+                enabled: !app.live
+                tip: app.live ? "Stop streaming and recording to import a collection" : "Import scenes and sources from OBS"
                 onClicked: { importMenu.collections = app.obsCollections(); importMenu.popup(importButton, 0, importButton.height + 4) }
                 FMenu {
                     id: importMenu
                     width: 280
                     property var collections: []
                     Instantiator {
+                        active: importMenu.populated // built while the menu is open
                         model: importMenu.collections
                         delegate: FMenuItem {
                             required property var modelData
                             text: "OBS: " + modelData.name + "  ·  " + modelData.scenes + " scenes"
-                            onTriggered: app.importObs(modelData.path)
+                            onTriggered: { const p = modelData.path; win.guardUnsaved(() => app.importObs(p)) }
                         }
                         onObjectAdded: (i, o) => importMenu.insertItem(i, o)
                         onObjectRemoved: (i, o) => importMenu.removeItem(o)
                     }
                     FMenuItem { text: "No OBS scene collections found"; enabled: false; visible: importMenu.collections.length === 0; height: visible ? implicitHeight : 0 }
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                    FMenuItem { text: "Choose a file..."; onTriggered: importDialog.open() }
+                    FMenuItem { text: "Choose a file..."; onTriggered: win.guardUnsaved(() => importDialog.open()) }
                 }
             }
-            FButton { text: "Save"; variant: "ghost"; onClicked: saveDialog.open() }
+            FButton { text: "Save"; variant: "ghost"; tip: "Save (Ctrl+S)"; onClicked: { if (!app.saveProject()) saveDialog.open() } }
             FButton {
                 visible: ["available", "ready", "downloading", "installing", "testing"].indexOf(engineUpdater.state) >= 0
                 iconName: "refresh-cw"
@@ -184,6 +204,7 @@ ApplicationWindow {
                     id: windowMenu
                     width: 240
                     Instantiator {
+                        active: windowMenu.populated // built while the menu is open
                         model: win.panels
                         delegate: FMenuItem {
                             required property var modelData
@@ -242,7 +263,7 @@ ApplicationWindow {
                         currentIndex: win.sceneView
                         FluidList {
                             id: sceneList
-                            model: app.scenes
+                            model: sceneRows
                             topMargin: 2
                             delegate: Item {
                                 required property var modelData
@@ -251,6 +272,8 @@ ApplicationWindow {
                                 height: Pal.ctl + 2
                                 Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.editing }
                                 MouseArea {
+                                    Accessible.role: Accessible.ListItem
+                                    Accessible.name: String(modelData.name || "Scene")
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.popup() }
@@ -272,18 +295,20 @@ ApplicationWindow {
                                     FMenuItem { text: "Duplicate with linked layers"; onTriggered: app.duplicateScene(modelData.id, true) }
                                     FMenuItem { text: "Duplicate"; onTriggered: app.duplicateScene(modelData.id, false) }
                                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                    FMenuItem { text: "Delete scene"; onTriggered: app.deleteScene(modelData.id) }
+                                    FMenuItem { text: "Delete scene"; enabled: app.scenes.length > 1; onTriggered: app.deleteScene(modelData.id) }
                                 }
                             }
                         }
                         GridView {
                             id: sceneGrid
+                            Accessible.role: Accessible.List
+                            Accessible.name: "Scenes"
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
                             boundsMovement: Flickable.StopAtBounds
                             flickDeceleration: 6000
                             maximumFlickVelocity: 3000
-                            model: app.scenes
+                            model: sceneRows
                             leftMargin: 8; rightMargin: 8; topMargin: 4
                             cellWidth: (width - 16) / 2
                             cellHeight: cellWidth * 9 / 16 + 30
@@ -318,6 +343,8 @@ ApplicationWindow {
                                         FBadge { visible: modelData.program; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
                                     }
                                     MouseArea {
+                                        Accessible.role: Accessible.ListItem
+                                        Accessible.name: String(modelData.name || "Scene")
                                         id: tileMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
@@ -372,8 +399,12 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         // Video first, then audio, with a divider between; the filter narrows it.
-                        model: {
-                            const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (app.sourceStatus[r.id] || {}).detail, r.kindLabel))
+                        model: RowsModel { rows: poolList.poolRowsFn() } // rows stay alive across changes
+                        // app.sourceStatus converts the whole map on every read: read it once, not per row.
+                        readonly property var status: app.sourceStatus
+                        function poolRowsFn() {
+                            const st = poolList.status
+                            const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (st[r.id] || {}).detail, r.kindLabel))
                             const video = rows.filter(r => r.video), audio = rows.filter(r => !r.video)
                             if (poolGuest.filter === 1) return video
                             if (poolGuest.filter === 2) return audio
@@ -385,7 +416,7 @@ ApplicationWindow {
                             required property var modelData
                             required property int index
                             property bool hoverable: !modelData.divider
-                            readonly property var st: modelData.divider ? ({}) : (app.sourceStatus[modelData.id] || ({}))
+                            readonly property var st: modelData.divider ? ({}) : (poolList.status[modelData.id] || ({}))
                             readonly property bool problem: !!st.status
                             readonly property bool inScene: !!modelData.inScene
                             width: ListView.view.width
@@ -540,6 +571,8 @@ ApplicationWindow {
                             // Drag onto the canvas to place it where you drop it; click selects (settings in
                             // the Inspector); double-click adds it to the scene; right-click for more.
                             MouseArea {
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: String(modelData.name || "Source")
                                 enabled: !modelData.divider
                                 anchors.fill: parent
                                 anchors.rightMargin: 150 // leave the row's buttons clickable
@@ -586,7 +619,10 @@ ApplicationWindow {
                                         : (modelData.scenes || []).length ? "Used in " + modelData.scenes.join(", ") : "Not used in any scene yet"
                                 }
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { text: "Delete source"; onTriggered: app.deleteSource(modelData.id) }
+                                FMenuItem { // LOBS-018: confirm when the source is in more than one scene
+                                    text: "Delete source"
+                                    onTriggered: (modelData.scenes || []).length > 1 ? deleteSourceDialog.ask(modelData) : app.deleteSource(modelData.id)
+                                }
                             }
                         }
                         Caption {
@@ -892,6 +928,8 @@ ApplicationWindow {
                         }
                         GridView {
                             id: assetGrid
+                            Accessible.role: Accessible.List
+                            Accessible.name: "Assets"
                             visible: assetsGuest.view === 1
                             anchors.fill: parent
                             anchors.leftMargin: 6; anchors.rightMargin: 6; anchors.topMargin: 2; anchors.bottomMargin: 6
@@ -902,7 +940,7 @@ ApplicationWindow {
                             cellHeight: Math.round(cellWidth * 0.62) + 52 // thumbnail + two lines of name
                             model: assetsGuest.items.filter(a => !a.folder) // folders sit above, compact
                             footer: dropHint
-                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; Accessible.name: "Scroll" }
                             // Folders: short rectangles, one cell wide and a third of a tile tall, so three
                             // stack in the space of one asset. They open, select, and take drops like tiles do.
                             header: Item {
@@ -1150,6 +1188,7 @@ ApplicationWindow {
                         FMenu {
                             id: copyMenu
                             Instantiator {
+                                active: copyMenu.populated // built while the menu is open
                                 model: app.scenes
                                 delegate: FMenu {
                                     required property var modelData
@@ -1162,11 +1201,31 @@ ApplicationWindow {
                             }
                         }
                     }
+                    // One right-click menu for every layer row.
+                        FMenu {
+                            id: layerMenu
+                            property var row: ({}) // the row it was opened on
+                            FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", layerMenu.row.id, layerMenu.row.name) }
+                            FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
+                            FCopyToMenu {}
+                            FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
+                            FMenuItem { text: "Ungroup"; enabled: layerMenu.row.group; onTriggered: app.ungroupSelected() }
+                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                            FMenuItem { text: "Bring to front    Ctrl Shift ]"; onTriggered: app.moveSelected(-1000) }
+                            FMenuItem { text: "Bring forward    Ctrl ]"; onTriggered: app.moveSelected(-1) }
+                            FMenuItem { text: "Send backward    Ctrl ["; onTriggered: app.moveSelected(1) }
+                            FMenuItem { text: "Send to back    Ctrl Shift ["; onTriggered: app.moveSelected(1000) }
+                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                            FMenuItem { visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; text: "Delete"; onTriggered: app.deleteSelected() }
+                        }
                     FluidList {
                         id: layerList
+                        // Switching scenes replaces every row; recycling them instead of building new
+                        // ones each time was most of a scene switch on a big show (LOBS-025).
+                        reuseItems: true
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: app.layers
+                        model: RowsModel { rows: app.layers } // rows stay alive across clicks
                         topMargin: 2
                         // Blank space under the layers deselects (pinned to the view, not the content).
                         MouseArea { parent: layerList; anchors.fill: parent; z: -1; onPressed: (m) => { app.clearSelection(); m.accepted = false } }
@@ -1241,9 +1300,14 @@ ApplicationWindow {
                             width: ListView.view.width
                             height: Pal.ctl + 2
                             readonly property bool showTools: layerList.hoverIndex === index || modelData.selected
+                            // A recycled row waiting in the pool is hidden and gives up focus.
+                            ListView.onPooled: { visible = false; focus = false }
+                            ListView.onReused: visible = true
                             Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.selected }
                             opacity: layerList.dragId === modelData.id ? 0.45 : 1
                             MouseArea {
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: String(modelData.name || "Layer")
                                 anchors.fill: parent
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 property real pressY: 0
@@ -1260,7 +1324,7 @@ ApplicationWindow {
                                 onClicked: (m) => {
                                     if (dragged) return
                                     app.selectLayer(modelData.id, m.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
-                                    if (m.button === Qt.RightButton) layerMenu.popup()
+                                    if (m.button === Qt.RightButton) { layerMenu.row = modelData; layerMenu.popup() }
                                 }
                                 onDoubleClicked: renameDialog.ask("layer", modelData.id, modelData.name)
                             }
@@ -1284,20 +1348,6 @@ ApplicationWindow {
                                 }
                                 FButton { visible: modelData.locked && !showTools; iconName: "lock"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: "Unlock" }
                                 FButton { iconName: modelData.visible ? "eye" : "eye-off"; variant: "ghost"; onClicked: app.toggleVisible(modelData.id); tip: modelData.visible ? "Hide" : "Show" }
-                            }
-                            FMenu {
-                                id: layerMenu
-                                FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", modelData.id, modelData.name) }
-                                FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
-                                FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
-                                FMenuItem { text: "Ungroup"; enabled: modelData.group; onTriggered: app.ungroupSelected() }
-                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { text: "Bring to front    Ctrl Shift ]"; onTriggered: app.moveSelected(-1000) }
-                                FMenuItem { text: "Bring forward    Ctrl ]"; onTriggered: app.moveSelected(-1) }
-                                FMenuItem { text: "Send backward    Ctrl ["; onTriggered: app.moveSelected(1) }
-                                FMenuItem { text: "Send to back    Ctrl Shift ["; onTriggered: app.moveSelected(1000) }
-                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { visible: !modelData.background; height: visible ? implicitHeight : 0; text: "Delete"; onTriggered: app.deleteSelected() }
                             }
                         }
                         Caption {
@@ -1726,7 +1776,7 @@ ApplicationWindow {
     Component {
         id: historyView
         FluidList {
-            model: app.history
+            model: RowsModel { rows: app.history } // rows stay alive across edits
             topMargin: 2
             delegate: Item {
                 required property var modelData
@@ -1734,7 +1784,7 @@ ApplicationWindow {
                 width: ListView.view.width
                 height: Pal.ctl + 2
                 Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: index === app.historyIndex }
-                MouseArea { anchors.fill: parent; onClicked: app.jumpHistory(index) }
+                MouseArea { Accessible.role: Accessible.ListItem; Accessible.name: String(modelData.label || modelData.name || "History step"); anchors.fill: parent; onClicked: app.jumpHistory(index) }
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 14
@@ -1777,7 +1827,7 @@ ApplicationWindow {
                             FIcon { name: modelData[1]; size: 18; color: on ? Pal.fg : Pal.muted; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: modelData[2]; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: on ? 550 : 400; anchors.horizontalCenter: parent.horizontalCenter }
                         }
-                        MouseArea { id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: addDialog.kind = modelData[0] }
+                        MouseArea { Accessible.role: Accessible.Button; Accessible.name: String(modelData[2]); id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: addDialog.kind = modelData[0] }
                     }
                 }
             }
@@ -1824,6 +1874,54 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: renameDialog.close() }
                 FButton { text: "Rename"; variant: "primary"; onClicked: renameDialog.apply() }
+            }
+        }
+    }
+    FDialog {
+        id: unsavedDialog
+        property var next: null
+        title: "Save this show first?"
+        width: 400
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                text: "This show has never been saved. If you don't save it, its changes are lost."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                FButton { text: "Cancel"; variant: "ghost"; onClicked: unsavedDialog.close() }
+                FButton { text: "Don't save"; variant: "secondary"; onClicked: { const n = unsavedDialog.next; unsavedDialog.close(); n() } }
+                FButton { text: "Save…"; variant: "primary"; onClicked: { win.afterSave = unsavedDialog.next; unsavedDialog.close(); saveDialog.open() } }
+            }
+        }
+    }
+    FDialog {
+        id: deleteSourceDialog
+        objectName: "deleteSourceDialog"
+        property var row: ({})
+        title: "Delete " + (row.name || "source") + "?"
+        width: 400
+        function ask(r) { row = r; open() }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                text: "It's used in " + (deleteSourceDialog.row.scenes || []).length + " scenes (" + (deleteSourceDialog.row.scenes || []).join(", ")
+                      + "). Deleting it removes it from all of them. You can undo this."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                FButton { text: "Cancel"; variant: "ghost"; onClicked: deleteSourceDialog.close() }
+                FButton { text: "Delete from all scenes"; variant: "danger"; onClicked: { app.deleteSource(deleteSourceDialog.row.id); deleteSourceDialog.close() } }
             }
         }
     }

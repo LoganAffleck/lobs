@@ -1,0 +1,33 @@
+{
+  "name": "lobs-web",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/gen-icons.mjs",
+    "dev": "vite",
+    "build": "npm run icons && vite build && vite build --ssr src/site/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs && node scripts/check-links.mjs",
+    "preview": "vite preview",
+    "shots": "node scripts/shots.mjs",
+    "logo": "node scripts/logo.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.2.5",
+    "lil-gui": "^0.20.0",
+    "marked": "15.0.12",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.21",
+    "@types/react": "19.1.5",
+    "@types/react-dom": "19.1.5",
+    "@types/three": "^0.170.0",
+    "@vitejs/plugin-react": "4.5.0",
+    "playwright": "1.52.0",
+    "typescript": "5.8.3",
+    "vite": "6.3.5"
+  }
+}

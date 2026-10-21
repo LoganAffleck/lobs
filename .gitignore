@@ -20,3 +20,12 @@ native/runtime/
 autotest.json
 streamtest.json
 native/resources/icon-preview.html
+
+# QA build and run output
+native/build-qa/
+qa/runs/
+
+# Website
+web/node_modules/
+web/dist/
+web/dist-ssr/

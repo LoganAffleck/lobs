@@ -22,6 +22,7 @@ struct ObsImport {
 	Doc doc;
 	QVector<ObsPlacement> pending; // every placed layer; refine with resolveObsPlacement()
 	QStringList skipped;           // human-readable notes on what didn't come over
+	QStringList pluginScenes;      // scenes built with the old LOBS-for-OBS plugin, left out
 	QString programScene;          // LOBS scene id of OBS's current program scene
 };
 

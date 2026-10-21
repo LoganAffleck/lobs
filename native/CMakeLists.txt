@@ -37,6 +37,8 @@ qt_add_executable(LOBS WIN32
     src/eyedropper.cpp
     src/browser_view.cpp
     src/projector.cpp
+    src/rows_model.cpp
+    src/rows_model.h
     src/projector.h
     src/browser_view.h
     src/eyedropper.h
@@ -52,7 +54,7 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     # Fluid Functionalism components (QML port)
     qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FSwitch.qml qml/FCheckbox.qml
     qml/FTabs.qml qml/FMenu.qml qml/FMenuItem.qml qml/FSelect.qml qml/FDialog.qml qml/FluidList.qml
-    qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml
+    qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml
     qml/SettingsPage.qml qml/MixerView.qml qml/FIcon.qml qml/FHelp.qml qml/FScrollView.qml qml/CanvasArea.qml qml/StatusBar.qml qml/OutputControls.qml qml/AssetMouse.qml qml/MeterFader.qml qml/ToolTipStyle.qml qml/SourceFields.qml qml/SourceSection.qml qml/FFontPicker.qml qml/FColorField.qml qml/FSearchField.qml qml/GraphicTools.qml
         qml/TransitionsDialog.qml
         qml/NewProjectDialog.qml
@@ -69,3 +71,14 @@ target_link_options(LOBS PRIVATE "/DELAYLOAD:obs.dll")
 
 # App folder (what the installer ships): dist/LOBS/LOBS.exe, engines in dist/LOBS/engine/<version>
 set_target_properties(LOBS PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/dist/LOBS)
+
+# QA build (qa/build-qa.bat): adds the --scenariotest runner and goes to dist/LOBS-qa instead,
+# so the shipped app never contains it.
+option(LOBS_TESTS "Build the QA scenario runner" OFF)
+if(LOBS_TESTS)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    target_sources(LOBS PRIVATE src/test_runner.cpp src/test_runner.h)
+    target_compile_definitions(LOBS PRIVATE LOBS_TESTS QT_QML_DEBUG) # QML profiler for perf work (QA build only)
+    target_link_libraries(LOBS PRIVATE Qt6::Test psapi)
+    set_target_properties(LOBS PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/dist/LOBS-qa)
+endif()

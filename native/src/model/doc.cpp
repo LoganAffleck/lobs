@@ -211,6 +211,31 @@ void Doc::linkTo(const QString &instId, const QString &targetId, Group g, bool k
 	gcLinks();
 }
 
+int Doc::repair()
+{
+	int dropped = 0;
+	auto keep = [&](QStringList &ids, auto exists) {
+		const qsizetype n = ids.size();
+		ids.erase(std::remove_if(ids.begin(), ids.end(), [&](const QString &id) { return !exists(id); }), ids.end());
+		dropped += int(n - ids.size());
+	};
+	keep(sceneOrder, [&](const QString &id) { return scenes.contains(id); });
+	keep(sourceOrder, [&](const QString &id) { return sources.contains(id); });
+	for (Scene &s : scenes)
+		keep(s.layers, [&](const QString &id) { return instances.contains(id); });
+	for (Instance &i : instances) {
+		keep(i.children, [&](const QString &id) { return instances.contains(id); });
+		for (auto it = i.links.begin(); it != i.links.end();)
+			if (!links.contains(*it))
+				it = i.links.erase(it), ++dropped;
+			else
+				++it;
+	}
+	if (dropped)
+		gcLinks();
+	return dropped;
+}
+
 void Doc::gcLinks()
 {
 	QHash<QString, QList<QPair<QString, Group>>> users;
@@ -362,7 +387,7 @@ QStringList Doc::copyToScene(const QStringList &ids, const QString &sceneId, boo
 				kids << copy(c);
 			n.children = kids;
 		}
-		if (!linked || src.kind == "group") {
+		if (!linked) { // a linked group links its own properties too, like any layer (LOBS-011)
 			for (Group g : kGroups)
 				copyGroup(n.props, propsFor(src, g), g);
 			n.links.clear();

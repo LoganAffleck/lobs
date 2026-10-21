@@ -5,6 +5,8 @@ import QtQuick.Controls
 // Drag left/right on it to scrub the value (Shift ×10, Ctrl ×0.1); a plain click types.
 FInput {
     id: root
+    Accessible.role: Accessible.SpinBox
+    Accessible.name: label !== "" ? label : "Number"
     property string label
     property string suffix
     property real value
@@ -56,6 +58,8 @@ FInput {
     // (the text area takes the mouse for the caret and selection).
     MouseArea {
         id: scrub
+        Accessible.role: Accessible.SpinBox
+        Accessible.name: root.label !== "" ? root.label : "Number"
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
         width: root.activeFocus ? root.leftPadding : root.width
         enabled: root.enabled

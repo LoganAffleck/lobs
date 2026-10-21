@@ -30,6 +30,8 @@ Engine::Engine(QObject *parent) : QObject(parent)
 	connect(&m_statsTimer, &QTimer::timeout, this, &Engine::pollStats);
 	m_recordTimer.setSingleShot(true);
 	connect(&m_recordTimer, &QTimer::timeout, this, &Engine::stopRecording);
+	m_parkTimer.setSingleShot(true);
+	connect(&m_parkTimer, &QTimer::timeout, this, &Engine::parkHiddenFilters);
 }
 
 Engine::~Engine()
@@ -177,7 +179,7 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 	if (s.kind == "color")
 		return {{"color", hexToAbgr(st.value("color", "#000000").toString())}, {"width", doc.canvasW}, {"height", doc.canvasH}};
 	if (s.kind == "text")
-		return textSettings(s, 96); // nominal size; only used for Media Pool previews
+		return textSettings(s, 96); // nominal size; only used for Sources previews
 	if (s.kind == "image")
 		return {{"file", st.value("file").toString()}};
 	if (s.kind == "browser") {
@@ -266,6 +268,13 @@ static QString cornerMask(double w, double h, double radiusPct)
 
 void Engine::apply(const Doc &doc)
 {
+	// apply() can switch scenes (a deleted scene was on screen), and switching unparks layers
+	// through apply(); never re-enter it while it walks the layers.
+	if (m_applying)
+		return;
+	m_applying = true;
+	struct Done { bool &f; ~Done() { f = false; } } done{m_applying};
+	m_lastDoc = doc;
 	// The show's transition: rebuilt (without playing) when it changes.
 	if (const Transition *t = doc.transition()) {
 		const bool changed = transitionSig(*t) != transitionSig(m_trDef);
@@ -276,9 +285,17 @@ void Engine::apply(const Doc &doc)
 	if (!m_started)
 		return;
 
+	// Most changes touch one layer or source; everything unchanged is skipped below, so an edit
+	// costs about the same in a 3-scene show and a 300-scene one (LOBS-024).
+	const bool canvasSame = m_appliedCanvasW == doc.canvasW && m_appliedCanvasH == doc.canvasH;
+	m_appliedCanvasW = doc.canvasW, m_appliedCanvasH = doc.canvasH;
+
 	// 1. Inputs: one per pool source, named by its id.
 	for (const QString &id : doc.sourceOrder) {
 		const Source &s = doc.sources[id];
+		if (canvasSame && m_inputs.contains(id) && m_appliedInput.value(id) == s)
+			continue;
+		m_appliedInput[id] = s;
 		const QJsonObject settings = inputSettings(doc, s);
 		const QString sig = QString(obsKind(s.kind)) + QJsonDocument(settings).toJson(QJsonDocument::Compact);
 		obs_source_t *in = m_inputs.value(id);
@@ -349,6 +366,14 @@ void Engine::apply(const Doc &doc)
 			Item &it = m_items[inst.id];
 			const Crop c = doc.crop(inst);
 			const Source &src = doc.sources[inst.sourceId];
+			const Item::Applied now{doc.transform(inst), c, Visibility{leaf.visible, leaf.opacity}, order, sceneId, src.kind,
+						src.kind == "text" || src.kind == "shape" ? src.settings : QVariantMap(), doc.filters(inst)};
+			if (it.hasApplied && (it.parked ? !sceneWanted(sceneId) : it.item && canvasSame && it.applied == now)) {
+				++order; // unchanged, or parked until its scene shows (applied in full then)
+				continue;
+			}
+			it.applied = now;
+			it.hasApplied = true;
 			QString childName = inst.sourceId;
 			if (src.kind == "text") {
 				// Font pixel size from the layer's height (split across lines), so it renders 1:1.
@@ -401,6 +426,11 @@ void Engine::apply(const Doc &doc)
 				it.cropSig = cropSig;
 			}
 			obs_data_release(instSettings);
+			if (!it.item) { // parked: back into its scene (order is set below)
+				it.item = obs_scene_add(scene, it.inst);
+				obs_sceneitem_addref(it.item);
+			}
+			it.parked = false;
 
 			// Filters: rounded-corner mask first, then the layer's filters, then opacity last.
 			// The chain is rebuilt only when its shape changes (filters added, removed, reordered,
@@ -499,7 +529,11 @@ void Engine::apply(const Doc &doc)
 			const bool isText = src.kind == "text";
 			obs_sceneitem_set_bounds_type(it.item, isText ? OBS_BOUNDS_SCALE_INNER : OBS_BOUNDS_STRETCH);
 			obs_sceneitem_set_bounds_alignment(it.item, isText ? OBS_ALIGN_CENTER : (OBS_ALIGN_LEFT | OBS_ALIGN_TOP));
-			obs_sceneitem_set_scale_filter(it.item, isText ? OBS_SCALE_AREA : OBS_SCALE_BICUBIC);
+			// A scale filter makes OBS draw the item through its own texture the size of the source,
+			// kept for the item's life. A solid color or vector shape looks the same without one, and
+			// a canvas-sized color layer would hold 8 MB for nothing (LOBS-034).
+			const bool flat = src.kind == "color" || src.kind == "shape";
+			obs_sceneitem_set_scale_filter(it.item, isText ? OBS_SCALE_AREA : flat ? OBS_SCALE_DISABLE : OBS_SCALE_BICUBIC);
 			obs_sceneitem_set_bounds(it.item, &bounds);
 			obs_sceneitem_set_pos(it.item, &pos);
 			obs_sceneitem_set_rot(it.item, float(t.rot));
@@ -609,10 +643,72 @@ void Engine::setInk(const QVector<QPointF> &pts, const QString &color, double wi
 	m_inkWidth = width;
 }
 
+QVariantMap Engine::layerResources() const
+{
+	int parked = 0, withFilters = 0, filters = 0, texts = 0, shapes = 0, showing = 0;
+	for (const Item &it : m_items) {
+		parked += it.parked;
+		const int n = it.inst ? int(obs_source_filter_count(it.inst)) : 0;
+		withFilters += n > 0, filters += n;
+		texts += !!it.text, shapes += !!it.shape;
+		showing += it.inst && obs_source_showing(it.inst);
+	}
+	return {{"layers", int(m_items.size())}, {"parked", parked}, {"withFilters", withFilters}, {"filters", filters}, {"texts", texts}, {"shapes", shapes}, {"showing", showing}};
+}
+
+void Engine::parkHiddenFilters()
+{
+	bool waiting = false;
+	for (Item &it : m_items) {
+		if (it.parked || !it.inst)
+			continue;
+		if (obs_source_showing(it.inst)) {
+			// Still showing although its scene isn't wanted: a transition or projector; look again.
+			waiting = waiting || !sceneWanted(it.applied.sceneId);
+			continue;
+		}
+		// Its scene item goes too: with a scale filter it holds a source-sized texture, and a
+		// hidden scene never ticks, so changing the filter wouldn't free it. apply() re-adds it.
+		if (it.item) {
+			obs_sceneitem_remove(it.item);
+			obs_sceneitem_release(it.item);
+			it.item = nullptr;
+		}
+		std::vector<obs_source_t *> old;
+		obs_source_enum_filters(it.inst, [](obs_source_t *, obs_source_t *f, void *p) { static_cast<std::vector<obs_source_t *> *>(p)->push_back(f); }, &old);
+		for (obs_source_t *f : old)
+			obs_source_filter_remove(it.inst, f);
+		if (it.maskFilter)
+			obs_source_release(it.maskFilter), it.maskFilter = nullptr;
+		if (it.opacityFilter)
+			obs_source_release(it.opacityFilter), it.opacityFilter = nullptr;
+		it.filterSig.clear();
+		it.parked = true;
+	}
+	if (waiting)
+		m_parkTimer.start(1000);
+}
+
+void Engine::unparkScene(const QString &sceneId)
+{
+	if (m_applying || sceneId.isEmpty())
+		return; // apply() is already running and brings shown scenes back itself
+	for (const Item &it : m_items)
+		if (it.parked && it.applied.sceneId == sceneId) {
+			m_unparkTarget = sceneId;
+			apply(m_lastDoc); // re-attaches this scene's parked filters
+			m_unparkTarget.clear();
+			return;
+		}
+}
+
 void Engine::setEditScene(const QString &sceneId)
 {
 	if (sceneId == m_editId)
 		return;
+	unparkScene(sceneId);
+	if (!m_parkTimer.isActive())
+		m_parkTimer.start(500);
 	if (m_editSource) {
 		obs_source_dec_showing(m_editSource);
 		m_editSource = nullptr;
@@ -672,6 +768,9 @@ obs_source_t *Engine::ensureTransition()
 void Engine::setProgramScene(const QString &sceneId, bool animate)
 {
 	const bool changed = sceneId != m_programId;
+	unparkScene(sceneId);
+	if (!m_parkTimer.isActive())
+		m_parkTimer.start(500); // parks what stopped showing; waits out transitions itself
 	m_programId = sceneId;
 	obs_scene_t *s = m_scenes.value(sceneId);
 	obs_source_t *scene = s ? obs_scene_get_source(s) : nullptr;
@@ -691,6 +790,9 @@ QImage Engine::renderThumbnail(const QString &sceneId, int width)
 	obs_scene_t *scene = m_scenes.value(sceneId);
 	if (!scene || width <= 0)
 		return {};
+	unparkScene(sceneId);
+	if (!m_parkTimer.isActive())
+		m_parkTimer.start(500);
 	const uint32_t w = uint32_t(width), h = uint32_t(width * m_canvasH / m_canvasW);
 	QImage img;
 	obs_enter_graphics();
@@ -859,8 +961,27 @@ bool Engine::sourceActive(const QString &sourceId) const
 	return in && obs_source_active(in);
 }
 
+void Engine::holdScene(const QString &sceneId, bool on)
+{
+	if (on) {
+		++m_heldScenes[sceneId];
+		unparkScene(sceneId);
+	} else {
+		if (--m_heldScenes[sceneId] <= 0)
+			m_heldScenes.remove(sceneId);
+		if (!m_parkTimer.isActive())
+			m_parkTimer.start(500);
+	}
+}
+
 void Engine::setAllScenesShowing(bool on)
 {
+	if (on)
+		for (const QString &id : m_scenes.keys())
+			unparkScene(id);
+	else
+		if (!m_parkTimer.isActive())
+		m_parkTimer.start(500);
 	for (auto it = m_scenes.begin(); it != m_scenes.end(); ++it) {
 		const bool showing = m_showingAll.contains(it.key());
 		if (on && !showing) {

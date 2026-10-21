@@ -1,0 +1,388 @@
+# LOBS Bug Log
+
+Running log; the final report is compiled from this. Severity: S1 crash/data loss · S2 major
+function broken · S3 minor/workaround exists · S4 cosmetic. Bugs are reported, not fixed.
+
+---
+
+## LOBS-001 · S1 · Any "test" in the install path or arguments silently throws away the user's show
+
+- **Area:** startup / persistence · **Found:** Phase 0 · **Status:** Fixed in 9aba8c5 · verified in `runs/20261020-181644` (was: Confirmed (repro 1/1))
+- **Where:** [main.cpp:493](../native/src/main.cpp:493), [app.cpp:127](../native/src/app.cpp:127)
+- **Cause:** `selfTest = app.arguments().join(' ').contains("test")`. `arguments()` includes
+  argv[0], the full exe path, and the check is a plain case-sensitive substring.
+- **Effect when it matches:** the document path becomes `%TEMP%\lobs-selftest.lobs.json` and
+  that file is **deleted at startup**. The user's `project/file` setting is ignored, and the
+  daily engine-update check is skipped. The user gets an empty show on every launch, and
+  whatever they built in the previous session is erased on the next start. No error is shown.
+- **Who hits it:** anyone whose path contains "test", for example a Windows account named
+  `testuser`, `contestant` or `latest`, a portable copy in `D:\Tests\`, or a Downloads folder
+  under such an account.
+- **Repro:**
+  1. Copy `native\dist\LOBS` to a folder whose path contains "test" (I used `...\scratchpad\latest-build`).
+  2. Put a marker file at `%TEMP%\lobs-selftest.lobs.json`.
+  3. Launch `LOBS.exe` normally, with no arguments.
+- **Expected:** a normal launch; user document at `%APPDATA%\LOBS\LOBS\current.lobs.json`.
+- **Actual:** the marker file is deleted, so the app took the self-test branch. The control
+  launch from `native\dist\LOBS` left the marker alone.
+- **Suggested fix:** check for exact flags (`--autotest`, `--snapshot`, …) in `arguments().mid(1)`,
+  not a substring of the joined command line.
+
+## LOBS-002 · S3 (was S2) · Autosave isn't atomic; a crash or power loss mid-write can wipe the show
+
+- **Area:** persistence · **Found:** Phase 0 (code review) · **Status:** Fixed in 5620684 (atomic writes; never reproduced as a loss) · verified in `runs/20261020-181644` (was: Not reproduced in 15 kills (see the status update at the end); code risk remains)
+- **Where:** [app.cpp:195](../native/src/app.cpp:195)
+- **Cause:** `QFile::open(WriteOnly | Truncate)` then `write()`. The file is truncated to 0
+  bytes before the new contents are written. The write result isn't checked, and there's no backup copy.
+- **Risk:** a crash, kill or power loss between the truncate and the write leaves an empty or
+  partial `current.lobs.json`. Stress docs (2,000 instances) make that window larger. A
+  failure such as a full disk is silently ignored.
+- **Planned verification:** kill the process while it saves a stress doc in a loop; check
+  whether the doc reloads.
+- **Suggested fix:** `QSaveFile` (write to temp + atomic rename), keep the last good copy, and
+  show a toast when saving fails.
+
+## LOBS-003 · S4 · Self-test recordings go to the user's real Videos folder
+
+- **Area:** test hygiene · **Found:** Phase 0 · **Status:** Fixed in 6296bfe · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** `--autotest` uses a throwaway document but records to the normal output path.
+  Running it left `C:\Users\Logan\Videos\LOBS\LOBS 2026-10-20 14-51-23.mp4` (124 KB) in the
+  user's recordings.
+- **Suggested fix:** in self-test mode, send output to the temp folder.
+
+## LOBS-004 · S4 · "Media Pool" is still used for what the product calls Sources
+
+- **Area:** terminology / docs · **Found:** reported by product owner, confirmed by search · **Status:** Fixed in bb9e54e · verified in `runs/20261020-181644` (was: Confirmed)
+- **Rule:** the panel and concept are **Sources**, everywhere. "Media Pool" should not appear.
+- **User-visible UI:** clean. The panel is titled "Sources" and no visible string, tooltip or toast says "Pool".
+- **Where it remains:**
+  - [PLAN.md](../PLAN.md) (the spec), about 15 uses: §2 heading and diagram ("Core concept: Media Pool → Scene Instances"), §3 MVP item 1, the §4b audio row, the architecture diagram, Phase 1a/1b notes, and the summary at lines 309–310. Line 239 says "Sources (was Media Pool)", so the rename was never carried through the spec.
+  - Code comments and identifiers: `app.pool` / `App::pool()` ([app.h:24](../native/src/app.h:24)), "Media Pool" comments in [app.h:98](../native/src/app.h:98), [app.h:169](../native/src/app.h:169), [app.cpp:1745](../native/src/app.cpp:1745), [engine.h:63](../native/src/engine.h:63), [engine.cpp:180](../native/src/engine.cpp:180), "pool source" in [obs_import.cpp](../native/src/model/obs_import.cpp) and [audio_fx.h](../native/src/model/audio_fx.h).
+  - Dock id `uniqueName: "pool"` ([Main.qml:337](../native/qml/Main.qml:337)). It's internal, but saved layouts reference it; renaming it needs a layout migration.
+- **Why it matters:** the spec is what contributors (and this QA pass) read. Two names for one concept drift into UI copy, help text and support answers.
+- **Suggested fix:** rename in PLAN.md and comments now. Rename `pool` → `sources` in code when convenient, and migrate the dock id while keeping `"pool"` as a fallback when restoring old layouts.
+
+## LOBS-005 · S3 · Status bar lag warning is cumulative, so a startup hiccup reads as an ongoing problem
+
+- **Area:** status / feedback · **Found:** Phase 2 harness run · **Status:** Fixed in ed22188 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Evidence:** run `20261020-150656/05-render-lag`. 5 frames lagged in the first 198 after startup (2.5%), then **0 lagged frames** over 20 s idle and 10 s of snapshot load. The status bar shows "Lagging N%" from all frames since the engine started ([engine_extras.cpp:36](../native/src/engine_extras.cpp:36), [StatusBar.qml:46](../native/qml/StatusBar.qml:46)). An earlier harness grab showed "Lagging 24.2%" in orange while the app was rendering normally.
+- **Why it matters:** H1 (status must be accurate). A live operator sees an orange performance warning when nothing is wrong, and learns to ignore the one warning that matters.
+- **Suggested fix:** show lag over a rolling window (for example the last 10 s), or count only since the current output started (OBS counts per output session).
+- **Open:** which startup or edit operation produced the 24% burst. Measured in PF-07.
+
+## Code-review leads (not bugs until a test demonstrates them)
+
+- **R-01 · linked copies of groups aren't linked.** `Doc::copyToScene` gives a copied **group** independent props even when `linked` is true; only its children link ([doc.cpp:352](../native/src/model/doc.cpp:352)). PLAN §3.5 says groups are "copyable/linkable like any instance". Verify in LK-09.
+- **R-02 · ungroup doesn't bake the group transform into children** ([doc.cpp:415](../native/src/model/doc.cpp:415)). If a group's transform affects how its children render, ungrouping a moved or scaled group will make children jump. Verify in LY-02 with before/after snapshots.
+
+---
+## Phase 2 run findings (run `runs/20261020-151552` unless noted)
+
+## LOBS-006 · S2 · Live lock can be bypassed: the Inspector moves and Delete removes on-air layers
+- **Area:** live safety · **Story:** LY-06 · **Status:** REOPENED by QA verification (RG-02, back doors remain; see end of file) · was: Fixed in 85f5fbb · verified in `runs/20261020-181644` (was: Confirmed (scenario `20-scenes-layers`))
+- **Repro:** 1) Put a scene with a layer on program. 2) Start recording, so `live` and `liveLocked` are both true. 3) Canvas drag and nudge are correctly refused. 4) Type a new X in the Inspector: the layer moves on air (x 200 → 900). 5) Press Delete: the layer is removed from the live scene.
+- **Expected (PLAN §4b):** "layers locked while live (moving one needs a modifier key or an unlock)". The lock should cover every way of moving the layer, and destructive edits on the on-air scene should be guarded.
+- **Cause:** the check lives only in the canvas drag path and in `nudge()` ([app.cpp:2937](../native/src/app.cpp:2937)). `setTransform`, `scrubTransform`, `setSize`, `fit`, `deleteSelected` and others don't check `liveLocked()`.
+- **Suggested fix:** one guard for every edit that targets the program scene's layers, with the same "Live lock is on" toast.
+
+## LOBS-007 · S2 · Opening another show silently drops the current project's unsaved edits from disk
+- **Area:** persistence · **Story:** PJ-01 · **Status:** Fixed in 84630d1 + c069809 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Repro:** 1) Create project B and add a layer, without pressing Save. 2) Open project A. 3) Look at B's `.lobs.json`: the layer isn't there (the file only has its Background). Autosave goes to `current.lobs.json`, which now holds A, so B's edit survives only in this session's undo history.
+- **Expected:** Open saves the current project first (as `createProject` already does), or asks "Save changes to B?".
+- **Cause:** `App::open` ([app.cpp:1595](../native/src/app.cpp:1595)) replaces the doc without `saveProject()`. The QML Open dialog calls it directly ([Main.qml:43](../native/qml/Main.qml:43)).
+
+## LOBS-008 · S2 · A failed "New project" still wipes the current show and leaves a broken project
+- **Area:** persistence · **Story:** PJ-01 · **Status:** Fixed in 91d65af · verified in `runs/20261020-181644` (was: Confirmed)
+- **Repro:** New project with a 250-character name (the dialog accepts it). The folder is created, then saving the file fails because the path is too long ("Couldn't save …"). By then `newDocument()` has already run: the open show is replaced with an empty one, and the project file points at a path that can't be written.
+- **Cause:** [app.cpp:1562](../native/src/app.cpp:1562) calls `newDocument()` before it knows `saveAs` will succeed.
+- **Suggested fix:** check name length and path length, write the new file first, and only then switch documents. Roll back the folder on failure.
+
+## LOBS-009 · S2 · A failed Save As repoints the project at the bad path, so every later Save fails
+- **Area:** persistence · **Story:** PJ-01b · **Status:** Fixed in 4876957 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Repro:** Save As to a good path, then Save As to an unwritable path (`Z:/…`). Toast: "Couldn't save". `projectFile` is now the bad path, so the next Save fails too.
+- **Cause:** `App::saveAs` sets `m_projectFile` and the `project/file` setting **before** opening the file ([app.cpp:1578](../native/src/app.cpp:1578)). Writes are also non-atomic (see LOBS-002).
+
+## LOBS-010 · S3 · Project names CON/NUL/COM1 and over-long names are accepted; "CON" makes a folder Explorer can't open
+- **Area:** projects · **Story:** PJ-01 · **Status:** Fixed in 6b37c3e · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** `checkNewProject` rejects `<>:"/\|?*` and a trailing period, but accepts reserved device names and 250-character names. `createProject("CON")` returned true and created `projects\CON\CON.lobs.json` (through Qt's long-path API). Explorer, cmd and most tools can't open or delete that folder without a `\\?\` prefix. Long names fail later (LOBS-008).
+- **Suggested fix:** reject reserved names (CON, PRN, AUX, NUL, COM1–9, LPT1–9, with or without an extension) and cap the name so the full file path stays under MAX_PATH.
+
+## LOBS-011 · S3 · A linked group's own visibility and opacity don't link, and the group shows no link badge
+- **Area:** linking / groups · **Story:** LK-09 · **Status:** Fixed in 1bdecc2 after the 2026-10-20 product decision · verified in `runs/20261020-185532` (was: Confirmed (confirms lead R-01))
+- **Detail:** Copying a group as **Linked** links its children but not the group itself (`links: {}`). Moving the group in B does move A's copy, because the move is applied to the linked children. Hiding the group or setting it to 50% opacity in B doesn't touch A. The Layers row for the group has no link badge, so the user can't tell which actions will propagate.
+- **Expected (PLAN §3.5):** groups are "copyable/linkable like any instance".
+- **Why it matters:** the same object behaves as linked for one action and unlinked for another, with no signifier (Norman; H4 consistency).
+
+## LOBS-012 · S3 · "Reset" on a linked section silently resets every linked scene
+- **Area:** linking / UX · **Story:** LK-12 · **Status:** Fixed in 1e9aa16 (test updated to the decision in 71a3153) after the 2026-10-20 product decision · verified in `runs/20261020-185532` (was: Confirmed)
+- **Repro:** linked pair, crop L=50 in B, then Reset on the Crop section → A's crop is also 0. No toast or confirmation, and the Undo label is "Reset crop".
+- **Note:** propagating is consistent with linking, but Reset reads as a local action. Say "Reset in 2 scenes" on the button or in a toast, or offer "Reset here only (unlink)" (H5, H1).
+
+## LOBS-013 · S3 · Every scene can be deleted, leaving no scenes and nothing on program
+- **Area:** scenes · **Story:** SC-01 · **Status:** Fixed in 90150ab · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** `App::deleteScene` has no last-scene guard, and the menu calls it directly ([Main.qml:275](../native/qml/Main.qml:275)). After deleting all scenes: 0 scenes, and edit and program are both empty. Adding a source then creates it with nowhere to place it. Undo recovers. (Deleting the scene on program does fall back correctly.)
+- **Suggested fix:** disable "Delete scene" on the last scene, or recreate an empty scene.
+
+## LOBS-014 · S3 · Grouping layers from different levels silently leaves some out
+- **Area:** layers · **Story:** LY-02 · **Status:** Fixed in 7bb39a4 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Repro:** select a layer inside a group, Ctrl+click a top-level layer, Ctrl+G → a new group containing **only** the first layer. The second layer isn't grouped and nothing says why.
+- **Cause:** `Doc::groupLayers` keeps only ids from the first id's sibling list ([doc.cpp:386](../native/src/model/doc.cpp:386)).
+- **Suggested fix:** move all selected layers to the first one's level, or refuse with a message.
+
+## LOBS-015 · S3 · Renaming a source doesn't rename the layers that use it
+- **Area:** Sources / layers · **Story:** MP-03 · **Status:** Fixed in dc73d00 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Repro:** source "Logo" placed in 3 scenes; rename the source to "Brand Logo" → every layer row still says "Logo" (inspector source name says "Brand Logo"). The layers were never renamed by hand.
+- **Expected:** layers that still carry the source's name follow it. Only a layer renamed by hand keeps its own name.
+
+## LOBS-016 · S3 · Opening a show with a dangling layer reference shows a blank ghost layer
+- **Area:** persistence robustness · **Story:** PJ-01c · **Status:** Fixed in 0407f8a · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** a v1 doc whose scene lists `ins_ghost` (an instance that doesn't exist) opens without complaint and shows an empty-named row in Layers. Junk files (empty, garbage, wrong version, truncated) are correctly refused, and the current show stays untouched. Only structurally-invalid-but-parseable docs get through.
+- **Suggested fix:** validate on load: drop missing ids from scene layers and group children, and GC links (the same checks as the QA `linkIntegrity` helper). Toast if anything was repaired.
+
+## LOBS-017 · S4 · Edits that change nothing still add an undo step
+- **Area:** undo · **Story:** UH-01 · **Status:** Fixed in 56735a7 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Repro:** Fill a layer, then Fill again: the history grows by one ("Fill canvas") with no change, so the next Undo appears to do nothing.
+- **Suggested fix:** in `Store::commit`, skip the entry when the document is unchanged.
+
+## LOBS-018 · S3 · "Delete source" removes it from every scene with no warning
+- **Area:** Sources / UX · **Story:** MP-03 · **Status:** Fixed in d612f99 · verified in `runs/20261020-181644` (was: Confirmed (code + controller))
+- **Detail:** the Sources menu item calls `app.deleteSource` directly ([Main.qml:589](../native/qml/Main.qml:589)). A source placed in N scenes disappears from all of them in one click. Undo restores it exactly (verified), but nothing says "Used in 3 scenes" (H5 error prevention).
+
+## To verify in the UI pass
+- **V-01 · Ctrl+] / Ctrl+[ didn't reorder** when sent through the harness (LY-01). The shortcuts are declared ([Main.qml:33](../native/qml/Main.qml:33)). Confirm whether other shortcuts work through the same injection path before calling it a bug. Also add a manual check.
+- **V-02 · Ctrl+S always opens Save As** ([Main.qml:38](../native/qml/Main.qml:38)) instead of saving to the open project (H4: Windows convention). Check what the toolbar "Save" does.
+
+## LOBS-019 · S3 · Ctrl+S and the toolbar "Save" always open Save As, even for a saved project
+- **Area:** persistence / UX · **Story:** V-02 · **Status:** Fixed in a697855 · verified in `runs/20261020-181644` (was: Confirmed (run `runs/20261020-152146/40-ui`))
+- **Repro:** Save a show as `v02.lobs.json`, add a layer, press Ctrl+S → a native "Save As" dialog opens and the file isn't updated. The toolbar Save button does the same.
+- **Cause:** `Shortcut { sequence: "Ctrl+S"; onActivated: saveDialog.open() }` ([Main.qml:38](../native/qml/Main.qml:38)). `App::saveProject()` exists but nothing in the UI calls it.
+- **Why it matters:** H4 (platform convention: Ctrl+S saves in place). Combined with LOBS-007 (Open doesn't save), the quick way to protect your work doesn't exist, so users either re-pick the same file every time or don't save.
+
+## LOBS-020 · S3 · "Copy to another scene" (Linked/Independent) is only on a small unlabeled icon
+- **Area:** linking / discoverability · **Story:** LK-01u · **Status:** Fixed in 4933280 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** the canvas right-click menu and the Layers row right-click menu (screenshots `lk01u-rowmenu.png`, `lk01u-menu.png`) offer Rename, Duplicate, Group, order and Delete, but **not** Copy to. The only way in is the 16 px copy icon in the Layers header (tooltip "Copy to another scene"). That opens scene ▸ Linked copy / Independent copy. It works and the Inspector then shows "Linked · Beta".
+- **Why it matters:** linking is LOBS's headline idea (PLAN §2), but it sits behind an icon with no label (H6 recognition over recall; Norman signifiers). There's also no paste-time prompt (spec gap D2).
+- **Suggested fix:** add "Copy to ▸" to both context menus. Consider Ctrl+C / Ctrl+V across scenes with the Linked/Independent choice from PLAN §2.
+
+## LOBS-021 · S2 · Screen readers get almost nothing: 22 of 201 interactive controls have an accessible name
+- **Area:** accessibility (WCAG 2.2 · 4.1.2 Name, Role, Value) · **Story:** AX-01 · **Status:** Fixed in 927c0b2 (census fix a74ba77) · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** census of visible interactive QML items: 201 interactive, 22 with `Accessible.name`. The QML has no explicit `Accessible.*` annotations. Icon-only buttons (Layers header group/copy/delete, the tool strip, help "?" buttons, scene grid/list toggle) expose no name at all. Text buttons only work where the Basic style happens to expose their text.
+- **Who's affected:** blind and low-vision streamers using Narrator/NVDA, and voice-control users ("click Copy"), who need names to target controls.
+- **Suggested fix:** `Accessible.name` (and `.role`) on FButton, FIcon-only buttons and list rows, defaulting to `tip` when there's no text; a CI check that uses the same census.
+
+## Withdrawn
+- **V-01 (Ctrl+] didn't reorder):** not a bug. All shortcuts work through the window (V-01 story: Ctrl+D, Ctrl+Z, Delete, Ctrl+], Ctrl+[, Ctrl+G). The failing LY-01 run had the first-run setup assistant open, which is modal and correctly takes the keys.
+- **V-02:** confirmed, now LOBS-019.
+
+---
+## Phase 3 (performance) findings
+
+## LOBS-022 · S1 · Memory leaks on every scene switch; long sessions end in "Not Responding"
+- **Area:** performance / stability · **Stories:** PF-02, PF-03 · **Status:** PARTLY FIXED per QA verification (UI leak gone; per-scene GPU buffers remain → LOBS-034) · was: Fixed in 76589e2 · verified in `runs/20261020-181644` (was: Confirmed, reproduced in 3 separate runs)
+- **Evidence:**
+  - `runs/probe-growth` (heavy project, 30 switches): private memory **2,627 → 5,230 MB**, about **87 MB per switch**. OS handles stay flat (about 47.6k).
+  - `runs/probe-growth2`, by project size:
+
+    | Setup | MB per switch |
+    |---|---|
+    | Tiny project, 2 scenes | 2.9 |
+    | Heavy project, 2 plain scenes | 16.9 |
+    | Heavy project, 2 camera scenes | 23.1 |
+    | Heavy project, 2 display-capture scenes | 24.2 |
+
+    The leak grows with **project** size, not scene content.
+  - Full heavy run (PF-02, 100 switches, then PF-03): after the switches, a run of 30 ordinary edits never finished. Windows marked LOBS **Not Responding** at **5.4 GB** working set, and the run was stopped after 4 minutes. In a fresh process the same edits take about 90 ms, so the hang comes from the accumulated memory.
+- **Repro:** open any project and switch the edited scene back and forth (click scenes in the list). Watch Private Bytes in Task Manager.
+- **Why S1:** a streamer switches scenes hundreds of times in a show. At the measured rates, a heavy show gains gigabytes per hour and ends in a frozen app mid-stream.
+- **Leads for the developer:** `App::editScene` → `Engine::setEditScene` (just inc/dec showing) plus `emit docChanged()`, which re-evaluates every QML binding on `app.scenes/pool/layers/inspector/history/mixer/transitions`. The per-switch cost scaling with whole-project size points at that QML rebuild. Candidates: JS arrays/maps rebuilt per change and kept alive, the `Instantiator`-driven "Copy to" submenus (one `FMenu` per scene, rebuilt on every `app.scenes` change), and delegates retained by `FluidList`. Heap-profile one switch.
+
+## LOBS-023 · S2 · Scene switching is slow on big projects, and capture scenes freeze the UI for 1.3–1.5 s
+- **Area:** performance · **Story:** PF-02 · **Status:** Fixed in 76589e2 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Targets:** select or show a scene ≤ 100 ms p95 (heavy project).
+- **Measured (heavy: 40 scenes, 104 sources, 424 layers, `runs/20261020-153*/60-perf-heavy`, 100 switches):**
+
+  | | p50 | p95 | max |
+  |---|---|---|---|
+  | Select scene for edit | **2,633 ms** | **4,998 ms** | **6,295 ms** |
+  | Show (cut) to program + frame | 195 ms | 457 ms | 666 ms |
+
+  The first switch took 123 ms. The growth tracks LOBS-022.
+- **Without the leak (fresh process, `probe-growth2`):** plain graphics scenes take a steady **310 ms** per switch, against 14 ms in a tiny project, so the cost scales with the whole document. Scenes containing **display capture take 1.3–1.5 s** per switch, and camera scenes take 0.4–0.9 s: activating a capture appears to block the UI thread.
+- **Why it matters:** a live operator clicking between scenes gets a frozen UI for up to seconds, and the on-air switch lags behind the click.
+- **Suggested direction:** make edit-scene changes not rebuild document-wide QML models (separate `editSceneChanged` from `docChanged`). Keep capture sources warm, or activate them off the UI thread.
+
+## Performance results so far (heavy project)
+| Metric | Target | Result |
+|---|---|---|
+| Open → interactive | ≤ 3 s | **0.96 s** ✅ |
+| Save | ≤ 500 ms | **8 ms** ✅ |
+| UI stall around autosave | ≤ 50 ms | **51 ms p95** (borderline; measurement includes ~10 ms timer slop) |
+| Select scene for edit | ≤ 100 ms p95 | **5.0 s p95** ❌ (LOBS-022/023) |
+| Show scene (cut) | ≤ 100 ms p95 | **457 ms p95** ❌ |
+| Linked edit, 30 scenes (fresh process) | ≤ 100 ms | **87–113 ms** (borderline) |
+| OS handles after opening heavy | — | 4.9k → **48.6k** (note; watch on stress) |
+
+## LOBS-024 · S2 · The editor runs at about 8 fps on a heavy project (drag, scrub, click, edit)
+- **Area:** performance · **Stories:** PF-03, PF-04, PF-05, PF-06 · **Status:** Fixed in 76589e2 (heavy); PF-04-heavy UI frame p95 34 ms vs 16.7 target, see report · verified in `runs/20261020-181644` (was: Confirmed (`runs/20261020-155724/62-perf-heavy-b`, fresh process; `runs/probe-select`))
+- **Measured, heavy project (40 scenes / 424 layers), against the targets:**
+
+  | Action | Target | Measured |
+  |---|---|---|
+  | UI frame interval while dragging a layer | p95 ≤ 16.7 ms | **p50 131 ms, p95 209 ms, max 679 ms** (about 8 fps) |
+  | Each canvas drag move | — | p50 111 ms, p95 189 ms |
+  | Inspector scrub step | p95 ≤ 33 ms | p50 100 ms, p95 241 ms |
+  | Click a layer → Inspector, fresh process | p95 ≤ 100 ms | **p50 230 ms, p95 411 ms** |
+  | Click a layer, after earlier edits (leak) | — | **1.3–2.8 s per click** |
+  | One edit (setTransform) | p95 ≤ 100 ms | p50 90 ms, p95 225–409 ms |
+  | Linked edit across 30 scenes | p95 ≤ 100 ms | p50 158 ms, p95 216 ms |
+
+- **The output stays clean:** 0 lagged frames over 20 s on program, and 0 over 10 s with every scene active. Only the editor UI is slow.
+- **Cause (from the code):** every change, including selection (which isn't even an edit), runs `App::onStoreChanged`/`emit docChanged()`. That means a full `Engine::apply` over all sources (builds settings JSON and a signature for each), `rebuildHotkeys()` (re-registers global hotkeys on **every** edit), and re-evaluating every QML model. Cost is O(project) per keystroke or mouse move.
+- **Suggested direction:** separate signals (`selectionChanged`, `editSceneChanged`, `docChanged`), incremental engine apply for the instance that changed, and hotkeys rebuilt only when scenes or sources are added or removed.
+
+## LOBS-025 · S1 · The stress project (200 scenes, 3,270 layers) is unusable
+- **Area:** performance / scale · **Stories:** PF-01, PF-02 (stress) · **Status:** Partly fixed in 76589e2. Stress still misses targets (PF-01/02/03/04/06-stress) · verified in `runs/20261020-181644` (was: Confirmed (`runs/20261020-160525/61-perf-stress`))
+- **Measured:**
+  - Open → interactive: **12.3–17.1 s** (p50 13.0 s; target ≤ 10 s).
+  - UI freeze around autosave: **up to 6.0 s** (target: never > 1 s). Save itself: 68 ms.
+  - **15 scene switches didn't finish in 6+ minutes.** The run was killed at its 8-minute cap.
+  - After three opens: **11.5 GB private memory, 9.0 GB working set, 271k OS handles, 2,003 GDI objects** (from 2.0 GB, 5k handles, 37 GDI). Some of this is the leak in LOBS-022.
+- **Risk beyond slowness:** Windows' default GDI limit is 10,000 objects per process. At about 3 GDI objects per source, a project with roughly 3,000 sources (or fewer, with more text layers) will hit the limit and fail to draw, or crash.
+- **Remaining stress perf stories (PF-03…PF-07) were not run.** They depend on switching and selection, which this bug blocks. Logged as a coverage gap.
+
+## LOBS-026 · S2 · Importing an OBS collection while live puts the imported scene on air
+- **Area:** import / live safety · **Story:** IM-03 · **Status:** Fixed in 84630d1 · verified in `runs/20261020-181644` (was: Confirmed (`runs/20261020-161451/70-import`))
+- **Repro:** put a scene on program and start recording (or streaming). Import → OBS collection. Program switches to the imported collection's current scene ("Be Right Back / Starting") immediately. The current show is also replaced without saving (same root cause as LOBS-007).
+- **Cause:** `App::importObs` calls `editScene(...)` then `take()` unconditionally ([app.cpp:1663](../native/src/app.cpp:1663)).
+- **Suggested fix:** while live, import without taking (or block import with "Stop streaming/recording first"), and save or confirm the current show first.
+
+## LOBS-027 · S3 · OBS import silently drops scenes built with the old LOBS-for-OBS plugin
+- **Area:** import · **Story:** IM-01 · **Status:** Fixed in 7db9513 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** `Untitled.json` (the owner's real collection) has 10 scenes. Five come over and match OBS exactly: same layers per scene, same hidden items (Camera Small, Kofi, Window Capture). The other 5 are skipped on purpose by `isLobsHelper()` ([obs_import.cpp:99](../native/src/model/obs_import.cpp:99)): `[LOBS] Pool`, plus **BRB, Gameplay, Just Chatting, Starting Soon**, which are real scenes whose layers were all plugin `lobs_instance` items. The toast reads "Imported 5 scenes and 15 sources… Not carried over: 2 sources with no LOBS equivalent, 1 device not connected". It never mentions the 4 user-visible scenes that disappeared.
+- **Why it matters:** H1 / H9. The people most likely to have these scenes are early adopters who used the plugin. They lose their scenes without being told.
+- **Suggested fix:** list the dropped scenes in the import note. Better: rebuild them from the plugin's `[LOBS] Pool` sources, since the `lobs_instance` items reference them.
+
+## IM-02 note (pass, with one observation)
+Truncated, empty and non-OBS files are refused ("Not an OBS scene collection") and the open show is untouched. Two parseable but degenerate files (`sources: []`, and wrong value types) import as a 0-scene or 1-scene show and replace the current one. Undo recovers. A 0-scene import probably shouldn't replace the show; this overlaps LOBS-013.
+
+## LOBS-028 · S3 · Setup assistant recommends a bitrate above a slow connection's whole upload
+- **Area:** setup assistant · **Story:** SA-02 · **Status:** Fixed in 9e39160 · verified in `runs/20261020-181644` (was: Confirmed (`runs/2026102016*/80-misc`))
+- **Detail:** `recommendSettings(1000 kbps, "Twitch")` → **1,500 kbps** at 852×480@30. The bitrate is clamped to a 1,500 kbps floor ([app.cpp:1493](../native/src/app.cpp:1493)), so any upload under 2 Mbps is told to send more than 75% of it. At 1 Mbps it's told to send more than the line can carry. The result is dropped frames and buffering, with no warning. The 3, 6, 10 and 50 Mbps cases are sensible (2.2k / 4.5k / 6k / 6k, capped at Twitch's 6,000).
+- **Suggested fix:** below about 2 Mbps, recommend 75% of the measured upload and say plainly that the connection is too slow for a stable stream.
+
+## LOBS-029 · S3 · A mic set to "Monitor and output" gets no echo/feedback warning
+- **Area:** audio · **Story:** AU-02 / AU-03 · **Status:** Fixed in 352dae0 · verified in `runs/20261020-181644` (was: Confirmed (spec gap D5, partly built))
+- **Detail:** the mixer has warnings for monitoring **desktop audio** ("Echo risk…"), browser sources and track 1 ([app.cpp:2727](../native/src/app.cpp:2727)). A **microphone** monitored to output gets `warnings: []`. Through speakers, that's the classic feedback howl. PLAN §3.12 / §4b calls for "an echo warning".
+- **Suggested fix:** warn on mic + "Monitor and output" ("You'll hear yourself; use headphones or the mic will feed back").
+
+## LOBS-030 · S4 · Opacity isn't clamped: values outside 0–1 are stored and saved
+- **Area:** inspector robustness · **Story:** CV-06 · **Status:** Fixed in d5432f8 · verified in `runs/20261020-181644` (was: Confirmed)
+- **Detail:** `setOpacity(1.7)` and `setOpacity(-1)` are stored as-is and written to the show file. Width and height clamp to ≥ 1 and corner radius clamps to 50%, so opacity is the odd one out. The UI slider probably keeps values in range, but scripts, imports and hand-edited files don't.
+
+## Status update: LOBS-002 (autosave non-atomic)
+- **Not reproduced.** `tools/crash_autosave.ps1` killed LOBS 15 times on the stress project (4 MB doc) at random moments after autosave was running. All 15 autosaves were valid (`runs/20261020-161813-crash-autosave`). Also, continuous editing doesn't starve autosave (PJ-02b: 38 edits → 38 saves, longest gap 0.7 s). The truncate-then-write pattern and the unchecked write result are still in the code, so the risk remains for power loss and full disks (not tested). **Downgraded: S2 → S3 (code risk).**
+
+## LOBS-031 · S2 · The Sources panel is always empty (regression from 76589e2)
+- **Area:** Sources · **Story:** MP-04u · **Status:** Fixed in a5da0f7 · verified in `runs/20261020-181644`
+- **Detail:** the Sources list's `RowsModel { rows: poolRowsFn() }` called the function unqualified. In the model's scope that name doesn't resolve, so the binding threw and the list stayed empty no matter how many cameras or captures were added. Introduced by the leak fix and found while writing the LOBS-018 UI story.
+
+## LOBS-032 · S2 · Steady editing holds off autosave indefinitely
+- **Area:** persistence · **Story:** PJ-02b · **Status:** Fixed in 888acb3 · verified in `runs/20261020-182650`
+- **Detail:** every edit restarted the 400 ms autosave timer. When edits got fast (76589e2), one edit every 250 ms gave 0 autosaves in 20 s (`runs/20261020-181644/32-autosave-starve`). Autosave now also fires at most 2 s after the first unsaved edit.
+
+## Fix-pass notes (2026-10-20)
+- **OUT-03 (virtual camera)** died once in the full run `20261020-181644` and passed alone in `20261020-182650` and in `run-output` `20261020-182828-output`. Flaky, cause not found.
+- **OUT-04:** `received.flv` reports 0.00 s duration in ffprobe although the story passes. The receiver probably closes before the FLV duration is written. Not investigated.
+- **Live lock (follow-up to LOBS-006):** after the product decision, every edit to what's on air is locked: visibility, opacity, filters, rename, duplicate, link and reset, adding layers, and on-air source settings. Alt or Unlock overrides it, and Settings > Stream > Live lock turns it off (2dde2ba, LY-06).
+- **OUT-02 / OUT-03** fail or die only when `50-output` runs after other suites in one `run.ps1` call (`20261020-185702`). Alone they pass (`20261020-185848`). Flaky, cause not found.
+- **Open while live** replaced what was on air. Now refused, and Open/Import are disabled while live (2a7f1f3, PJ-06).
+- **An untitled show was lost on Open or Import.** These now ask Save… / Don't save / Cancel when it has changes (3b214b1, PJ-07, PJ-07u).
+
+
+---
+## QA verification pass on the fix commits (HEAD `2f3ad18`, 2026-10-20)
+
+Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/20261020-190750` (functional), `runs/20261020-191132` (QA regression probes, `90-regression.js`, written by QA after reading the fix diffs), `runs/probe-leak2-head`, and `runs/*-output` (output).
+
+- **Functional suite: 62/62 pass** (was 38/62). Every story the fix pass claimed now passes in QA's run too.
+- **Test changes reviewed:**
+  - LK-12 now follows the product decision. It's stricter, which is fine.
+  - LY-06, PJ-01d/01e/04–07, MP-04u and LK-01m add regression checks, which is fine.
+  - AX-01 no longer counts static `Text` as a control. That's defensible, but it shrinks the denominator: **102 of 127 named (80.3%)**, just over the bar.
+  - No check was weakened to hide a failure.
+- **Reopened or new below:** LOBS-006 (reopened), LOBS-022 (partly fixed → LOBS-034), LOBS-033 (new), LOBS-035 (new), and one product question.
+
+## LOBS-006 · REOPENED · Live lock still has back doors that change what's on air
+- **Fix pass 2:** Fixed in 4d38c43 · verified in `runs/20261020-204324` (LY-06, RG-01..04 pass). Visibility and opacity are live controls. Guarded now: deleteSource (on-air layers), deleteScene (program), addBackground. New, Sample and New project are refused while live.
+- **Story:** RG-02 (`90-regression.js`) · **Status:** Reopened (fix 85f5fbb/2dde2ba is incomplete)
+- While recording, with live lock on and scene "OnAir" on program:
+  1. **The Layers eye icon hides the on-air layer.** `App::toggleVisible` has no guard, while Inspector visibility (`setVisibleFlag`) is refused. Same action, two answers (H4).
+  2. **Delete source removes the on-air layers.** `App::deleteSource` has no guard.
+  3. **Deleting the on-air scene is allowed.** Program jumps to another scene ("OffAir") mid-recording. `App::deleteScene` has no guard.
+- Also unguarded (not checked for on-air effect): `renameSource`, `addBackground`, `setSourceSetting` paths reached through other callers. A static scan of `app.cpp` found 20+ committing functions with no `live*EditAllowed` call; the three above change what viewers see.
+- **Suggested fix:** route those three through `liveEditAllowed`/`liveSourceEditAllowed`/`liveSceneEditAllowed`. Or, if the eye icon should stay usable live (see the product question below), make the Inspector match it.
+
+## LOBS-033 · S3 · While live, arrow-key nudge is refused on scenes that aren't on air
+- **Status:** Fixed in abd8ac9 · verified in `runs/20261020-204324` (RG-01, RG-04)
+- **Story:** RG-01 · **Status:** Confirmed (pre-existing; the old blanket check survived the new guard)
+- **Repro:** while live, edit an off-air scene, select a layer, press an arrow key → "Live lock is on. Unlock to nudge while live." The layer doesn't move. Inspector edits, filters and adding sources on the same off-air scene all work.
+- **Cause:** `App::nudge` calls the new `liveEditAllowed(m_selection)` (correct), then still has `if (liveLocked()) return showToast(...)`, which refuses regardless of scene. That second check also ignores Alt, despite the toast.
+- **Why it matters:** preparing the next scene while live is the main reason the edit/program split exists (SC-02).
+
+## LOBS-022 · Partly fixed · UI leak fixed; memory still grows with every scene you visit (see LOBS-034)
+- **Fix pass 2:** Fixed with LOBS-034 (40cd61c, 40e039c) · RG-05 passes in `runs/20261020-204324`.
+- **QA result:** RG-05 (`runs/20261020-191132`) and `runs/probe-leak2-head`:
+
+  | Case | Retained per switch |
+  |---|---|
+  | Tiny project, with or without rendering | ~0 MB ✅ |
+  | Heavy, 100 switches across all 40 scenes, rendering | **33.7 MB** (2,661 → 6,034 MB) |
+  | Heavy, 50 switches with a frame each | **56 MB** |
+  | Heavy, 50 switches without frames | 17 MB |
+  | Heavy, the same 2 scenes back and forth | **0 MB** |
+
+  Memory isn't returned after 10 s idle plus GC.
+- **Reading:** the unbounded UI leak (QML rows and menus) is fixed, so a click retains about 0.4 MB and repeated switching between visited scenes retains 0. What remains is a one-time cost per scene rendered that is **never released**. That's LOBS-034. The fix commit's "≈0 MB per 100 switches" figure holds only for switches between already-visited scenes, or without rendering.
+- **Speed is fixed:** switch + frame p95 **52 ms** (was 5.0 s), click + frame p95 **29 ms** (was 411 ms).
+
+## LOBS-034 · S2 · Every layer keeps a source-sized GPU buffer after its scene stops showing
+- **Status:** Fixed in 40cd61c (+ re-entry guard 40e039c) · verified in `runs/20261020-204324` (RG-05, LY-07)
+- **Confirmed first** (`_probe-leak2`, run `20261020-192836`): revisiting 2 scenes retained 0.04 MB/switch; new heavy scenes 60 MB/switch, nothing freed after 10 s idle. Three per-layer source-sized textures: lobs_instance's offscreen copy, the scene item's scale-filter texture, and each OBS filter's target. The scale-filter one was the biggest (a canvas-sized color layer = 8 MB). Turning the filter off on a hidden layer doesn't free it, because hidden private scenes never tick.
+- **Fix:** offscreen copy only for cropped layers, freed on hide; no scale filter for color and shape layers; hidden scenes' layers have their scene items and filters detached ("parked") and reattached right before the scene shows (edit, program, transitions, grid thumbnails, projectors).
+- **Result:** heavy after visiting all 40 scenes: 1,966 → 415 MB above the empty show (`_probe-leak3`). RG-05 passes.
+- **Area:** memory / scale · **Stories:** RG-05, PF-*-stress · **Status:** Confirmed by measurement; cause from code
+- **Cause:** `li_video_render` creates `li->texrender` at the **source's** full size on first render, and frees it only in `li_destroy` ([lobs_instance.c:140](../native/src/lobs_instance.c:140), [:77](../native/src/lobs_instance.c:77)). There's nothing on hide or deactivate. Color sources are canvas-sized (1920×1080×4 = 8 MB each), the camera is 8 MB, and a 4K display capture is about 33 MB. Every layer of every scene ever shown keeps its buffer.
+- **Effect:** memory ≈ the sum over **visited** layers. Heavy (424 layers) settles around 3.4 GB. Stress (3,270 layers) would need tens of GB, which matches the stress numbers below.
+- **Suggested fix:** release the texrender when the instance stops showing (`hide`/`deactivate` callback), or share one per source (not per layer). Also, skip the texrender entirely when no crop or radius is set, and draw plain color sources directly instead of rendering a canvas-sized texture.
+
+## LOBS-035 · S4 · The recording error still tells Windows 11 users about "Windows 10 Ransomware Protection"
+- **Status:** Fixed in 1ded3e6 · verified in `runs/20261020-205127-output` (OUT-01b now reads "Windows Security → Controlled folder access can also block it…")
+- Was a UX note in the report (not logged as a bug). Still present: OUT-01b `lastError`/status text. It comes from OBS. Suggested wording: "Windows Security → Controlled folder access".
+
+## Product decision (2026-10-20, from the product owner): visibility and opacity are live controls
+- While live and locked, **show/hide and opacity stay allowed** on the on-air scene, from both the Layers eye icon and the Inspector. A show runner needs to hide and show overlays or a temporary CTA mid-show.
+- **Everything else on air stays locked:** move, size, crop, corners, filters, rename, duplicate, reorder, group, add or delete layers, delete source, delete the on-air scene, source settings, link and reset.
+- The tests encode this: LY-06 and RG-02 (updated by QA). Both fail on `2f3ad18`, because the Inspector refuses hide and opacity while Delete source and Delete scene still slip through.
+
+## Perf verification (HEAD `2f3ad18`, `runs/20261020-191455`)
+- **LOBS-023:** verified fixed on heavy. Select scene p95 60 ms (was 5.0 s); Show (cut) p95 25 ms (was 457 ms).
+- **LOBS-024:** mostly fixed.
+  - Click p95 31 ms, edit p95 14 ms, linked edit p95 48 ms, scrub p95 24 ms.
+  - **Still over target:** UI frame interval while dragging, p95 **33.8 ms** / p99 40.5 ms / max 94 ms (target p95 ≤ 16.7 ms). Typical (p50 17 ms) is about 58 fps; the worst 5% of frames drop to about 30 fps.
+- **LOBS-025:** still partly fixed. Stress is now usable but misses targets:
+  - Pass: open 8.3 s ✅, Show p95 190 ms ✅, click p95 149 ms ✅, edit p95 21 ms ✅.
+  - **Fail:** select scene p95 339 ms (≤ 250), linked edit across 100 scenes p95 393 ms (≤ 250), drag frame p95 114 ms (≤ 33), scrub p95 120 ms (≤ 66), **autosave stall up to 2.9 s** (never > 1 s), memory 898 KB per edit. That's bounded by the 200-step history: about 175 MB.
+  - Resources after open are unchanged: **6.4 GB private, 270k handles, 2,003 GDI objects**. This is LOBS-034, and the GDI risk from LOBS-025 remains.
+
+## Fix pass 2 results (HEAD after 78ddb11)
+- **LOBS-021 remainder:** 52cad55 names Go live, the switch tracks, the mixer and the scene and asset grids. Still unnamed: the MouseArea inside KDDockWidgets' TabBarBase (C++, QML can't attach a name to it).
+- **LOBS-025:** partly fixed in 78ddb11. Stress PF-01 (autosave stall), PF-02, PF-03 and PF-05 now pass (`runs/20261020-204324`). Still failing:
+  - **PF-04-stress** drag frame p95 79 ms [≤ 33] and scrub p95 87 ms [≤ 66]. Moves cost 3.5 ms; most of the frame is QML rendering the window (12 ms p50, 58 ms p95; `_probe-drag-stress`).
+  - **PF-06-stress** memory per edit 1,021 KB (→ LOBS-036).
+  - **GDI and handles after opening stress:** 2,003 GDI objects, 238,811 handles, 4.7 GB private. The 818 text layers each own a GDI+ text renderer (`text_gdiplus`), which accounts for the GDI count. The handle count tracks OBS source count (3,270 layer instances + 818 text renderers, each with OBS's per-source locks and events). Not fixed.
+- **LOBS-024:** heavy PF-04 drag frame p95 33.6 ms [≤ 16.7] stays failing. Moves cost 1.5 ms and frames 2.8 ms (p50); the interval is exactly 2 vsyncs because the harness injects moves on a 16 ms timer against a 16.7 ms vsync (`_probe-drag`, `runs/20261020-202948`). I think the check measures the harness, not the app; the test is unchanged.
+
+## LOBS-036 · S3 · Each edit on a very large show keeps about 1 MB of undo history
+- **Story:** PF-06-stress · **Status:** Open (found in fix pass 2)
+- **Detail:** 200 edits on the stress project grow memory about 1,021 KB per edit (`runs/20261020-204324/63-perf-stress-b`). Each undo step is a whole Doc. Docs share data copy-on-write, but `instances` is one QHash of 3,270 entries: editing one layer copies the whole table.
+- **Suggested fix:** share instances individually (for example a QHash of implicitly shared instance pointers), so an edit copies one layer. A model-wide refactor, so not done in this pass.

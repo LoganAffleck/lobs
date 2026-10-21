@@ -29,7 +29,7 @@ ColumnLayout {
         function refresh() { deviceList = listFor ? app.devices(listFor) : [] }
         onListForChanged: refresh()
         Component.onCompleted: refresh()
-        onDownChanged: if (down) refresh()
+        onDownChanged: if (down) deviceList = listFor ? app.devices(listFor, true) : [] // opening it: ask Windows again
         options: deviceList
         currentValue: sf.st.device
         onPicked: (v) => app.setSourceSetting(sf.d.id, "device", v)

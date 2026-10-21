@@ -15,6 +15,7 @@
 #include <shlobj.h>
 
 #include <QDir>
+#include <QDateTime>
 #include <QFont>
 #include <QFontMetricsF>
 #include <QPainter>
@@ -24,6 +25,7 @@
 #include <QGuiApplication>
 #include <QMimeData>
 #include <QDirIterator>
+#include <QSaveFile>
 #include <QTcpSocket>
 #include <QHostInfo>
 #include <functional>
@@ -38,6 +40,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
+#include <QThreadPool>
 #include <QUrl>
 #include <cmath>
 
@@ -66,11 +69,14 @@ static Doc loadDoc(const QString &path)
 	QFile f(path);
 	if (f.open(QIODevice::ReadOnly)) {
 		const QJsonDocument j = QJsonDocument::fromJson(f.readAll());
-		if (j.isObject() && j["version"].toInt() == 1)
-			return Doc::fromJson(j.object());
+		if (j.isObject() && j["version"].toInt() == 1) {
+			Doc d = Doc::fromJson(j.object());
+			d.repair();
+			return d;
+		}
 	}
 	// Self-tests (temp shows named "...test...") build on the sample show.
-	if (QFileInfo(path).fileName().contains("test", Qt::CaseInsensitive))
+	if (QFileInfo(path).fileName() == "lobs-selftest.lobs.json")
 		return Doc::sample();
 	// First run: one empty scene on a black background, with the mic and desktop audio ready.
 	Doc d;
@@ -106,6 +112,18 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	: QObject(parent), m_engine(engine), m_store(withDefaultDevices(loadDoc(docPath), engine)), m_docPath(docPath)
 {
 	connect(&m_store, &Store::changed, this, &App::onStoreChanged);
+	// docChanged is cheap for QML; the big lists follow only when they actually changed.
+	connect(this, &App::docChanged, this, &App::refreshModels);
+	m_inspectorTimer.setSingleShot(true);
+	m_inspectorTimer.setInterval(16);
+	connect(&m_inspectorTimer, &QTimer::timeout, this, [this] {
+		const QVariant v = QVariant::fromValue(inspector());
+		QVariant &old = m_modelCache["inspector"];
+		if (!old.isValid() || old != v) {
+			old = v;
+			emit inspectorChanged();
+		}
+	});
 	connect(engine, &Engine::statsChanged, this, &App::engineChanged);
 	connect(engine, &Engine::statusChanged, this, &App::engineChanged);
 	connect(engine, &Engine::recordingChanged, this, &App::engineChanged);
@@ -161,8 +179,17 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	}
 }
 
+QVariantMap App::takePerfCounters()
+{
+	const QVariantMap m{{"changes", m_perfChanges}, {"applyMs", m_perfApplyUs / 1000.0}, {"editSceneMs", m_perfEditUs / 1000.0},
+			    {"hotkeysMs", m_perfHotkeyUs / 1000.0}, {"qmlMs", m_perfQmlUs / 1000.0}};
+	m_perfApplyUs = m_perfEditUs = m_perfHotkeyUs = m_perfQmlUs = m_perfChanges = 0;
+	return m;
+}
+
 void App::onStoreChanged()
 {
+	++m_perfChanges;
 	const Doc &d = doc();
 	QElapsedTimer pt;
 	pt.start();
@@ -183,7 +210,11 @@ void App::onStoreChanged()
 		m_engine->setProgramScene(m_editScene);
 	updateOverlay();
 	m_perfEditUs += pt.nsecsElapsed() / 1000;
-	m_saveTimer.start(400);
+	// Autosave 400 ms after the last edit, but never more than 2 s after the first unsaved one,
+	// so steady editing (holding a key, scrubbing) can't hold it off (LOBS-032).
+	if (!m_saveTimer.isActive())
+		m_unsavedSince.start();
+	m_saveTimer.start(std::max<qint64>(0, std::min<qint64>(400, 2000 - m_unsavedSince.elapsed())));
 	pt.restart();
 	rebuildHotkeys(); // scenes and sources come and go
 	m_perfHotkeyUs += pt.nsecsElapsed() / 1000;
@@ -192,12 +223,81 @@ void App::onStoreChanged()
 	m_perfQmlUs += pt.nsecsElapsed() / 1000;
 }
 
+// Writes the show to a file atomically: a temp file next to it, renamed over the old one only
+// once the write succeeded, so a crash or a full disk never leaves a half-written show.
+static bool writeShowFile(const QString &path, const Doc &d)
+{
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly))
+		return false;
+	const QByteArray data = QJsonDocument(d.toJson()).toJson();
+	if (f.write(data) != data.size())
+		return f.cancelWriting(), false;
+	return f.commit();
+}
+
+void App::refreshModels()
+{
+	// Comparing is far cheaper than QML rebuilding every row of an unchanged list (all the
+	// hotkey rows, the mixer, every scene) on each click and keystroke.
+	auto push = [&](const char *key, const QVariant &v, void (App::*signal)()) {
+		QVariant &old = m_modelCache[QString::fromLatin1(key)];
+		if (old.isValid() && old == v)
+			return;
+		old = v;
+		emit (this->*signal)();
+	};
+	// A canvas drag only moves layers: scenes, Sources, the mixer, transitions and hotkeys can't
+	// change, so they wait for the drag to end (LOBS-025).
+	const bool dragging = m_drag != Drag::None;
+	if (dragging)
+		m_modelsStale = true;
+	if (!dragging) {
+		m_modelsStale = false;
+		push("scenes", QVariant::fromValue(scenes()), &App::scenesChanged);
+		push("pool", QVariant::fromValue(pool()), &App::poolChanged);
+	}
+	push("layers", QVariant::fromValue(layers()), &App::layersChanged);
+	// While dragging on the canvas, the Inspector follows at most once a frame: rebuilding it on
+	// every mouse move cost more than the move itself on big shows (LOBS-024).
+	if (m_drag != Drag::None) {
+		if (!m_inspectorTimer.isActive())
+			m_inspectorTimer.start();
+	} else {
+		push("inspector", QVariant::fromValue(inspector()), &App::inspectorChanged);
+	}
+	push("history", QVariant::fromValue(history()), &App::historyChanged);
+	if (dragging)
+		return;
+	push("mixer", QVariant::fromValue(mixer()), &App::mixerChanged);
+	push("transitions", QVariant::fromValue(transitions()), &App::transitionsChanged);
+	push("hotkeyActions", QVariant::fromValue(hotkeyActions()), &App::hotkeyActionsChanged);
+}
+
 void App::autosave()
 {
-	QDir().mkpath(QFileInfo(m_docPath).absolutePath());
-	QFile f(m_docPath);
-	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		f.write(QJsonDocument(doc().toJson()).toJson());
+	// Turning a big show into JSON takes seconds, so the UI thread only takes a snapshot (the doc
+	// is copy-on-write) and a worker serializes and writes it (LOBS-025). One write at a time; an
+	// edit during a write saves again right after.
+	if (m_autosaveBusy) {
+		m_autosaveAgain = true;
+		return;
+	}
+	m_autosaveBusy = true;
+	const Doc snapshot = doc();
+	const QString path = m_docPath;
+	QThreadPool::globalInstance()->start([this, snapshot, path] {
+		QDir().mkpath(QFileInfo(path).absolutePath());
+		const bool ok = writeShowFile(path, snapshot);
+		QMetaObject::invokeMethod(this, [this, ok] {
+			m_autosaveBusy = false;
+			if (!ok && !m_autosaveFailed)
+				showToast("Couldn't autosave. Check that there's space on the drive.");
+			m_autosaveFailed = !ok;
+			if (std::exchange(m_autosaveAgain, false))
+				autosave();
+		});
+	});
 }
 
 void App::showToast(const QString &msg)
@@ -749,7 +849,7 @@ void App::runDemo(const QString &name)
 
 void App::addBackground()
 {
-	if (!doc().scenes.contains(m_editScene))
+	if (!doc().scenes.contains(m_editScene) || !liveSceneEditAllowed(m_editScene))
 		return;
 	m_store.commit("Add background", [&](Doc &d) { placeBackground(d, m_editScene); });
 }
@@ -762,6 +862,11 @@ void App::renameScene(const QString &id, const QString &name)
 
 void App::deleteScene(const QString &id)
 {
+	// LOBS-013: a show always keeps one scene, so edit and program always have somewhere to point.
+	if (doc().sceneOrder.size() <= 1 && doc().sceneOrder.contains(id))
+		return showToast("A show needs at least one scene");
+	if (!liveSceneEditAllowed(id)) // deleting the program scene would switch what's on air
+		return;
 	m_store.commit("Delete scene", [&](Doc &d) { d.deleteScene(id); });
 }
 
@@ -780,6 +885,8 @@ void App::duplicateScene(const QString &id, bool linked)
 
 void App::addSource(const QString &kind, const QString &name, const QString &extra, bool place)
 {
+	if (place && !liveSceneEditAllowed(m_editScene))
+		return;
 	QVariantMap settings;
 	if (kind == "text") settings = {{"text", extra.isEmpty() ? "Text" : extra}, {"size", 96}};
 	else if (kind == "color") settings = {{"color", extra.isEmpty() ? "#1d1b2e" : extra}};
@@ -815,6 +922,8 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 
 void App::placeSource(const QString &id)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	if (!doc().sources.contains(id) || !doc().scenes.contains(m_editScene))
 		return;
 	if (!kindInfo(doc().sources[id].kind).video)
@@ -830,11 +939,20 @@ void App::placeSource(const QString &id)
 void App::renameSource(const QString &id, const QString &name)
 {
 	if (!name.trimmed().isEmpty())
-		m_store.commit("Rename source", [&](Doc &d) { d.sources[id].name = name.trimmed(); });
+		m_store.commit("Rename source", [&](Doc &d) {
+			// LOBS-015: layers still named after the source follow it; a layer renamed by hand keeps its name.
+			const QString old = d.sources[id].name;
+			for (Instance &i : d.instances)
+				if (i.sourceId == id && i.name == old)
+					i.name = name.trimmed();
+			d.sources[id].name = name.trimmed();
+		});
 }
 
 void App::deleteSource(const QString &id)
 {
+	if (!liveSourceEditAllowed(id))
+		return;
 	m_store.commit("Delete source", [&](Doc &d) { d.deleteSource(id); });
 	if (m_poolSelection == id)
 		m_poolSelection.clear();
@@ -848,13 +966,27 @@ void App::selectSource(const QString &id)
 	emit docChanged();
 }
 
-QVariantList App::devices(const QString &sourceId)
+QVariantList App::devices(const QString &sourceId, bool fresh)
 {
-	return doc().sources.contains(sourceId) ? m_engine->listDevices(sourceId, doc().sources[sourceId].kind) : QVariantList{};
+	if (!doc().sources.contains(sourceId))
+		return {};
+	// Status already lists each kind's devices; reuse that instead of asking Windows again.
+	const QString kind = doc().sources[sourceId].kind;
+	if (!fresh && m_deviceCache.contains(kind))
+		return m_deviceCache.value(kind);
+	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+	DeviceList &c = m_sourceDevices[sourceId];
+	if (fresh || now - c.at > 5000) {
+		c.items = m_engine->listDevices(sourceId, doc().sources[sourceId].kind);
+		c.at = now;
+	}
+	return c.items;
 }
 
 void App::setSourceSetting(const QString &id, const QString &key, const QVariant &value)
 {
+	if (!liveSourceEditAllowed(id))
+		return;
 	m_store.commit("Edit " + doc().sources.value(id).name, [&](Doc &d) { d.sources[id].settings[key] = value; });
 }
 
@@ -886,7 +1018,7 @@ void App::toggleLock(const QString &id)
 
 void App::moveLayer(const QString &id, int delta)
 {
-	if (isBackgroundLayer(doc(), id))
+	if (isBackgroundLayer(doc(), id) || !liveEditAllowed({id}))
 		return;
 	// Stop above the background, which stays at the bottom.
 	const QStringList &sib = doc().scenes.value(doc().instances.value(id).sceneId).layers;
@@ -899,7 +1031,7 @@ void App::moveLayer(const QString &id, int delta)
 
 void App::moveSelected(int delta)
 {
-	if (m_selection.isEmpty())
+	if (m_selection.isEmpty() || !liveEditAllowed(m_selection))
 		return;
 	const QStringList ids = m_selection;
 	const QString label = delta <= -100 ? "Bring to front" : delta >= 100 ? "Send to back" : delta < 0 ? "Bring forward" : "Send backward";
@@ -927,6 +1059,8 @@ void App::dropLayer(const QString &id, const QString &target, const QString &mod
 {
 	const Doc &cur = doc();
 	if (id == target || !cur.instances.contains(id) || !cur.instances.contains(target) || cur.descendants(id).contains(target))
+		return;
+	if (!liveEditAllowed({id, target}))
 		return;
 	if (mode == "into" && cur.instances[target].kind != "group")
 		return;
@@ -957,13 +1091,15 @@ void App::dropLayer(const QString &id, const QString &target, const QString &mod
 
 void App::renameLayer(const QString &id, const QString &name)
 {
+	if (!liveEditAllowed({id}))
+		return;
 	if (!name.trimmed().isEmpty())
 		m_store.commit("Rename layer", [&](Doc &d) { d.instances[id].name = name.trimmed(); });
 }
 
 void App::deleteSelected()
 {
-	if (m_selection.isEmpty())
+	if (m_selection.isEmpty() || !liveEditAllowed(m_selection))
 		return;
 	QStringList ids;
 	for (const QString &id : m_selection)
@@ -980,8 +1116,18 @@ void App::deleteSelected()
 
 void App::groupSelected()
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	QString gid;
 	const QStringList ids = m_selection;
+	// LOBS-014: only layers at the same level group together; say so instead of leaving some out.
+	if (!ids.isEmpty()) {
+		Doc probe = doc();
+		const QStringList level = probe.siblings(ids.first());
+		for (const QString &id : ids)
+			if (!level.contains(id))
+				return showToast("To group layers, pick ones at the same level (all inside one group, or all outside)");
+	}
 	m_store.commit("Group layers", [&](Doc &d) { gid = d.groupLayers(ids); });
 	if (!gid.isEmpty())
 		m_selection = {gid}, updateOverlay(), emit docChanged();
@@ -990,12 +1136,16 @@ void App::groupSelected()
 void App::ungroupSelected()
 {
 	const QString id = singleSelection();
+	if (!liveEditAllowed({id}))
+		return;
 	if (!id.isEmpty() && doc().instances[id].kind == "group")
 		m_store.commit("Ungroup", [&](Doc &d) { d.ungroup(id); });
 }
 
 void App::duplicateSelected()
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	if (m_selection.isEmpty())
 		return;
 	QStringList made;
@@ -1013,6 +1163,8 @@ void App::duplicateSelected()
 
 void App::copySelectedTo(const QString &sceneId, bool linked)
 {
+	if (!liveSceneEditAllowed(sceneId))
+		return;
 	if (m_selection.isEmpty() || !doc().scenes.contains(sceneId))
 		return;
 	const QStringList ids = m_selection;
@@ -1027,6 +1179,8 @@ void App::setTransform(const QString &field, double value)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty())
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Instance &i = doc().instances[id];
 	if (i.kind == "group") {
@@ -1075,6 +1229,8 @@ void App::scrubTransform(const QString &field, double value, bool final, bool ke
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	const int mode = final ? 2 : 1;
 	if (doc().instances[id].kind == "group") {
 		if (field != "x" && field != "y")
@@ -1097,6 +1253,8 @@ void App::setSize(const QString &field, double value, bool keepAspect)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Transform t = withField(doc().transform(doc().instances[id]), field, value, keepAspect);
 	m_store.commit("Resize", [&](Doc &d) { d.setTransform(id, t); });
@@ -1130,6 +1288,8 @@ void App::cropToAspect(double ratio)
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	const QSize ns = m_engine->sourceSize(doc().instances[id].sourceId);
 	if (ns.isEmpty())
 		return showToast("This layer's size isn't known yet");
@@ -1151,6 +1311,8 @@ void App::setCornerRadius(double pct, bool final)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Doc &base = m_store.gestureBase() ? *m_store.gestureBase() : doc();
 	Crop c = base.crop(base.instances[id]);
@@ -1175,6 +1337,8 @@ void App::scrubCrop(const QString &field, int value, bool final)
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	const Doc &base = m_store.gestureBase() ? *m_store.gestureBase() : doc();
 	Crop c = base.crop(base.instances[id]);
 	value = std::max(0, value);
@@ -1191,6 +1355,8 @@ void App::setCrop(const QString &field, int value)
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
 		return;
+	if (!liveEditAllowed({id}))
+		return;
 	Crop c = doc().crop(doc().instances[id]);
 	value = std::max(0, value);
 	if (field == "l") c.l = value;
@@ -1203,11 +1369,12 @@ void App::setCrop(const QString &field, int value)
 
 void App::setOpacity(double value, bool final)
 {
+	// Visibility and opacity are live controls: allowed on air even while locked (2026-10-20).
 	const QStringList ids = m_selection;
 	auto fn = [&](Doc &d) {
 		for (const QString &id : ids) {
 			Visibility v = d.visibility(d.instances[id]);
-			v.opacity = value;
+			v.opacity = std::clamp(value, 0.0, 1.0); // LOBS-030
 			d.setVisibility(id, v);
 		}
 	};
@@ -1216,6 +1383,7 @@ void App::setOpacity(double value, bool final)
 
 void App::setVisibleFlag(bool visible)
 {
+	// Visibility and opacity are live controls: allowed on air even while locked (2026-10-20).
 	const QStringList ids = m_selection;
 	m_store.commit(visible ? "Show layer" : "Hide layer", [&](Doc &d) {
 		for (const QString &id : ids) {
@@ -1230,6 +1398,8 @@ void App::fit(const QString &mode)
 {
 	const QString id = singleSelection();
 	if (id.isEmpty() || doc().instances[id].kind == "group")
+		return;
+	if (!liveEditAllowed({id}))
 		return;
 	const Instance &i = doc().instances[id];
 	const QSize ns = m_engine->sourceSize(i.sourceId);
@@ -1252,6 +1422,8 @@ void App::fit(const QString &mode)
 
 void App::addFilter(const QString &type)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty() || !filterTypes().contains(type))
 		return;
@@ -1262,6 +1434,8 @@ void App::addFilter(const QString &type)
 
 void App::removeFilter(int index)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
@@ -1274,6 +1448,8 @@ void App::removeFilter(int index)
 
 void App::toggleFilter(int index)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
@@ -1286,6 +1462,8 @@ void App::toggleFilter(int index)
 
 void App::setFilterValue(int index, const QString &key, const QVariant &value, bool final)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	if (id.isEmpty())
 		return;
@@ -1309,6 +1487,8 @@ static bool groupFromName(const QString &name, Group &out)
 
 void App::linkGroup(const QString &group, const QString &targetId, bool keepMine)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	Group g;
 	if (id.isEmpty() || !groupFromName(group, g) || !doc().instances.contains(targetId))
@@ -1320,13 +1500,19 @@ void App::linkGroup(const QString &group, const QString &targetId, bool keepMine
 
 void App::resetGroup(const QString &group)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	Group g;
 	if (id.isEmpty() || !groupFromName(group, g))
 		return;
 	const Instance &i = doc().instances[id];
 	const PropMap def = doc().defaultProps(i.kind == "group" ? nullptr : &doc().sources[i.sourceId]);
-	m_store.commit("Reset " + group, [&](Doc &d) {
+	// LOBS-012: Reset is local. A linked section unlinks first (keeping its values everywhere
+	// else), then only this layer resets; later edits apply to it alone.
+	const bool wasLinked = i.links.contains(g);
+	m_store.commit(wasLinked ? "Unlink and reset " + group : "Reset " + group, [&](Doc &d) {
+		d.unlink(id, g);
 		switch (g) {
 		case Group::Transform: if (i.kind != "group") d.setTransform(id, def.transform); break;
 		case Group::Crop: d.setCrop(id, {}); break;
@@ -1334,10 +1520,14 @@ void App::resetGroup(const QString &group)
 		case Group::Visibility: d.setVisibility(id, {}); break;
 		}
 	});
+	if (wasLinked)
+		showToast("Unlinked " + group + " and reset it here only");
 }
 
 void App::unlinkGroup(const QString &group)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	const QString id = singleSelection();
 	for (Group g : kGroups)
 		if (groupKey(g) == group && !id.isEmpty())
@@ -1385,18 +1575,40 @@ void App::jumpHistory(int index)
 	m_store.jumpTo(index);
 }
 
+// A new or sample show isn't any project yet: forget the project file, so a later Save or
+// "save before Open" can't write this show over the project that was open before.
+void App::forgetProject()
+{
+	if (m_projectFile.isEmpty())
+		return;
+	m_projectFile.clear();
+	QSettings().remove("project/file");
+	watchAssets();
+	emit assetsChanged();
+	emit projectChanged();
+}
+
 void App::newDocument()
 {
+	// A new show replaces what's on air, so not while live (like Open and Import).
+	if (live())
+		return showToast("Stop streaming and recording to start a new show");
 	m_store.replace(Doc(), "New document");
+	forgetProject();
 	m_poolSelection.clear();
 	m_editScene.clear();
 	addScene();
+	m_cleanDoc = doc();
 }
 
 void App::loadSample()
 {
+	if (live())
+		return showToast("Stop streaming and recording to load the sample show");
 	m_store.replace(withDefaultDevices(Doc::sample(), m_engine), "Load sample show");
+	forgetProject();
 	editScene(doc().sceneOrder.value(0));
+	m_cleanDoc = doc();
 }
 
 // ---------- setup assistant ----------
@@ -1490,7 +1702,9 @@ QVariantMap App::recommendSettings(int measured, const QString &service) const
 {
 	// Leave a quarter of the measured upload free for the rest of your connection.
 	const int cap = service == "Twitch" ? 6000 : service.startsWith("YouTube") ? 9000 : 8000;
-	const int bitrate = std::clamp(int(measured * 0.75 / 100) * 100, 1500, cap);
+	// LOBS-028: never recommend more than that, even on a slow connection (the wizard warns below 2 Mbps).
+	const int bitrate = std::clamp(int(measured * 0.75 / 100) * 100, 100, cap);
+	const bool slow = measured < 2000;
 	int w = 1920, h = 1080, fps = 60;
 	if (bitrate < 2500) w = 852, h = 480, fps = 30;
 	else if (bitrate < 3500) w = 1280, h = 720, fps = 30;
@@ -1505,7 +1719,7 @@ QVariantMap App::recommendSettings(int measured, const QString &service) const
 	for (const QVariant &e : m_engine->encoders())
 		if (e.toMap()["id"].toString() == enc)
 			encName = e.toMap()["name"].toString();
-	return {{"bitrate", bitrate}, {"outWidth", w}, {"outHeight", h}, {"fps", fps}, {"encoder", "auto"}, {"encoderName", encName}, {"hardware", hardware}, {"measured", measured}};
+	return {{"bitrate", bitrate}, {"outWidth", w}, {"outHeight", h}, {"fps", fps}, {"encoder", "auto"}, {"encoderName", encName}, {"hardware", hardware}, {"measured", measured}, {"slow", slow}};
 }
 
 QString App::streamKeyUrl(const QString &service) const
@@ -1519,14 +1733,14 @@ QString App::streamKeyUrl(const QString &service) const
 	return {};
 }
 
+static void placeBackground(Doc &d, const QString &sceneId); // defined with the scene helpers
+
 bool App::saveProject()
 {
 	if (m_projectFile.isEmpty())
 		return false;
-	QFile f(m_projectFile);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	if (!writeShowFile(m_projectFile, doc()))
 		return showToast("Couldn't save " + m_projectFile), false;
-	f.write(QJsonDocument(doc().toJson()).toJson());
 	return true;
 }
 
@@ -1551,9 +1765,16 @@ QString App::checkNewProject(const QString &name, const QString &folder) const
 	static const QRegularExpression bad(R"([<>:"/\\|?*])");
 	if (n.contains(bad) || n.endsWith('.'))
 		return "Names can't contain < > : \" / \\ | ? * or end with a period.";
+	// Windows device names can't be folder or file names (with or without an extension).
+	static const QRegularExpression reserved(R"(^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$)", QRegularExpression::CaseInsensitiveOption);
+	if (reserved.match(n).hasMatch())
+		return "\"" + n + "\" is reserved by Windows. Choose another name.";
 	const QString f = cleanFolder(folder);
 	if (f.isEmpty() || !QDir::isAbsolutePath(f))
 		return "Choose where to keep it.";
+	// The show file and its assets must fit in Windows' usual path limit (260), with room to spare.
+	if ((f + "/" + n + "/" + n + ".lobs.json").size() > 200)
+		return "That name is too long for this folder. Use a shorter name or folder.";
 	if (QFileInfo::exists(f + "/" + n))
 		return "There's already a folder named \"" + n + "\" there.";
 	return {};
@@ -1563,37 +1784,57 @@ bool App::createProject(const QString &name, const QString &folder)
 {
 	if (!checkNewProject(name, folder).isEmpty())
 		return false;
+	if (live())
+		return showToast("Stop streaming and recording to start a new project"), false;
 	const QString dir = cleanFolder(folder) + "/" + name.trimmed();
-	if (!QDir().mkpath(dir + "/assets"))
+	const QString file = dir + "/" + name.trimmed() + ".lobs.json";
+	// The project being left keeps its latest changes; if that can't be saved, stop here.
+	if (!m_projectFile.isEmpty() && !saveProject())
+		return false;
+	// Write the new project before switching to it, so a failure leaves the open show alone.
+	Doc fresh;
+	const QString scene = fresh.addScene("Scene").id;
+	placeBackground(fresh, scene);
+	if (!QDir().mkpath(dir + "/assets") || !writeShowFile(file, fresh)) {
+		QDir(dir).removeRecursively(); // it didn't exist before (checkNewProject)
 		return showToast("Couldn't create " + QDir::toNativeSeparators(dir)), false;
-	saveProject(); // the project being left keeps its latest changes
-	newDocument();
-	const bool ok = saveAs(QUrl::fromLocalFile(dir + "/" + name.trimmed() + ".lobs.json"));
-	emit projectChanged();
-	if (ok)
-		showToast("Created " + name.trimmed());
-	return ok;
-}
-
-bool App::saveAs(const QUrl &url)
-{
-	// The show's folder becomes the project: its assets folder sits next to it.
-	m_projectFile = url.toLocalFile();
+	}
+	m_store.replace(fresh, "New project");
+	m_poolSelection.clear();
+	m_editScene.clear();
+	editScene(scene);
+	m_projectFile = file;
 	QSettings().setValue("project/file", m_projectFile);
 	watchAssets();
 	adoptExternalFiles();
 	emit assetsChanged();
-	QFile f(url.toLocalFile());
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		return showToast("Couldn't save " + url.toLocalFile()), false;
-	f.write(QJsonDocument(doc().toJson()).toJson());
-	showToast("Saved " + QFileInfo(f).fileName());
+	emit projectChanged();
+	showToast("Created " + name.trimmed());
+	return true;
+}
+
+bool App::saveAs(const QUrl &url)
+{
+	const QString path = url.toLocalFile();
+	if (!writeShowFile(path, doc()))
+		return showToast("Couldn't save " + path), false;
+	// Only now does the show's folder become the project (its assets folder sits next to it),
+	// so a failed Save As leaves the current project as it was.
+	m_projectFile = path;
+	QSettings().setValue("project/file", m_projectFile);
+	watchAssets();
+	adoptExternalFiles();
+	emit assetsChanged();
+	showToast("Saved " + QFileInfo(path).fileName());
 	emit projectChanged();
 	return true;
 }
 
 bool App::open(const QUrl &url)
 {
+	// Opening replaces what's on air, so not while live (like Import).
+	if (live())
+		return showToast("Stop streaming and recording to open another show"), false;
 	QFile f(url.toLocalFile());
 	if (!f.open(QIODevice::ReadOnly))
 		return showToast("Couldn't open " + url.toLocalFile()), false;
@@ -1602,7 +1843,13 @@ bool App::open(const QUrl &url)
 		return f.close(), importObs(url.toLocalFile());
 	if (!j.isObject() || j["version"].toInt() != 1)
 		return showToast("Not a LOBS document"), false;
-	m_store.replace(withDefaultDevices(Doc::fromJson(j.object()), m_engine), "Open " + QFileInfo(f).fileName());
+	// The project being left keeps its latest changes; if that can't be saved, don't open.
+	if (!m_projectFile.isEmpty() && !saveProject())
+		return false;
+	Doc opened = Doc::fromJson(j.object());
+	if (const int n = opened.repair()) // LOBS-016
+		showToast(QString("Repaired %1 broken reference%2 in this show").arg(n).arg(n == 1 ? "" : "s"));
+	m_store.replace(withDefaultDevices(opened, m_engine), "Open " + QFileInfo(f).fileName());
 	m_projectFile = url.toLocalFile();
 	QSettings().setValue("project/file", m_projectFile);
 	watchAssets();
@@ -1658,8 +1905,15 @@ bool App::importObs(const QString &path)
 		}
 	}
 	const QString name = o["name"].toString(QFileInfo(path).completeBaseName());
+	// An import replaces the whole show, including what's on air, so not while live.
+	if (live())
+		return showToast("Stop streaming and recording to import a collection"), false;
+	// The project being left keeps its latest changes; if that can't be saved, don't import.
+	if (!m_projectFile.isEmpty() && !saveProject())
+		return false;
 	// Read-only: the OBS file is never written. The import becomes a new LOBS document.
 	m_store.replace(withDefaultDevices(imp.doc, m_engine), "Import " + name + " from OBS");
+	m_cleanDoc = doc(); // the OBS file still has it all
 	editScene(imp.programScene);
 	take();
 	// Sources only report their size while running, so run every scene until sizes settle.
@@ -1683,6 +1937,8 @@ bool App::importObs(const QString &path)
 	if (unsupported) gaps << QString("%1 source%2 with no LOBS equivalent").arg(unsupported).arg(unsupported == 1 ? "" : "s");
 	if (devices) gaps << QString("%1 device%2 not connected, set to this PC's default").arg(devices).arg(devices == 1 ? "" : "s");
 	if (other) gaps << QString("%1 other item%2").arg(other).arg(other == 1 ? "" : "s");
+	if (!imp.pluginScenes.isEmpty())
+		gaps << QString("%1 scene%2 made with the old LOBS plugin (%3)").arg(imp.pluginScenes.size()).arg(imp.pluginScenes.size() == 1 ? "" : "s").arg(imp.pluginScenes.join(", "));
 	const int n = int(imp.doc.scenes.size());
 	showToast(QString("Imported %1 scene%2 and %3 sources from OBS \"%4\".").arg(n).arg(n == 1 ? "" : "s").arg(imp.doc.sources.size()).arg(name) +
 		  (gaps.isEmpty() ? QString() : " Not carried over: " + gaps.join(", ") + "."));
@@ -1728,12 +1984,44 @@ void App::toggleRecording()
 	m_engine->recording() ? m_engine->stopRecording() : m_engine->startRecording();
 }
 
+bool App::liveSceneEditAllowed(const QString &sceneId)
+{
+	if (!liveLocked() || sceneId != m_engine->programScene() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
+		return true;
+	showToast("Live lock is on. Hold Alt or unlock to change layers on air.");
+	return false;
+}
+
+bool App::liveSourceEditAllowed(const QString &sourceId)
+{
+	if (!liveLocked() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
+		return true;
+	const QString program = m_engine->programScene();
+	for (const Instance &i : doc().instances)
+		if (i.sourceId == sourceId && i.sceneId == program)
+			return showToast("Live lock is on. Hold Alt or unlock to change sources on air."), false;
+	return true;
+}
+
+bool App::liveEditAllowed(const QStringList &ids)
+{
+	if (!liveLocked() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
+		return true;
+	const QString program = m_engine->programScene();
+	for (const QString &id : ids)
+		if (doc().instances.value(id).sceneId == program && !program.isEmpty()) {
+			showToast("Live lock is on. Hold Alt or unlock to change layers on air.");
+			return false;
+		}
+	return true;
+}
+
 void App::nudge(int dx, int dy)
 {
+	if (!liveEditAllowed(m_selection))
+		return;
 	if (m_selection.isEmpty())
 		return;
-	if (liveLocked())
-		return showToast("Live lock is on. Unlock to nudge while live.");
 	const QStringList ids = m_selection;
 	m_store.commit("Nudge", [&](Doc &d) {
 		QSet<QString> seen;
@@ -1742,7 +2030,7 @@ void App::nudge(int dx, int dy)
 	});
 }
 
-// ---------- media pool → canvas drag ----------
+// ---------- Sources → canvas drag ----------
 
 static Transform dropTransform(const Doc &d, const QString &sourceId, QPointF c)
 {
@@ -1769,6 +2057,8 @@ void App::poolDragMove(const QString &sourceId, double x, double y)
 
 void App::poolDrop(const QString &sourceId, double x, double y)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	m_dropBoxes.clear();
 	if (!doc().sources.contains(sourceId) || !doc().scenes.contains(m_editScene))
 		return updateOverlay();
@@ -1890,6 +2180,8 @@ void App::refreshSourceStatus()
 
 void App::toggleInScene(const QString &sourceId)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	if (!doc().sources.contains(sourceId) || !doc().scenes.contains(m_editScene))
 		return;
 	QStringList here;
@@ -2289,19 +2581,24 @@ void App::setFolderColor(const QString &folder, const QString &color)
 // Layers whose file is gone (moved or deleted outside LOBS): [{sourceId, name, file, layers}].
 QVariantList App::missingAssets() const
 {
+	// Read by several bindings on every change; checking the disk for every file each time cost
+	// ~30 ms per read on a big show (LOBS-025). Same doc and under 2 s old: reuse the answer.
+	if (m_missingValid && m_missingAge.elapsed() < 2000 && m_missingDoc == doc())
+		return m_missingCache;
+	QHash<QString, int> layers;
+	for (const Instance &i : doc().instances)
+		++layers[i.sourceId];
 	QVariantList out;
 	for (const Source &s : doc().sources) {
 		if (s.kind != "image" && s.kind != "media")
 			continue;
 		const QString f = s.settings.value("file").toString();
-		if (f.isEmpty() || QFile::exists(f))
+		if (f.isEmpty() || !layers.value(s.id) || QFile::exists(f))
 			continue;
-		int layers = 0;
-		for (const Instance &i : doc().instances)
-			layers += i.sourceId == s.id;
-		if (layers)
-			out << QVariantMap{{"sourceId", s.id}, {"name", QFileInfo(f).fileName()}, {"file", f}, {"layers", layers}};
+		out << QVariantMap{{"sourceId", s.id}, {"name", QFileInfo(f).fileName()}, {"file", f}, {"layers", layers.value(s.id)}};
 	}
+	m_missingCache = out, m_missingDoc = doc(), m_missingValid = true;
+	m_missingAge.start();
 	return out;
 }
 
@@ -2503,6 +2800,8 @@ void App::assetDragMove(const QString &path, double x, double y)
 
 void App::assetDrop(const QString &path, double x, double y)
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	m_dropBoxes.clear();
 	if (!doc().scenes.contains(m_editScene) || assetKind(path) == "other")
 		return updateOverlay();
@@ -2660,6 +2959,15 @@ void App::setHotkey(const QString &action, const QString &combo)
 
 void App::rebuildHotkeys()
 {
+	QString sig;
+	for (const QString &id : doc().sceneOrder)
+		sig += id + "=" + doc().scenes.value(id).name + ";";
+	for (const QString &id : doc().sourceOrder)
+		sig += id + "=" + doc().sources.value(id).name + ";";
+	sig += QJsonDocument(QJsonObject::fromVariantMap(m_engine->settings().hotkeys)).toJson(QJsonDocument::Compact);
+	if (sig == m_hotkeySig)
+		return; // nothing a hotkey points at changed
+	m_hotkeySig = sig;
 	QStringList valid;
 	for (const QVariant &v : hotkeyActions())
 		valid << v.toMap()["id"].toString();
@@ -2725,6 +3033,8 @@ QVariantList App::mixer() const
 		QStringList warn;
 		if (s.kind == "desktop_audio" && s.audio.monitor == "monitor_and_output")
 			warn << "Echo risk: monitoring desktop audio plays it back into itself.";
+		if (s.kind == "mic" && s.audio.monitor == "monitor_and_output") // LOBS-029
+			warn << "Feedback risk: you hear your own mic. Use headphones, or speakers will feed back into it.";
 		if (s.audio.monitor == "monitor_only")
 			warn << "Monitor only: you hear it, the stream and recording don't.";
 		if (s.kind == "browser" && s.audio.monitor == "off")
@@ -3176,6 +3486,8 @@ void App::canvasRelease()
 	else if (m_drag == Drag::Crop)
 		m_store.endGesture("Crop " + doc().instances.value(m_dragIds.value(0)).name);
 	m_drag = Drag::None;
+	if (m_modelsStale) // the lists the drag skipped
+		refreshModels();
 	m_guides.clear();
 	updateOverlay();
 }
@@ -3214,6 +3526,8 @@ void App::setToolStrokeWidth(int w) { m_toolStrokeWidth = std::clamp(w, 0, 64); 
 // Mouse up with a drawing tool: make the layer. A click without a drag gets a default size.
 void App::finishCreate()
 {
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
 	m_engine->setInk({}, "#ffffff", 1);
 	m_engine->setGhost({}, {});
 	m_dropBoxes.clear();

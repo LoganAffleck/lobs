@@ -44,6 +44,7 @@ struct PropMap {
 	Crop crop;
 	QVector<Filter> filters;
 	Visibility visibility;
+	bool operator==(const PropMap &) const = default;
 };
 
 struct AudioSettings {
@@ -55,6 +56,7 @@ struct AudioSettings {
 	bool mono = false;       // downmix to mono (e.g. a mic that only comes in on one side)
 	double balance = 0.5;    // 0 = left, 0.5 = center, 1 = right
 	int syncMs = 0;          // delay against video, ms (OBS's Sync Offset)
+	bool operator==(const AudioSettings &) const = default;
 };
 
 // A scene transition (how Show switches scenes). type is the kind (cut, fade, swipe, slide,
@@ -63,6 +65,7 @@ struct Transition {
 	QString id, name, type;
 	int durationMs = 300;
 	QVariantMap settings;
+	bool operator==(const Transition &) const = default;
 };
 
 struct Source {
@@ -70,6 +73,7 @@ struct Source {
 	QVariantMap settings;
 	bool hasAudio = false;
 	AudioSettings audio;
+	bool operator==(const Source &) const = default;
 };
 
 struct Instance {
@@ -78,18 +82,21 @@ struct Instance {
 	bool locked = false;
 	PropMap props;
 	QHash<Group, QString> links; // group -> link id
+	bool operator==(const Instance &) const = default;
 };
 
 struct Link {
 	QString id;
 	Group group = Group::Transform;
 	PropMap value; // only `group` is meaningful
+	bool operator==(const Link &) const = default;
 };
 
 struct Scene {
 	QString id, name, folder;
 	bool favorite = false;
 	QStringList layers; // top-level instance ids, top-first
+	bool operator==(const Scene &) const = default;
 };
 
 struct KindInfo {
@@ -167,12 +174,18 @@ struct Doc {
 	// --- io ---
 	QJsonObject toJson() const;
 	static Doc fromJson(const QJsonObject &o);
+	// Drops references to scenes, layers and links that don't exist (a hand-edited or damaged
+	// file). Returns how many it dropped.
+	int repair();
 	static Doc sample();
 
 private:
 	PropMap *propsFor(const QString &instId, Group g);
 	const PropMap &propsFor(const Instance &i, Group g) const;
 	void gcLinks();
+
+public:
+	bool operator==(const Doc &) const = default;
 };
 
 QString uid(const QString &prefix);

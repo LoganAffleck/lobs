@@ -21,7 +21,7 @@ Rectangle {
         Text { id: t; color: parent.tone; font.family: Pal.font; font.pixelSize: Pal.caption; anchors.verticalCenter: parent.verticalCenter }
     }
 
-    MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: statsPopup.opened ? statsPopup.close() : statsPopup.open() }
+    MouseArea { Accessible.role: Accessible.Button; Accessible.name: "Stream and recording stats"; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: statsPopup.opened ? statsPopup.close() : statsPopup.open() }
 
     RowLayout {
         anchors.fill: parent
@@ -43,9 +43,10 @@ Rectangle {
             tone: (bar.st.fps || 0) < (bar.st.targetFps || 60) - 2 ? "#fbbf24" : Pal.muted
         }
         Seg {
-            visible: (bar.st.laggedPct || 0) > 1 || (bar.st.skippedPct || 0) > 1 // OBS's own warning level
+            // OBS's own warning level, over the last 10 s (LOBS-005); the popup shows totals.
+            visible: (bar.st.recentLaggedPct || 0) > 1 || (bar.st.recentSkippedPct || 0) > 1
             tone: "#fbbf24"
-            text: "Lagging " + (bar.st.laggedPct || 0).toFixed(1) + "% · skipped " + (bar.st.skippedPct || 0).toFixed(1) + "%"
+            text: "Lagging " + (bar.st.recentLaggedPct || 0).toFixed(1) + "% · skipped " + (bar.st.recentSkippedPct || 0).toFixed(1) + "%"
         }
         Seg { visible: (bar.st.diskFreeGb || 99) < 10; tone: "#fbbf24"; text: (bar.st.diskFreeGb || 0).toFixed(1) + " GB free" }
     }

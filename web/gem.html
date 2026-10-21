@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LOBS gem lab</title>
+    <link rel="icon" href="/brand/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/brand/lobs-logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #ddd; font: 13px/1.4 Inter, system-ui, sans-serif; overflow: hidden; }
+      #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+      .hud { position: fixed; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+      .hud h1 { margin: 0; font-size: 14px; font-weight: 650; }
+      .hud p { margin: 0; color: #888; font-size: 12px; }
+      #previews { display: flex; align-items: flex-end; gap: 14px; padding: 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.08); pointer-events: auto; }
+      #previews canvas { border-radius: 3px; }
+      .row { display: flex; gap: 10px; align-items: center; }
+      #toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 8px; background: #2c2c2c; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+      .lil-gui.root { --width: 300px; }
+      @media (max-width: 640px) { .lil-gui.root { --width: 220px; max-height: 60vh; } }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="row"><h1>LOBS gem lab</h1><p id="facets"></p><p id="samples"></p></div>
+      <p>Drag to orbit, scroll to zoom. Settings save to the link.</p>
+      <div id="previews"></div>
+    </div>
+    <div id="toast"></div>
+    <script type="module" src="/src/gem/main.ts"></script>
+  </body>
+</html>

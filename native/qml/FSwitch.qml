@@ -4,11 +4,15 @@ import QtQuick.Controls
 // Switch: pill track turns blue when on; the thumb slides on the moderate spring.
 AbstractButton {
     id: sw
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: text
     checkable: true
     hoverEnabled: true
     implicitHeight: Pal.ctl
     implicitWidth: 32 + (text.length ? lbl.implicitWidth + 8 : 0)
     indicator: Rectangle {
+        Accessible.role: Accessible.CheckBox
+        Accessible.name: sw.text !== "" ? sw.text : "Switch"
         width: 32; height: 18; radius: 9
         anchors.verticalCenter: parent.verticalCenter
         color: sw.checked ? Pal.focus : Pal.s7

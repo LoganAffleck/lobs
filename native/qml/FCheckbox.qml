@@ -4,6 +4,8 @@ import QtQuick.Controls
 // 14px checkbox (compact icon size). Fills with the foreground color when checked.
 AbstractButton {
     id: cb
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: text
     checkable: true
     hoverEnabled: true
     implicitHeight: Pal.ctl

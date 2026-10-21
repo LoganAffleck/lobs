@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 
-// Setup assistant: first run, or Settings → Run setup again. Walks through what you'll do,
+// Setup assistant: first run, or Settings â†’ Run setup again. Walks through what you'll do,
 // your platform and stream key, the closest server, a bandwidth test, video and bitrate,
 // recording, and Twitch panels. Nothing is saved until Finish.
 FDialog {
@@ -208,7 +208,7 @@ FDialog {
                 visible: wiz.service === "Custom"
                 Layout.fillWidth: true; spacing: 6
                 Text { text: "Server URL"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
-                FInput { Layout.fillWidth: true; placeholderText: "rtmp://…"; text: wiz.customUrl; onTextChanged: wiz.customUrl = text }
+                FInput { Layout.fillWidth: true; placeholderText: "rtmp://â€¦"; text: wiz.customUrl; onTextChanged: wiz.customUrl = text }
             }
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 6
@@ -233,7 +233,7 @@ FDialog {
             RowLayout {
                 Layout.fillWidth: true
                 Body { text: "Sorted by response time." }
-                FButton { iconName: "refresh-cw"; text: wiz.pinging ? "Checking…" : "Check again"; variant: "secondary"; enabled: !wiz.pinging; onClicked: wiz.runPings() }
+                FButton { iconName: "refresh-cw"; text: wiz.pinging ? "Checkingâ€¦" : "Check again"; variant: "secondary"; enabled: !wiz.pinging; onClicked: wiz.runPings() }
             }
             ListView {
                 Layout.fillWidth: true; Layout.preferredHeight: 340
@@ -252,7 +252,7 @@ FDialog {
                     }
                     MouseArea { id: sm; anchors.fill: parent; hoverEnabled: true; onClicked: { wiz.server = modelData.value; wiz.serverPicked = true } }
                 }
-                Text { visible: wiz.pinging; anchors.centerIn: parent; text: "Checking servers…"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body }
+                Text { visible: wiz.pinging; anchors.centerIn: parent; text: "Checking serversâ€¦"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body }
             }
         }
         // ---- test ----
@@ -276,13 +276,13 @@ FDialog {
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: wiz.testResult ? (wiz.testResult.ok ? (wiz.testResult.kbps / 1000).toFixed(1) + " Mbps" : "Test failed")
-                                 : wiz.testing ? ((wiz.test.kbps || 0) / 1000).toFixed(1) + " Mbps" : "—"
+                                 : wiz.testing ? ((wiz.test.kbps || 0) / 1000).toFixed(1) + " Mbps" : "â€”"
                             color: wiz.testResult && !wiz.testResult.ok ? Pal.danger : Pal.fg; font.family: Pal.font; font.pixelSize: 30; font.weight: 600
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: wiz.testResult ? (wiz.testResult.ok ? "upload measured · " + wiz.testResult.dropped.toFixed(1) + "% frames dropped" : wiz.testResult.error)
-                                 : wiz.testing ? (wiz.test.connected ? "measuring… " + Math.round(wiz.test.elapsed || 0) + " / 10 s" : "connecting…") : "Not tested yet"
+                            text: wiz.testResult ? (wiz.testResult.ok ? "upload measured Â· " + wiz.testResult.dropped.toFixed(1) + "% frames dropped" : wiz.testResult.error)
+                                 : wiz.testing ? (wiz.test.connected ? "measuringâ€¦ " + Math.round(wiz.test.elapsed || 0) + " / 10 s" : "connectingâ€¦") : "Not tested yet"
                             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
                         }
                     }
@@ -326,6 +326,11 @@ FDialog {
                       : "How recordings are sized and how smooth they are."
             }
             Caption {
+                visible: wiz.streaming && wiz.rec.slow === true
+                color: Pal.danger
+                text: "Your upload is too slow for a stable stream. A wired connection helps, or record instead."
+            }
+            Caption {
                 visible: wiz.streaming && wiz.rec.hardware === false
                 text: "No hardware encoder found. 720p is lighter on your CPU."
             }
@@ -334,7 +339,7 @@ FDialog {
                 Label { text: "Resolution" }
                 FSelect {
                     Layout.fillWidth: true
-                    options: [{ name: "1920 × 1080", value: "1920x1080" }, { name: "1600 × 900", value: "1600x900" }, { name: "1280 × 720", value: "1280x720" }, { name: "852 × 480", value: "852x480" }]
+                    options: [{ name: "1920 Ã— 1080", value: "1920x1080" }, { name: "1600 Ã— 900", value: "1600x900" }, { name: "1280 Ã— 720", value: "1280x720" }, { name: "852 Ã— 480", value: "852x480" }]
                     currentValue: wiz.outW + "x" + wiz.outH
                     onPicked: (v) => { const p = v.split("x"); wiz.outW = +p[0]; wiz.outH = +p[1] }
                 }
@@ -372,7 +377,7 @@ FDialog {
                 Layout.fillWidth: true; spacing: 8
                 Label { text: "Save to" }
                 FInput { Layout.fillWidth: true; text: wiz.recFolder; onTextChanged: wiz.recFolder = text }
-                FButton { text: "Browse…"; variant: "secondary"; onClicked: folderPick.open() }
+                FButton { text: "Browseâ€¦"; variant: "secondary"; onClicked: folderPick.open() }
             }
             RowLayout {
                 Layout.fillWidth: true; spacing: 8
@@ -413,11 +418,11 @@ FDialog {
             GridLayout {
                 columns: 2; columnSpacing: 16; rowSpacing: 6; Layout.topMargin: 6
                 Label { text: "Platform"; visible: wiz.streaming }
-                Body { visible: wiz.streaming; text: wiz.service.replace(" - RTMPS", "") + (wiz.hasKey ? " · key saved" : " · no stream key yet") }
+                Body { visible: wiz.streaming; text: wiz.service.replace(" - RTMPS", "") + (wiz.hasKey ? " Â· key saved" : " Â· no stream key yet") }
                 Label { text: "Server"; visible: wiz.twitch }
                 Body { visible: wiz.twitch; text: (wiz.pings.find(p => p.value === wiz.server) || { name: "Automatic" }).name }
                 Label { text: "Video" }
-                Body { text: wiz.outW + " × " + wiz.outH + " at " + wiz.fps + " fps" }
+                Body { text: wiz.outW + " Ã— " + wiz.outH + " at " + wiz.fps + " fps" }
                 Label { text: "Bitrate"; visible: wiz.streaming }
                 Body { visible: wiz.streaming; text: (wiz.bitrate / 1000).toFixed(1) + " Mbps" }
                 Label { text: "Recording" }

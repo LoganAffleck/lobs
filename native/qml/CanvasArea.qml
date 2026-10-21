@@ -28,9 +28,9 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     color: "#fecaca"; font.family: Pal.font; font.pixelSize: Pal.body
-                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? " · layers are locked. Hold Alt to move one." : " · live lock is off.")
+                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? " · editing what's on air is locked. Hold Alt, or unlock to edit." : " · live lock is off, edits go on air.")
                 }
-                FButton { text: app.liveLocked ? "Unlock" : "Lock again"; variant: "ghost"; onClicked: app.setLiveUnlock(app.liveLocked) }
+                FButton { visible: app.settings.liveLock !== false; text: app.liveLocked ? "Unlock" : "Lock again"; variant: "ghost"; onClicked: app.setLiveUnlock(app.liveLocked) }
             }
         }
         Item {
@@ -80,6 +80,7 @@ Rectangle {
                     FMenu {
                         id: trMenu
                         Instantiator {
+                            active: trMenu.populated // built while the menu is open
                             model: app.transitions
                             delegate: FMenuItem {
                                 required property var modelData
@@ -146,10 +147,13 @@ Rectangle {
     }
     FMenu {
         id: canvasMenu
+        FCopyToMenu {}
+        MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
         FMenu {
             id: progMenu
             title: "Open projector"
             Instantiator {
+                active: progMenu.populated // built while the menu is open
                 model: app.screens()
                 delegate: FMenuItem { required property var modelData; text: modelData.name; onTriggered: app.openProjector("", modelData.index) }
                 onObjectAdded: (i, o) => progMenu.insertItem(i, o)
@@ -162,6 +166,7 @@ Rectangle {
             id: sceneMenu
             title: "Open scene projector"
             Instantiator {
+                active: sceneMenu.populated // built while the menu is open
                 model: app.screens()
                 delegate: FMenuItem { required property var modelData; text: modelData.name; onTriggered: app.openProjector(app.editSceneId, modelData.index) }
                 onObjectAdded: (i, o) => sceneMenu.insertItem(i, o)

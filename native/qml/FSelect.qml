@@ -28,6 +28,7 @@ FButton {
         id: menu
         width: Math.max(sel.width, 220)
         Instantiator {
+            active: menu.populated // built while the menu is open
             model: sel.options
             delegate: FMenuItem {
                 required property var modelData

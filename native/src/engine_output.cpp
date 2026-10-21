@@ -6,10 +6,23 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QRegularExpression>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cmath>
+
+// OBS's last error for an output, as ": message" (or ""), in current Windows wording (LOBS-035).
+QString obsOutputError(obs_output_t *out)
+{
+	const char *e = obs_output_get_last_error(out);
+	if (!e || !*e)
+		return {};
+	QString s = QString::fromUtf8(e);
+	static const QRegularExpression ransom(QStringLiteral("If Windows 10 Ransomware Protection is enabled it can also cause this error\\.[^\n]*"));
+	s.replace(ransom, QString("Windows Security %1 Controlled folder access can also block it: allow LOBS there, or choose another folder.").arg(QChar(0x2192)));
+	return ": " + s.trimmed();
+}
 
 static obs_data_t *toData(const QJsonObject &o)
 {
@@ -235,8 +248,7 @@ bool Engine::startStreaming()
 	signal_handler_connect(sh, "reconnect_success", onStreamReconnect, this);
 
 	if (!obs_output_start(m_streamOutput)) {
-		const char *e = obs_output_get_last_error(m_streamOutput);
-		m_lastError = QString("Couldn't start the stream%1").arg(e ? QString(": ") + e : QString());
+		m_lastError = "Couldn't start the stream" + obsOutputError(m_streamOutput);
 		return false;
 	}
 	m_streaming = true;
@@ -339,8 +351,7 @@ void Engine::startRecording()
 	obs_output_set_audio_encoder(m_recOutput, aenc, 0);
 	signal_handler_connect(obs_output_get_signal_handler(m_recOutput), "stop", onRecordStop, this);
 	if (!obs_output_start(m_recOutput)) {
-		const char *e = obs_output_get_last_error(m_recOutput);
-		m_lastError = QString("Recording failed to start%1").arg(e ? QString(": ") + e : QString());
+		m_lastError = "Recording failed to start" + obsOutputError(m_recOutput);
 		setStatus(m_lastError);
 		return;
 	}

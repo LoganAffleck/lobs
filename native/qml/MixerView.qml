@@ -13,7 +13,10 @@ Item {
     // Fader shaped like OBS's: position 0..1 maps to -60..0 dB.
     function posFromLin(lin) { return lin <= 0.001 ? 0 : Math.max(0, Math.min(1, (20 * Math.log10(lin) + 60) / 60)) }
     function linFromPos(p) { return p <= 0 ? 0 : Math.pow(10, (p * 60 - 60) / 20) }
-    readonly property int count: app.mixer.length
+    // app.mixer converts the whole list to JavaScript on every read, so read it once per change:
+    // src(i) on a big show used to rebuild it per call and left seconds of garbage (LOBS-025).
+    readonly property var mix: app.mixer
+    readonly property int count: mix.length
     // Layout: Auto picks strips for a wide, short panel, unless the strips would scroll
     // sideways while rows would fit; Rows / Strips force one (remembered).
     property string layoutMode: app.uiValue("mixer/layout", "auto")
@@ -32,7 +35,7 @@ Item {
         layoutMode = layoutMode === "auto" ? "rows" : layoutMode === "rows" ? "strips" : "auto"
         app.setUiValue("mixer/layout", layoutMode)
     }
-    function src(i) { return app.mixer[i] || ({ id: "", name: "", icon: "", color: "#555", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 }) }
+    function src(i) { return mix[i] || ({ id: "", name: "", icon: "", color: "#555", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 }) }
     function balanceText(b) { const p = Math.round((b - 0.5) * 200); return p === 0 ? "Center" : p < 0 ? "L " + (-p) + "%" : "R " + p + "%" }
     function monitorIcon(m) { return m === "off" ? "headphone-off" : "headphones" }
     function monitorTip(m) { return m === "off" ? "Not monitored. Click to hear it in your headphones (and keep it in the output)." : m === "monitor_only" ? "Monitor only: you hear it, viewers don't. Click to turn monitoring off." : "Monitored: you hear it, and it's in the output. Click to turn monitoring off." }
@@ -162,6 +165,8 @@ Item {
 
     // ---------- strips (wide / short) ----------
     ScrollView {
+        Accessible.role: Accessible.Pane
+        Accessible.name: "Audio mixer"
         visible: mv.strips
         anchors { left: parent.left; right: parent.right; top: toolbar.bottom; bottom: parent.bottom }
         clip: true
@@ -369,6 +374,7 @@ Item {
                         FMenu {
                             id: fxMenu
                             Instantiator {
+                                active: fxMenu.populated // built while the menu is open
                                 model: app.audioFxTypes()
                                 delegate: FMenuItem { required property var modelData; text: modelData.label; onTriggered: app.addAudioFilter(details.s.id, modelData.type) }
                                 onObjectAdded: (i, o) => fxMenu.insertItem(i, o)

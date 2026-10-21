@@ -6,6 +6,7 @@
 #include <kddockwidgets/qtquick/Platform.h>
 #include <kddockwidgets/qtquick/ViewFactory.h>
 #include "icons.h"
+#include <QQmlPropertyMap>
 #include <QIcon>
 #include <QSvgRenderer>
 #include "engine.h"
@@ -14,6 +15,8 @@
 #include "shellmeta.h"
 #include "shapes.h"
 #include "browser_view.h"
+#include "startup_mode.h"
+#include "rows_model.h"
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QUrl>
@@ -42,10 +45,14 @@
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QThreadPool>
 #include <QTimer>
 #include <QWindow>
 
 #include <windows.h>
+#ifdef LOBS_TESTS
+#include "test_runner.h"
+#endif
 
 QString installEngineZip(const QString &zip, const QString &version, QString *note);
 
@@ -374,6 +381,12 @@ int main(int argc, char *argv[])
 	QGuiApplication app(argc, argv);
 	app.setOrganizationName("LOBS");
 	app.setApplicationName("LOBS");
+#ifdef LOBS_TESTS
+	const int scenarioAt = int(app.arguments().indexOf("--scenariotest"));
+	const bool scenario = scenarioAt > 0 && scenarioAt + 2 < app.arguments().size();
+	if (scenario)
+		lobs_test::isolateProfile(app.arguments()[scenarioAt + 2]);
+#endif
 
 	// --render-svg <in.svg> <out.png> <size>: rasterize an SVG (used to build the app icon).
 	if (const int at = int(app.arguments().indexOf("--render-svg")); at > 0 && at + 3 < app.arguments().size()) {
@@ -479,6 +492,7 @@ int main(int argc, char *argv[])
 
 	Engine engine;
 	qmlRegisterType<BrowserView>("LOBS.Web", 1, 0, "BrowserView");
+	qmlRegisterType<RowsModel>("LOBS.Models", 1, 0, "RowsModel");
 	engine.setSettings(AppSettings::load());
 	blog(LOG_INFO, "[lobs] OBS engine %s from %s", qPrintable(sel.version), qPrintable(sel.root));
 	if (!engine.start(sel.root))
@@ -490,11 +504,13 @@ int main(int argc, char *argv[])
 	EngineUpdater engineUpdater(sel);
 
 	// Self-tests work on a throwaway document, so they never touch the user's show.
-	const bool selfTest = app.arguments().join(' ').contains("test");
+	const bool selfTest = isSelfTestRun(app.arguments());
 	const QString docPath = selfTest ? QDir::tempPath() + "/lobs-selftest.lobs.json"
 					 : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/current.lobs.json";
-	if (selfTest)
+	if (selfTest) {
 		QFile::remove(docPath);
+		AppSettings::defaultRecordFolderOverride() = QDir::tempPath() + "/lobs-selftest-recordings"; // LOBS-003
+	}
 
 	// --engine-smoketest <report.json>: headless check that this engine works with LOBS.
 	if (const int st = int(app.arguments().indexOf("--engine-smoketest")); st > 0 && st + 1 < app.arguments().size())
@@ -521,7 +537,11 @@ int main(int argc, char *argv[])
 	// Fluid Functionalism tokens (dark), shared by every QML file as `Pal.<name>`:
 	// the 8-step surface ladder, 2 text colors, 12% borders, +6%/+10% hover/selected,
 	// 3 springs (fast/moderate/slow, ms), the compact size step and the 5-style type scale.
-	qml.rootContext()->setContextProperty("Pal", QVariantMap{
+	// A property map, not a QVariantMap: QML reads one property instead of converting the whole
+	// map to a new JS object on every Pal.x access (thousands per list rebuild).
+	auto *palMap = new QQmlPropertyMap(&qml);
+	{
+		const QVariantMap values{
 		{"s1", "#171717"}, {"s2", "#1e1e1e"}, {"s3", "#252525"}, {"s4", "#2c2c2c"},
 		{"s5", "#333333"}, {"s6", "#3a3a3a"}, {"s7", "#414141"}, {"s8", "#484848"},
 		{"fg", "#f5f5f5"}, {"muted", "#a3a3a3"},
@@ -529,19 +549,27 @@ int main(int argc, char *argv[])
 		{"focus", "#6b97ff"}, {"link", "#7aa7ff"}, {"danger", "#fca5a5"}, {"dangerBg", "#450a0a"}, {"live", "#ef4444"},
 		{"fast", 80}, {"moderate", 160}, {"slow", 240},
 		{"ctl", 28}, {"radius", 8}, {"font", fontFamily},
-		{"display", 22}, {"title", 14}, {"subtitle", 13}, {"body", 12}, {"caption", 11}});
+		{"display", 22}, {"title", 14}, {"subtitle", 13}, {"body", 12}, {"caption", 11}};
+		for (auto it = values.cbegin(); it != values.cend(); ++it)
+			palMap->insert(it.key(), it.value());
+	}
+	qml.rootContext()->setContextProperty("Pal", palMap);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
 	qml.addImageProvider("icon", new IconProvider(root + "/icons"));
 	qml.loadFromModule("LOBS", "Main");
 	if (qml.rootObjects().isEmpty())
 		return 1;
+#ifdef LOBS_TESTS
+	if (scenario)
+		lobs_test::startScenario(app, controller, engine, qml, app.arguments()[scenarioAt + 1], app.arguments()[scenarioAt + 2]);
+#endif
 	// The UI is up on this engine: it's good (ends a new engine's trial), then look for
 	// OBS updates at most once a day, a little after startup.
 	QTimer::singleShot(5000, [&]() {
 		if (engine.started())
 			engine_store::markGood(sel.version);
-		if (!app.arguments().join(' ').contains("test"))
+		if (!selfTest)
 			engineUpdater.checkIfDue();
 	});
 
@@ -1171,6 +1199,7 @@ int main(int argc, char *argv[])
 	}
 
 	const int rc = app.exec();
+	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
 	engine.shutdown();
 	g_log = nullptr;
 	return rc;

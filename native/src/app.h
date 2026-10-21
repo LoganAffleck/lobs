@@ -15,16 +15,17 @@
 #include <QPointF>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QVariant>
 
 class App : public QObject {
 	Q_OBJECT
-	Q_PROPERTY(QVariantList scenes READ scenes NOTIFY docChanged)
-	Q_PROPERTY(QVariantList pool READ pool NOTIFY docChanged)
-	Q_PROPERTY(QVariantList layers READ layers NOTIFY docChanged)
-	Q_PROPERTY(QVariantMap inspector READ inspector NOTIFY docChanged)
-	Q_PROPERTY(QVariantList history READ history NOTIFY docChanged)
+	Q_PROPERTY(QVariantList scenes READ scenesCached NOTIFY scenesChanged)
+	Q_PROPERTY(QVariantList pool READ poolCached NOTIFY poolChanged)
+	Q_PROPERTY(QVariantList layers READ layersCached NOTIFY layersChanged)
+	Q_PROPERTY(QVariantMap inspector READ inspectorCached NOTIFY inspectorChanged)
+	Q_PROPERTY(QVariantList history READ historyCached NOTIFY historyChanged)
 	Q_PROPERTY(int historyIndex READ historyIndex NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneId READ editSceneId NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneName READ editSceneName NOTIFY docChanged)
@@ -40,12 +41,14 @@ class App : public QObject {
 	Q_PROPERTY(int thumbTick READ thumbTick NOTIFY thumbTickChanged)
 	Q_PROPERTY(bool streaming READ streaming NOTIFY engineChanged)
 	Q_PROPERTY(bool live READ live NOTIFY engineChanged)
+	// An untitled show with changes since New/Sample/Import: Open and Import ask to save it first.
+	Q_PROPERTY(bool unsavedShow READ unsavedShow NOTIFY docChanged)
 	Q_PROPERTY(bool liveLocked READ liveLocked NOTIFY engineChanged)
 	Q_PROPERTY(QVariantMap streamStats READ streamStats NOTIFY streamStatsChanged)
 	Q_PROPERTY(QVariantMap settings READ settings NOTIFY settingsChanged)
 	Q_PROPERTY(QVariantList encoders READ encoders CONSTANT)
 	Q_PROPERTY(QStringList services READ services CONSTANT)
-	Q_PROPERTY(QVariantList mixer READ mixer NOTIFY docChanged)
+	Q_PROPERTY(QVariantList mixer READ mixerCached NOTIFY mixerChanged)
 	Q_PROPERTY(QVariantMap levels READ levels NOTIFY levelsChanged)
 
 public:
@@ -83,7 +86,9 @@ public:
 	Q_INVOKABLE void renameSource(const QString &id, const QString &name);
 	Q_INVOKABLE void deleteSource(const QString &id);
 	Q_INVOKABLE void selectSource(const QString &id);
-	Q_INVOKABLE QVariantList devices(const QString &sourceId);
+	// Devices or windows a source can use. Asking Windows takes 100-500 ms, so the list is kept
+	// for a few seconds; fresh = true (opening the menu) always asks again.
+	Q_INVOKABLE QVariantList devices(const QString &sourceId, bool fresh = false);
 	Q_INVOKABLE void setSourceSetting(const QString &id, const QString &key, const QVariant &value);
 	// Audio effects on a pool source (mixer).
 	Q_INVOKABLE QVariantList audioFxTypes() const;
@@ -95,7 +100,7 @@ public:
 	Q_INVOKABLE void refreshBrowser(const QString &id) { m_engine->refreshBrowser(id); }
 	// layers
 	Q_INVOKABLE void selectLayer(const QString &id, bool additive);
-	Q_INVOKABLE void clearSelection(); // nothing selected: layers and Media Pool sources
+	Q_INVOKABLE void clearSelection(); // nothing selected: layers and Sources rows
 	Q_INVOKABLE void toggleVisible(const QString &id);
 	Q_INVOKABLE void toggleLock(const QString &id);
 	Q_INVOKABLE void moveLayer(const QString &id, int delta);
@@ -166,7 +171,7 @@ public:
 	Q_INVOKABLE bool importObs(const QString &path);
 	Q_INVOKABLE void toggleRecording();
 	Q_INVOKABLE void nudge(int dx, int dy);
-	// drag a Media Pool source over the preview (coords relative to the preview item)
+	// drag a source from Sources over the preview (coords relative to the preview item)
 	Q_INVOKABLE void poolDragMove(const QString &sourceId, double x, double y);
 	Q_INVOKABLE void poolDrop(const QString &sourceId, double x, double y);
 	Q_INVOKABLE void poolDragCancel();
@@ -205,7 +210,14 @@ public:
 	// going live
 	bool streaming() const { return m_engine->streaming(); }
 	bool live() const { return m_engine->live(); }
-	bool liveLocked() const { return m_engine->live() && !m_liveUnlock; }
+	bool unsavedShow() const { return m_projectFile.isEmpty() && !(doc() == m_cleanDoc); }
+	bool liveLocked() const { return m_engine->live() && m_engine->settings().liveLock && !m_liveUnlock; }
+	// LOBS-006: the one check for edits that move, resize, crop, reorder or remove layers in the
+	// scene viewers see. Refuses (with a toast) while live lock is on, unless Alt is held.
+	bool liveEditAllowed(const QStringList &ids);
+	// The same check for adding layers to a scene, and for changing a source that is on air.
+	bool liveSceneEditAllowed(const QString &sceneId);
+	bool liveSourceEditAllowed(const QString &sourceId);
 	QVariantMap streamStats() const { return m_engine->streamStats(); }
 	QVariantMap settings() const;
 	QVariantList encoders() const { return m_engine->encoders(); }
@@ -248,6 +260,10 @@ public:
 	Q_INVOKABLE void setFolderColor(const QString &folder, const QString &color);
 	static QString folderColor(const QString &folder);
 	QVariantList missingAssets() const;
+	mutable QVariantList m_missingCache;
+	mutable lobs::Doc m_missingDoc;
+	mutable QElapsedTimer m_missingAge;
+	mutable bool m_missingValid = false;
 	Q_INVOKABLE void findMissingAssets();
 	Q_INVOKABLE void relinkAsset(const QString &sourceId, const QString &file);
 	Q_INVOKABLE void revealAsset(const QString &path);       // Explorer, with the file selected
@@ -268,7 +284,7 @@ public:
 	Q_INVOKABLE void closeProjectors(); // before the engine shuts down
 	void requestCanvasMenu(QPointF windowPos) { emit canvasMenuRequested(windowPos.x(), windowPos.y()); }
 	// Transitions (stored in the show): the list, the one Show uses, and editing them.
-	Q_PROPERTY(QVariantList transitions READ transitions NOTIFY docChanged)
+	Q_PROPERTY(QVariantList transitions READ transitionsCached NOTIFY transitionsChanged)
 	Q_PROPERTY(QString currentTransition READ currentTransition NOTIFY docChanged)
 	QVariantList transitions() const;
 	QString currentTransition() const { const lobs::Transition *t = doc().transition(); return t ? t->id : QString(); }
@@ -320,7 +336,7 @@ public:
 	Q_PROPERTY(bool vcamActive READ vcamActive NOTIFY engineChanged)
 	Q_PROPERTY(bool vcamAvailable READ vcamAvailable NOTIFY engineChanged)
 	Q_PROPERTY(QVariantMap liveStats READ liveStats NOTIFY engineChanged)
-	Q_PROPERTY(QVariantList hotkeyActions READ hotkeyActions NOTIFY docChanged)
+	Q_PROPERTY(QVariantList hotkeyActions READ hotkeyActionsCached NOTIFY hotkeyActionsChanged)
 	bool replayActive() const { return m_engine->replayActive(); }
 	bool vcamActive() const { return m_engine->vcamActive(); }
 	bool vcamAvailable() const { return m_engine->vcamAvailable(); }
@@ -374,6 +390,15 @@ public:
 
 signals:
 	void docChanged();
+	// The big lists, each emitted only when its contents changed (so QML rebuilds only those).
+	void scenesChanged();
+	void poolChanged();
+	void layersChanged();
+	void inspectorChanged();
+	void historyChanged();
+	void mixerChanged();
+	void transitionsChanged();
+	void hotkeyActionsChanged();
 	void engineChanged();
 	void toastChanged();
 	void assetsChanged();
@@ -413,6 +438,7 @@ private:
 	QString m_docPath;
 	Hotkeys *m_hotkeys = nullptr;
 	QString m_projectFile; // the saved show this session belongs to ("" = unsaved)
+	lobs::Doc m_cleanDoc; // an untitled show matching this has nothing to lose (see unsavedShow)
 	QFileSystemWatcher m_assetWatch;
 	QVariantMap m_sourceStatus;
 	int m_sourceTick = 0;
@@ -437,6 +463,7 @@ private:
 	QString m_poolSelection;
 	QString m_toast;
 	QTimer m_toastTimer, m_saveTimer;
+	QElapsedTimer m_unsavedSince; // first edit since the last autosave
 	// Imported layers whose size waits on the engine learning each source's natural size.
 	QVector<lobs::ObsPlacement> m_pendingPlacements;
 	QTimer m_placeTimer;
@@ -449,6 +476,15 @@ private:
 	int m_toolStrokeWidth = 6;
 	int m_laserTrailMs = 500;
 	Eyedropper m_eyedropper;
+	void forgetProject();
+	struct DeviceList { QVariantList items; qint64 at = 0; };
+	QHash<QString, DeviceList> m_sourceDevices; // by source id (the Inspector's device menu)
+	QHash<QString, QVariant> m_modelCache; // last value of each list sent to QML
+	QTimer m_inspectorTimer; // drags: Inspector updates once per frame
+	void refreshModels();
+	QString m_hotkeySig; // scenes and sources the global hotkeys were built for
+	bool m_autosaveFailed = false; // toast once per failing streak
+	bool m_autosaveBusy = false, m_autosaveAgain = false; // a background autosave is writing
 	int m_visibleMenus = 0;
 	QList<QPointer<QWindow>> m_projectors;
 	QString m_toolFont = "Segoe UI";
@@ -478,6 +514,22 @@ private:
 	int m_perfMoves = 0;
 	qint64 m_perfTotalUs = 0, m_perfMaxUs = 0;
 	qint64 m_perfApplyUs = 0, m_perfEditUs = 0, m_perfHotkeyUs = 0, m_perfQmlUs = 0; // drag timing, logged on release
+	qint64 m_perfCommitUs = 0, m_perfChanges = 0;
+	bool m_modelsStale = false; // a drag skipped some list refreshes; refreshModels() catches up after
+public:
+	// Time spent per phase of applying changes since the last call (ms), then reset. For profiling.
+	// QML reads these lists many times per change. Each read returns the copy refreshModels()
+	// last pushed instead of rebuilding it (LOBS-025).
+	QVariantList scenesCached() const { const QVariant v = m_modelCache.value(QStringLiteral("scenes")); return v.isValid() ? v.toList() : scenes(); }
+	QVariantList poolCached() const { const QVariant v = m_modelCache.value(QStringLiteral("pool")); return v.isValid() ? v.toList() : pool(); }
+	QVariantList layersCached() const { const QVariant v = m_modelCache.value(QStringLiteral("layers")); return v.isValid() ? v.toList() : layers(); }
+	QVariantMap inspectorCached() const { const QVariant v = m_modelCache.value(QStringLiteral("inspector")); return v.isValid() ? v.toMap() : inspector(); }
+	QVariantList historyCached() const { const QVariant v = m_modelCache.value(QStringLiteral("history")); return v.isValid() ? v.toList() : history(); }
+	QVariantList mixerCached() const { const QVariant v = m_modelCache.value(QStringLiteral("mixer")); return v.isValid() ? v.toList() : mixer(); }
+	QVariantList transitionsCached() const { const QVariant v = m_modelCache.value(QStringLiteral("transitions")); return v.isValid() ? v.toList() : transitions(); }
+	QVariantList hotkeyActionsCached() const { const QVariant v = m_modelCache.value(QStringLiteral("hotkeyActions")); return v.isValid() ? v.toList() : hotkeyActions(); }
+	Q_INVOKABLE QVariantMap takePerfCounters();
+private:
 	QVector<QPointF> m_createPts; // canvas px while drawing with a graphic tool
 	void finishCreate();
 	QPointF m_dragStart;

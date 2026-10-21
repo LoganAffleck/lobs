@@ -60,7 +60,7 @@ struct OverlayBox {
 	QRectF rect; // canvas px
 	double rot = 0;
 	bool handles = false;
-	bool drop = false; // drop-target preview while dragging from the Media Pool
+	bool drop = false; // drop-target preview while dragging from Sources
 	bool group = false;
 	bool linked = false;
 	bool crop = false; // crop mode: edge and corner crop handles instead of resize handles
@@ -69,6 +69,8 @@ struct OverlayGuide {
 	bool vertical;
 	double at;
 };
+
+QString obsOutputError(obs_output *out); // ": message" from OBS for a failed output, or ""
 
 class Engine : public QObject {
 	Q_OBJECT
@@ -81,6 +83,7 @@ public:
 	bool started() const { return m_started; }
 	QString status() const { return m_status; }
 	QString stats() const { return m_stats; }
+	QVariantMap layerResources() const; // for QA: how many layers hold filters, text and shape renderers
 	bool recording() const { return m_recording; }
 	bool streaming() const { return m_streaming; }
 	bool live() const { return m_streaming || m_recording; }
@@ -96,7 +99,9 @@ public:
 	QImage renderThumbnail(const QString &sceneId, int width); // reads back a small frame of a scene
 	QImage renderSourceThumbnail(const QString &sourceId, int width); // one input, at its own aspect
 	bool sourceActive(const QString &sourceId) const; // running because a shown scene uses it
-	void setAllScenesShowing(bool on); // keep every scene's sources active (for live thumbnails)
+	void setAllScenesShowing(bool on);
+	// A scene projector keeps its scene showing (and its layers' filters attached) while open.
+	void holdScene(const QString &sceneId, bool on); // keep every scene's sources active (for live thumbnails)
 	QSize sourceSize(const QString &sourceId) const; // natural size, or 0x0 if unknown
 	QVariantList listDevices(const QString &sourceId, const QString &kind) const;
 
@@ -183,9 +188,29 @@ private:
 		obs_scene_item *item = nullptr;
 		QString sceneId, cropSig, filterSig;
 		QString filterValueSig, maskPath;
+		// What this layer was last applied with: when nothing here changed, apply() skips it.
+		struct Applied {
+			lobs::Transform t; lobs::Crop c; lobs::Visibility v; int order = -1;
+			QString sceneId, sourceKind; QVariantMap sourceSettings; QVector<lobs::Filter> filters;
+			bool operator==(const Applied &) const = default;
+		};
+		Applied applied;
+		bool hasApplied = false;
 		obs_source *maskFilter = nullptr, *opacityFilter = nullptr; // kept, updated in place
 		double opacity = 1;
+		bool parked = false; // filters detached while its scene isn't showing (LOBS-034)
 	};
+	// Each OBS filter, and a scene item with a scale filter, keeps a render target the size of the
+	// layer's source until it's destroyed. So a layer whose scene stopped showing gives its filters
+	// and scale filter back, and gets them again just before the scene shows (LOBS-034).
+	void parkHiddenFilters();
+	void unparkScene(const QString &sceneId);
+	QTimer m_parkTimer;
+	QHash<QString, int> m_heldScenes; // scene -> number of projectors holding it
+	QString m_unparkTarget; // the scene unparkScene() is preparing
+	bool m_applying = false; // apply() is running (it must not re-enter)
+	bool sceneWanted(const QString &sceneId) const { return sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId); }
+	lobs::Doc m_lastDoc;
 	void setStatus(const QString &s);
 	void pollStats();
 	void removeItem(const QString &instId);
@@ -199,6 +224,8 @@ private:
 
 	QHash<QString, obs_source *> m_inputs; // source id -> input (named by id)
 	QHash<QString, QString> m_inputSig;
+	QHash<QString, lobs::Source> m_appliedInput; // input as last applied (apply() skips unchanged ones)
+	int m_appliedCanvasW = 0, m_appliedCanvasH = 0;
 	QHash<QString, QString> m_audioFxSig; // source id -> filter chain shape (ids + types)
 	void applyAudioFilters(obs_source *in, const QString &sourceId, const QVector<lobs::Filter> &fs);
 	QHash<QString, int> m_audioChannel;
@@ -285,6 +312,10 @@ private:
 	QString m_root;
 	QVariantMap m_liveStats;
 	os_cpu_usage_info *m_cpu = nullptr;
+	// Frame counters at each stats poll over the last ~10 s, for the status bar's warning (LOBS-005).
+	struct FrameSample { qint64 ms; uint32_t lagged, rendered, skipped, encoded; };
+	QVector<FrameSample> m_frameSamples;
+	QElapsedTimer m_frameClock;
 	QElapsedTimer m_recClock;
 	void pollLiveStats();
 	obs_output *m_replayOutput = nullptr;

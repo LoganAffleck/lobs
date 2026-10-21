@@ -24,7 +24,11 @@ Menu {
         if (!visible || coversPreview) return
         if (overlapsPreview(m)) { coversPreview = true; app.popupOpened() }
     }
-    onAboutToShow: { coversPreview = overlapsPreview(m); if (coversPreview) app.popupOpened() }
+    // Lists of items (scenes, options...) are built only while the menu is open: Instantiators
+    // use `active: menu.populated`. Otherwise every change rebuilt every menu's items.
+    property bool populated: false
+    onAboutToShow: { populated = true; coversPreview = overlapsPreview(m); if (coversPreview) app.popupOpened() }
+    onClosed: populated = false
     onOpened: recheck()
     onXChanged: recheck()
     onYChanged: recheck()

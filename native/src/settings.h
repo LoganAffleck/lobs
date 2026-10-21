@@ -40,10 +40,14 @@ struct AppSettings {
 	StreamSettings stream;
 	VideoSettings video;
 	RecordSettings record;
+	bool liveLock = true; // while streaming or recording, layers on air need Alt or Unlock to change
 
 	static AppSettings load();
 	void save() const;
 	QVariantMap toMap() const; // for QML (stream key never included, only whether one is set)
 	void applyMap(const QVariantMap &m);
 	QString recordFolder() const;
+	// Where recordings go when no folder is set. Self-tests point it at the temp folder (LOBS-003).
+	static QString defaultRecordFolder();
+	static QString &defaultRecordFolderOverride();
 };

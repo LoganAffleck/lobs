@@ -229,6 +229,15 @@ Rectangle {
                                 }
                             }
                         }
+                        GroupTitle { text: "While live" }
+                        Card {
+                            SettingRow {
+                                divider: false
+                                title: "Live lock"
+                                description: "While streaming or recording, layers on air don't change by accident. Hold Alt, or click Unlock in the banner, to edit."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.liveLock !== false; onClicked: page.save("liveLock", !(page.s.liveLock !== false)) }
+                            }
+                        }
                     }
 
                     // ===== Recording =====

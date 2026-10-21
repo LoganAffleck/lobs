@@ -15,6 +15,8 @@ RowLayout {
 
     component Seg: AbstractButton {
         id: seg
+        Accessible.role: Accessible.Button
+        Accessible.name: text !== "" ? text : (tip !== "" ? tip : iconName)
         property string iconName
         property bool active: false
         property color dot: "#22c55e"
@@ -103,6 +105,8 @@ RowLayout {
     // ---- primary: Go live / LIVE ----
     AbstractButton {
         id: live
+        Accessible.role: Accessible.Button
+        Accessible.name: app.streaming ? "Stop streaming" : "Go live"
         property bool confirming: false
         hoverEnabled: true
         implicitHeight: Pal.ctl + 6

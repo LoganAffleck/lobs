@@ -47,6 +47,7 @@ Rectangle {
             model: bar.tools
             delegate: ToolButton {
                 required property var modelData
+                Accessible.name: modelData.tip
                 iconName: modelData.icon
                 active: app.tool === modelData.id
                 tip: modelData.tip + "  " + modelData.key
