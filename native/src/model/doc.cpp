@@ -516,7 +516,7 @@ QJsonObject Doc::toJson() const
 	for (const auto &k : links)
 		lnks[k.id] = QJsonObject{{"id", k.id}, {"group", groupKey(k.group)}, {"value", propsJson(k.value)[groupKey(k.group)]}};
 	return QJsonObject{{"version", 1}, {"canvas", QJsonObject{{"w", canvasW}, {"h", canvasH}}}, {"sources", srcs}, {"sourceOrder", QJsonArray::fromStringList(sourceOrder)},
-			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"mixerOrder", QJsonArray::fromStringList(mixerOrder)}, {"mixerPinned", QJsonArray::fromStringList(mixerPinned)}, {"swatches", QJsonArray::fromStringList(swatches)},
+			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"mixerOrder", QJsonArray::fromStringList(mixerOrder)}, {"backgroundsLocked", backgroundsLocked}, {"mixerPinned", QJsonArray::fromStringList(mixerPinned)}, {"swatches", QJsonArray::fromStringList(swatches)},
 			   {"transitions", [&] {
 				    QJsonArray a;
 				    for (const Transition &t : transitions)
@@ -607,6 +607,12 @@ Doc Doc::fromJson(const QJsonObject &o)
 	d.bins = strings(o["bins"]);
 	d.mixerOrder = strings(o["mixerOrder"]);
 	d.mixerPinned = strings(o["mixerPinned"]);
+	if (!o["backgroundsLocked"].toBool()) { // saved before backgrounds started locked: lock them, once
+		for (Instance &i : d.instances)
+			if (i.kind != "group" && d.sources.value(i.sourceId).settings.value("background").toBool())
+				i.locked = true;
+	}
+	d.backgroundsLocked = true;
 	return d;
 }
 

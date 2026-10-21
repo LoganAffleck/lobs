@@ -119,6 +119,9 @@ struct Doc {
 	// Audio Mixer arrangement, separate from Sources: pinned sources first, then this order;
 	// audio sources in neither go at the end, in Sources order.
 	QStringList mixerOrder, mixerPinned;
+	// Backgrounds were unlocked before 0.2.1; a show opened in a later version locks them once
+	// (then the user can unlock them and it stays that way).
+	bool backgroundsLocked = true;
 	// Transitions for Show: the list you pick from, and the one in use.
 	QVector<Transition> transitions = {{"tr_fade", "Fade", "fade", 300, {}}, {"tr_cut", "Cut", "cut", 0, {}}};
 	QString currentTransition = "tr_fade";

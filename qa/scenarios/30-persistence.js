@@ -184,3 +184,24 @@ story("PJ-07", "An untitled show reports unsaved changes; a fresh one doesn't", 
 	app.saveAs(t.url(t.out("pj07.lobs.json")));
 	check("a saved project isn't untitled", app.unsavedShow === false);
 });
+
+story("PJ-08", "Opening a show saved before backgrounds were locked locks its background once", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	const bg = t.doc().scenes[A].layers[t.doc().scenes[A].layers.length - 1];
+	// An older show: unlocked background, no backgroundsLocked marker.
+	const d = JSON.parse(t.docJson());
+	d.instances[bg].locked = false;
+	delete d.backgroundsLocked;
+	const f = t.out("pj08-old.lobs.json");
+	t.writeFile(f, JSON.stringify(d));
+	check("opens", app.open(t.url(f)));
+	check("its background is now locked", t.doc().instances[bg].locked === true);
+	// Unlocking it by hand sticks across save and reopen.
+	app.selectLayer(bg, false); app.toggleLock(bg);
+	check("unlocked by hand", t.doc().instances[bg].locked === false);
+	app.saveProject();
+	app.newDocument();
+	check("reopens", app.open(t.url(f)));
+	check("and stays unlocked", t.doc().instances[bg].locked === false);
+});
