@@ -203,6 +203,7 @@ story("MD-01", "Media controls: play, pause, restart, stop, seek, and allowed on
 	const i0 = app.mediaInfo(m.source);
 	t.metric("start", i0);
 	check("duration is known", i0.durationMs > 2000, i0);
+	t.waitUntil(() => app.mediaInfo(m.source).state === "playing", 3000); // OBS ignores Stop while a file is still opening
 	app.mediaCommand(m.source, "stop"); t.wait(300);
 	eq("stop", app.mediaInfo(m.source).state, "stopped");
 	app.mediaCommand(m.source, "playPause"); t.waitUntil(() => app.mediaInfo(m.source).state === "playing", 3000);
