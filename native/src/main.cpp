@@ -535,6 +535,10 @@ int main(int argc, char *argv[])
 	dockConfig.setTransparencyOnlyOverDropIndicator(false);
 	dockConfig.setViewFactory(new LobsViewFactory());
 
+	// Objects QML uses outlive the QML engine (declared first, destroyed after it): panels still
+	// read them while the windows close.
+	WindowChrome chrome;
+	Captioner captions(&engine);
 	QQmlApplicationEngine qml;
 	KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&qml);
 	PreviewHost previewHost(&engine, &controller);
@@ -561,8 +565,6 @@ int main(int argc, char *argv[])
 			palMap->insert(it.key(), it.value());
 	}
 	qml.rootContext()->setContextProperty("Pal", palMap);
-	WindowChrome chrome;
-	Captioner captions(&engine);
 	qml.rootContext()->setContextProperty("captions", &captions);
 	qml.rootContext()->setContextProperty("chrome", &chrome);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
