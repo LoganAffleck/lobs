@@ -994,6 +994,51 @@ void Engine::setAllScenesShowing(bool on)
 	}
 }
 
+namespace {
+struct TapBox { Engine::AudioTap tap; void *param; };
+QHash<QPair<QString, void *>, TapBox *> g_taps;
+void onSourceAudio(void *p, obs_source_t *, const audio_data *a, bool muted)
+{
+	auto *box = static_cast<TapBox *>(p);
+	const audio_output_info *info = audio_output_get_info(obs_get_audio());
+	const int channels = info ? int(get_audio_channels(info->speakers)) : 2;
+	box->tap(box->param, reinterpret_cast<const float *const *>(a->data), channels, int(a->frames), muted);
+}
+}
+
+bool Engine::addAudioTap(const QString &sourceId, AudioTap tap, void *param)
+{
+	obs_source_t *in = m_inputs.value(sourceId);
+	if (!in || g_taps.contains({sourceId, param}))
+		return false;
+	auto *box = new TapBox{tap, param};
+	g_taps.insert({sourceId, param}, box);
+	obs_source_add_audio_capture_callback(in, onSourceAudio, box);
+	return true;
+}
+
+void Engine::removeAudioTap(const QString &sourceId, AudioTap, void *param)
+{
+	TapBox *box = g_taps.take({sourceId, param});
+	if (!box)
+		return;
+	if (obs_source_t *in = m_inputs.value(sourceId))
+		obs_source_remove_audio_capture_callback(in, onSourceAudio, box);
+	delete box; // the callback is removed under OBS's audio lock, so nothing is using it
+}
+
+int Engine::audioSampleRate() const
+{
+	const audio_output_info *info = obs_get_audio() ? audio_output_get_info(obs_get_audio()) : nullptr;
+	return info ? int(info->samples_per_sec) : 48000;
+}
+
+void Engine::sendCaption(const QString &text, double seconds)
+{
+	if (m_streamOutput && obs_output_active(m_streamOutput) && !text.trimmed().isEmpty())
+		obs_output_output_caption_text2(m_streamOutput, text.toUtf8().constData(), seconds);
+}
+
 QVariantMap Engine::mediaInfo(const QString &sourceId) const
 {
 	obs_source_t *in = m_inputs.value(sourceId);

@@ -107,6 +107,13 @@ public:
 	QVariantMap mediaInfo(const QString &sourceId) const;
 	// cmd: playPause, restart, stop, seek (to ms).
 	void mediaCommand(const QString &sourceId, const QString &cmd, qint64 ms = 0);
+	// Live captions: a copy of a source's audio (float planar at sampleRate(), on OBS's audio
+	// thread), and caption text sent inside the stream (CEA-608) while streaming.
+	using AudioTap = void (*)(void *param, const float *const *planes, int channels, int frames, bool muted);
+	bool addAudioTap(const QString &sourceId, AudioTap tap, void *param);
+	void removeAudioTap(const QString &sourceId, AudioTap tap, void *param);
+	int audioSampleRate() const;
+	void sendCaption(const QString &text, double seconds);
 	QVariantList listDevices(const QString &sourceId, const QString &kind) const;
 
 	// Preview

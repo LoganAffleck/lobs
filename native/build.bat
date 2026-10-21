@@ -13,6 +13,8 @@ cmake -S . -B build -G Ninja -DCMAKE_MAKE_PROGRAM="%NINJA%" -DCMAKE_BUILD_TYPE=R
 cmake --build build || exit /b 1
 "%QTDIR%\bin\windeployqt.exe" --release --qmldir qml --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime %DIST%\LOBS.exe >nul || exit /b 1
 copy /y deps\kddw\bin\kddockwidgets-qt62.dll %DIST%\ >nul
+rem whisper.cpp for live captions
+copy /y deps\whisper\bin\*.dll %DIST%\ >nul
 rem obs-browser links Qt Widgets; ship ours so only one Qt build is loaded
 copy /y "%QTDIR%\bin\Qt6Widgets.dll" %DIST%\ >nul
 copy /y engine-modules.txt %DIST%\ >nul

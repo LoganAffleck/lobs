@@ -1,6 +1,7 @@
 // LOBS.exe — native shell. QML draws the UI; a native child window over the "preview"
 // item is where libobs renders the edited scene, and where canvas mouse input lands.
 #include "window_chrome.h"
+#include "captions.h"
 #include "app.h"
 
 #include <kddockwidgets/Config.h>
@@ -510,6 +511,7 @@ int main(int argc, char *argv[])
 					 : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/current.lobs.json";
 	if (selfTest) {
 		QFile::remove(docPath);
+		QFile::remove(QDir::tempPath() + "/layout.json"); // panels from an earlier test run would carry over
 		AppSettings::defaultRecordFolderOverride() = QDir::tempPath() + "/lobs-selftest-recordings"; // LOBS-003
 	}
 
@@ -556,6 +558,8 @@ int main(int argc, char *argv[])
 	}
 	qml.rootContext()->setContextProperty("Pal", palMap);
 	WindowChrome chrome;
+	Captioner captions(&engine);
+	qml.rootContext()->setContextProperty("captions", &captions);
 	qml.rootContext()->setContextProperty("chrome", &chrome);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
@@ -1205,6 +1209,7 @@ int main(int argc, char *argv[])
 
 	const int rc = app.exec();
 	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
+	captions.stop(); // its audio tap is on an engine input
 	engine.shutdown();
 	g_log = nullptr;
 	return rc;

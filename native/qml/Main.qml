@@ -255,6 +255,7 @@ ApplicationWindow {
                             onTriggered: {
                                 if (modelData.isOpen) modelData.close()
                                 else if (modelData === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
+                                else if (modelData === captionsDock && audioDock.isOpen) dockArea.addDockWidget(captionsDock, KDDW.KDDockWidgets.Location_OnRight, audioDock, Qt.size(380, 0)) // beside the mixer
                                 else modelData.show()
                             }
                         }
@@ -1483,6 +1484,13 @@ ApplicationWindow {
             }
         }
 
+        KDDW.DockWidget {
+            id: captionsDock
+            uniqueName: "captions"
+            title: "Captions"
+            CaptionsPanel { id: captionsGuest; property size kddockwidgets_min_size: Qt.size(300, 220); anchors.fill: parent }
+        }
+
         Component.onCompleted: Qt.callLater(buildLayout)
         function buildLayout() {
             addDockWidget(scenesDock, KDDW.KDDockWidgets.Location_OnLeft, null, Qt.size(320, 0))
@@ -1514,7 +1522,7 @@ ApplicationWindow {
     property bool layoutReady: false
     Timer { interval: 3000; repeat: true; running: win.layoutReady; onTriggered: layoutSaver.saveToFile(win.layoutFile) }
     onClosing: { layoutReady = false; app.closeProjectors() }
-    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, chatDock, infoDock]
+    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, captionsDock, chatDock, infoDock]
     property Item previewItem: null
 
     // Docked panels are moved with LOBS's own drag (keeps their slot until the drop).
@@ -1531,7 +1539,8 @@ ApplicationWindow {
             { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.", "Source: select one in Sources to edit its input."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
             { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 goes to the stream; recordings can use tracks 1-6.", "Monitor: hear it in headphones. Monitor only keeps it out of output.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
             { help: ["Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.", "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },
-            { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: more than 1%, worth a look."], dock: statsDock, guest: statsGuest, icon: "gauge" }
+            { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: more than 1%, worth a look."], dock: statsDock, guest: statsGuest, icon: "gauge" },
+            { help: ["Speech to text from one audio source, on this PC.", "Send to stream: viewers turn on CC to see them.", "Language: pick it, or let LOBS detect it.", "Text shows up a few seconds after speech."], dock: captionsDock, guest: captionsGuest, icon: "captions" }
         ]
     }
 

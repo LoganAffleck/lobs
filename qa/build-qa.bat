@@ -12,6 +12,8 @@ cmake -S . -B build-qa -G Ninja -DCMAKE_MAKE_PROGRAM="%NINJA%" -DCMAKE_BUILD_TYP
 cmake --build build-qa || exit /b 1
 "%QTDIR%\bin\windeployqt.exe" --release --qmldir qml --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime %DIST%\LOBS.exe >nul || exit /b 1
 copy /y deps\kddw\bin\kddockwidgets-qt62.dll %DIST%\ >nul
+rem whisper.cpp for live captions
+copy /y deps\whisper\bin\*.dll %DIST%\ >nul
 copy /y "%QTDIR%\bin\Qt6Widgets.dll" %DIST%\ >nul
 copy /y engine-modules.txt %DIST%\ >nul
 if not exist %DIST%\fonts mkdir %DIST%\fonts

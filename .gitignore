@@ -12,6 +12,9 @@ native/deps/redist/
 native/deps/KDDockWidgets/
 native/deps/kddw/
 native/deps/kddw-build/
+native/deps/whisper.cpp/
+native/deps/whisper/
+native/deps/whisper-build/
 obs-plugin/deps/obs-studio/
 native/runtime/
 

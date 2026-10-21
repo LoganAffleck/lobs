@@ -245,3 +245,25 @@ story("AU-04", "Mixer: its own order, drag to reorder, pin to the front, saved a
 	app.setMixerPinned(ids[1], false);
 	eq("unpin keeps its place among the rest", order()[0], "Mic B");
 });
+
+story("CC-01", "Live captions: speech in an audio source becomes caption text", () => {
+	// Needs the speech model: LOBS_WHISPER_MODEL points at a local copy (see qa/README) and
+	// qa/runs/fixtures/speech.wav (Windows text-to-speech, made by qa/tools/make_speech.ps1).
+	const wav = t.scriptDir() + "/../runs/fixtures/speech.wav";
+	if (captions.modelState !== "ready" || !t.exists(wav)) {
+		t.note("skipped: model " + captions.modelState + ", speech clip " + t.exists(wav));
+		check("speech model and clip available for this check", false, captions.modelPath());
+		return;
+	}
+	fresh();
+	const m = addKind("media", "Speech", wav);
+	sel(m.inst);
+	app.mediaCommand(m.source, "restart");
+	check("captions start on the clip's audio", captions.start(m.source), captions.status);
+	t.waitUntil(() => /water/i.test(captions.lines.map(l => l.text).join(" ")), 45000); // the last phrase
+	const text = captions.lines.map(l => l.text).join(" ");
+	t.note("captions: " + text);
+	captions.stop();
+	check("speech turned into text, nothing lost at the seams", /stream/i.test(text) && /today/i.test(text) && /haunted/i.test(text) && /follow/i.test(text) && /water/i.test(text), text);
+	check("stopped", !captions.running);
+});

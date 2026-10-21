@@ -39,6 +39,7 @@ qt_add_executable(LOBS WIN32
     src/projector.cpp
     src/rows_model.cpp
     src/window_chrome.cpp src/window_chrome.h
+    src/captions.cpp src/captions.h
     src/rows_model.h
     src/projector.h
     src/browser_view.h
@@ -55,7 +56,7 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     # Fluid Functionalism components (QML port)
     qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FSwitch.qml qml/FCheckbox.qml
     qml/FTabs.qml qml/FMenu.qml qml/FMenuItem.qml qml/FSelect.qml qml/FDialog.qml qml/FluidList.qml
-    qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/StatsView.qml
+    qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/StatsView.qml qml/CaptionsPanel.qml
     qml/SettingsPage.qml qml/MixerView.qml qml/FIcon.qml qml/FHelp.qml qml/FScrollView.qml qml/CanvasArea.qml qml/StatusBar.qml qml/OutputControls.qml qml/AssetMouse.qml qml/MeterFader.qml qml/ToolTipStyle.qml qml/SourceFields.qml qml/SourceSection.qml qml/FFontPicker.qml qml/FColorField.qml qml/FSearchField.qml qml/GraphicTools.qml
         qml/TransitionsDialog.qml
         qml/NewProjectDialog.qml
@@ -65,6 +66,9 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     RESOURCES resources/icon/lobs-32.png resources/icon/lobs-64.png)
 
 target_include_directories(LOBS PRIVATE ${LIBOBS_INCLUDE})
+# whisper.cpp (live captions), built by deps/build-whisper.bat
+target_include_directories(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/include)
+target_link_libraries(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/lib/whisper.lib)
 target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys dwmapi)
 # libobs is loaded from the engine folder chosen at startup (<app>/engine/<version>), so it
