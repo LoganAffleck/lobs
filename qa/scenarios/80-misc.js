@@ -199,6 +199,7 @@ story("MD-01", "Media controls: play, pause, restart, stop, seek, and allowed on
 	const m = addKind("media", "Clip", clip);
 	sel(m.inst);
 	check("the Inspector knows it's a media layer", app.inspector.sourceKind === "media", app.inspector.sourceKind);
+	t.wait(400); t.grab("md01-inspector.png");
 	t.waitUntil(() => app.mediaInfo(m.source).durationMs > 0, 5000);
 	const i0 = app.mediaInfo(m.source);
 	t.metric("start", i0);

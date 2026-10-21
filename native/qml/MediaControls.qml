@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
 
-// Play, restart, stop and seek for the selected video or audio file. Playback is a live
-// control: it works on air while live lock is on, like show and hide.
+// Play, restart, stop and seek for a video or audio file (in the Inspector, under the file).
+// Playback is a live control: it works on air while live lock is on, like show and hide.
 Rectangle {
     id: bar
     property string sourceId: ""
@@ -31,7 +31,8 @@ Rectangle {
         FButton { iconName: "rotate-ccw"; variant: "ghost"; tip: "Play from the start"; onClicked: { app.mediaCommand(bar.sourceId, "restart"); bar.refresh() } }
         FButton { iconName: "square"; variant: "ghost"; tip: "Stop"; onClicked: { app.mediaCommand(bar.sourceId, "stop"); bar.refresh() } }
         FFillSlider {
-            Layout.preferredWidth: 180
+            Layout.fillWidth: true
+            Layout.minimumWidth: 120
             Layout.leftMargin: 6
             label: ""
             from: 0
