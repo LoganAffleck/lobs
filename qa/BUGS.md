@@ -313,6 +313,7 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Reopened or new below:** LOBS-006 (reopened), LOBS-022 (partly fixed → LOBS-034), LOBS-033 (new), LOBS-035 (new), and one product question.
 
 ## LOBS-006 · REOPENED · Live lock still has back doors that change what's on air
+- **Fix pass 2:** Fixed in 4d38c43 · verified in `runs/20261020-204324` (LY-06, RG-01..04 pass). Visibility and opacity are live controls. Guarded now: deleteSource (on-air layers), deleteScene (program), addBackground. New, Sample and New project are refused while live.
 - **Story:** RG-02 (`90-regression.js`) · **Status:** Reopened (fix 85f5fbb/2dde2ba is incomplete)
 - While recording, with live lock on and scene "OnAir" on program:
   1. **The Layers eye icon hides the on-air layer.** `App::toggleVisible` has no guard, while Inspector visibility (`setVisibleFlag`) is refused. Same action, two answers (H4).
@@ -322,12 +323,14 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Suggested fix:** route those three through `liveEditAllowed`/`liveSourceEditAllowed`/`liveSceneEditAllowed`. Or, if the eye icon should stay usable live (see the product question below), make the Inspector match it.
 
 ## LOBS-033 · S3 · While live, arrow-key nudge is refused on scenes that aren't on air
+- **Status:** Fixed in abd8ac9 · verified in `runs/20261020-204324` (RG-01, RG-04)
 - **Story:** RG-01 · **Status:** Confirmed (pre-existing; the old blanket check survived the new guard)
 - **Repro:** while live, edit an off-air scene, select a layer, press an arrow key → "Live lock is on. Unlock to nudge while live." The layer doesn't move. Inspector edits, filters and adding sources on the same off-air scene all work.
 - **Cause:** `App::nudge` calls the new `liveEditAllowed(m_selection)` (correct), then still has `if (liveLocked()) return showToast(...)`, which refuses regardless of scene. That second check also ignores Alt, despite the toast.
 - **Why it matters:** preparing the next scene while live is the main reason the edit/program split exists (SC-02).
 
 ## LOBS-022 · Partly fixed · UI leak fixed; memory still grows with every scene you visit (see LOBS-034)
+- **Fix pass 2:** Fixed with LOBS-034 (40cd61c, 40e039c) · RG-05 passes in `runs/20261020-204324`.
 - **QA result:** RG-05 (`runs/20261020-191132`) and `runs/probe-leak2-head`:
 
   | Case | Retained per switch |
@@ -343,12 +346,17 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Speed is fixed:** switch + frame p95 **52 ms** (was 5.0 s), click + frame p95 **29 ms** (was 411 ms).
 
 ## LOBS-034 · S2 · Every layer keeps a source-sized GPU buffer after its scene stops showing
+- **Status:** Fixed in 40cd61c (+ re-entry guard 40e039c) · verified in `runs/20261020-204324` (RG-05, LY-07)
+- **Confirmed first** (`_probe-leak2`, run `20261020-192836`): revisiting 2 scenes retained 0.04 MB/switch; new heavy scenes 60 MB/switch, nothing freed after 10 s idle. Three per-layer source-sized textures: lobs_instance's offscreen copy, the scene item's scale-filter texture, and each OBS filter's target. The scale-filter one was the biggest (a canvas-sized color layer = 8 MB). Turning the filter off on a hidden layer doesn't free it, because hidden private scenes never tick.
+- **Fix:** offscreen copy only for cropped layers, freed on hide; no scale filter for color and shape layers; hidden scenes' layers have their scene items and filters detached ("parked") and reattached right before the scene shows (edit, program, transitions, grid thumbnails, projectors).
+- **Result:** heavy after visiting all 40 scenes: 1,966 → 415 MB above the empty show (`_probe-leak3`). RG-05 passes.
 - **Area:** memory / scale · **Stories:** RG-05, PF-*-stress · **Status:** Confirmed by measurement; cause from code
 - **Cause:** `li_video_render` creates `li->texrender` at the **source's** full size on first render, and frees it only in `li_destroy` ([lobs_instance.c:140](../native/src/lobs_instance.c:140), [:77](../native/src/lobs_instance.c:77)). There's nothing on hide or deactivate. Color sources are canvas-sized (1920×1080×4 = 8 MB each), the camera is 8 MB, and a 4K display capture is about 33 MB. Every layer of every scene ever shown keeps its buffer.
 - **Effect:** memory ≈ the sum over **visited** layers. Heavy (424 layers) settles around 3.4 GB. Stress (3,270 layers) would need tens of GB, which matches the stress numbers below.
 - **Suggested fix:** release the texrender when the instance stops showing (`hide`/`deactivate` callback), or share one per source (not per layer). Also, skip the texrender entirely when no crop or radius is set, and draw plain color sources directly instead of rendering a canvas-sized texture.
 
 ## LOBS-035 · S4 · The recording error still tells Windows 11 users about "Windows 10 Ransomware Protection"
+- **Status:** Fixed in 1ded3e6 · verified in `runs/20261020-205127-output` (OUT-01b now reads "Windows Security → Controlled folder access can also block it…")
 - Was a UX note in the report (not logged as a bug). Still present: OUT-01b `lastError`/status text. It comes from OBS. Suggested wording: "Windows Security → Controlled folder access".
 
 ## Product decision (2026-10-20, from the product owner): visibility and opacity are live controls
@@ -365,3 +373,16 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
   - Pass: open 8.3 s ✅, Show p95 190 ms ✅, click p95 149 ms ✅, edit p95 21 ms ✅.
   - **Fail:** select scene p95 339 ms (≤ 250), linked edit across 100 scenes p95 393 ms (≤ 250), drag frame p95 114 ms (≤ 33), scrub p95 120 ms (≤ 66), **autosave stall up to 2.9 s** (never > 1 s), memory 898 KB per edit. That's bounded by the 200-step history: about 175 MB.
   - Resources after open are unchanged: **6.4 GB private, 270k handles, 2,003 GDI objects**. This is LOBS-034, and the GDI risk from LOBS-025 remains.
+
+## Fix pass 2 results (HEAD after 78ddb11)
+- **LOBS-021 remainder:** 52cad55 names Go live, the switch tracks, the mixer and the scene and asset grids. Still unnamed: the MouseArea inside KDDockWidgets' TabBarBase (C++, QML can't attach a name to it).
+- **LOBS-025:** partly fixed in 78ddb11. Stress PF-01 (autosave stall), PF-02, PF-03 and PF-05 now pass (`runs/20261020-204324`). Still failing:
+  - **PF-04-stress** drag frame p95 79 ms [≤ 33] and scrub p95 87 ms [≤ 66]. Moves cost 3.5 ms; most of the frame is QML rendering the window (12 ms p50, 58 ms p95; `_probe-drag-stress`).
+  - **PF-06-stress** memory per edit 1,021 KB (→ LOBS-036).
+  - **GDI and handles after opening stress:** 2,003 GDI objects, 238,811 handles, 4.7 GB private. The 818 text layers each own a GDI+ text renderer (`text_gdiplus`), which accounts for the GDI count. The handle count tracks OBS source count (3,270 layer instances + 818 text renderers, each with OBS's per-source locks and events). Not fixed.
+- **LOBS-024:** heavy PF-04 drag frame p95 33.6 ms [≤ 16.7] stays failing. Moves cost 1.5 ms and frames 2.8 ms (p50); the interval is exactly 2 vsyncs because the harness injects moves on a 16 ms timer against a 16.7 ms vsync (`_probe-drag`, `runs/20261020-202948`). I think the check measures the harness, not the app; the test is unchanged.
+
+## LOBS-036 · S3 · Each edit on a very large show keeps about 1 MB of undo history
+- **Story:** PF-06-stress · **Status:** Open (found in fix pass 2)
+- **Detail:** 200 edits on the stress project grow memory about 1,021 KB per edit (`runs/20261020-204324/63-perf-stress-b`). Each undo step is a whole Doc. Docs share data copy-on-write, but `instances` is one QHash of 3,270 entries: editing one layer copies the whole table.
+- **Suggested fix:** share instances individually (for example a QHash of implicitly shared instance pointers), so an edit copies one layer. A model-wide refactor, so not done in this pass.
