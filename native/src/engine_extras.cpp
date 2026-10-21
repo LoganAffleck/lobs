@@ -125,8 +125,7 @@ bool Engine::startReplay()
 	signal_handler_connect(sh, "saved", onReplaySaved, this);
 	signal_handler_connect(sh, "stop", onReplayStop, this);
 	if (!obs_output_start(m_replayOutput)) {
-		const char *e = obs_output_get_last_error(m_replayOutput);
-		m_lastError = QString("Replay buffer failed to start%1").arg(e ? QString(": ") + e : QString());
+		m_lastError = "Replay buffer failed to start" + obsOutputError(m_replayOutput);
 		return false;
 	}
 	emit replayChanged();
@@ -247,8 +246,7 @@ bool Engine::startVirtualCam()
 		return false;
 	}
 	if (!obs_output_start(m_vcamOutput)) {
-		const char *e = obs_output_get_last_error(m_vcamOutput);
-		m_lastError = QString("Virtual camera failed to start%1").arg(e ? QString(": ") + e : QString());
+		m_lastError = "Virtual camera failed to start" + obsOutputError(m_vcamOutput);
 		return false;
 	}
 	emit vcamChanged();

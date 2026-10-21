@@ -70,6 +70,8 @@ struct OverlayGuide {
 	double at;
 };
 
+QString obsOutputError(obs_output *out); // ": message" from OBS for a failed output, or ""
+
 class Engine : public QObject {
 	Q_OBJECT
 public:

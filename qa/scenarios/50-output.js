@@ -50,6 +50,7 @@ story("OUT-01b", "Record into a folder that can't be written", () => {
 	t.note("unwritable folder: recording=" + rec + ", toast='" + toast + "', lastError='" + err + "', status='" + app.status + "'");
 	if (rec) { app.toggleRecording(); t.waitUntil(() => t.recordingsFinished() > n, 10000); }
 	check("fails visibly (no silent 'recording' that produces nothing)", !rec && (toast || err), { recording: rec, toast: toast, err: err, last: t.lastRecording() });
+	check("the error uses current Windows wording (LOBS-035)", !/Windows 10 Ransomware/.test(err + toast + app.status), err);
 	app.saveSettings({ recordFolder: t.out("rec") });
 });
 
