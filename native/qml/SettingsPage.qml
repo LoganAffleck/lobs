@@ -495,7 +495,7 @@ Rectangle {
                         spacing: 0
                         GroupTitle { text: "LOBS" }
                         Card {
-                            SettingRow { divider: false; title: "Version"; description: "0.2.0 · Qt 6.11, C++20"; Item {} }
+                            SettingRow { divider: false; title: "Version"; description: "0.3.0 · Qt 6.11, C++20"; Item {} }
                             SettingRow { title: "Engine"; description: "OBS " + engineUpdater.installed + " (official release build)"; Item {} }
                             SettingRow { title: "Encoder in use"; description: (app.encoders.find(e => e.value === page.s.resolvedEncoder) || { name: page.s.resolvedEncoder }).name; Item {} }
                         }
