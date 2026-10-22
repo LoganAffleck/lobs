@@ -1472,13 +1472,23 @@ ApplicationWindow {
             id: chatDock
             uniqueName: "twitchChat"
             title: "Chat"
-            TwitchPanel { kind: "chat"; live: chatDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c); property size kddockwidgets_min_size: Qt.size(260, 200); anchors.fill: parent }
+            Loader {
+                property size kddockwidgets_min_size: Qt.size(260, 200)
+                anchors.fill: parent
+                active: chatDock.isOpen || item
+                sourceComponent: TwitchPanel { kind: "chat"; live: chatDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c) }
+            }
         }
         KDDW.DockWidget {
             id: infoDock
             uniqueName: "twitchInfo"
             title: "Stream info"
-            TwitchPanel { kind: "info"; live: infoDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c); property size kddockwidgets_min_size: Qt.size(300, 240); anchors.fill: parent }
+            Loader {
+                property size kddockwidgets_min_size: Qt.size(300, 240)
+                anchors.fill: parent
+                active: infoDock.isOpen || item
+                sourceComponent: TwitchPanel { kind: "info"; live: infoDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c) }
+            }
         }
 
         KDDW.DockWidget {
@@ -1497,7 +1507,12 @@ ApplicationWindow {
                 property size kddockwidgets_min_size: Qt.size(280, 200)
                 anchors.fill: parent
                 clip: true
-                StatsView { anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 } }
+                // Built the first time the panel opens, not at startup.
+                Loader {
+                    active: statsDock.isOpen || item
+                    anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
+                    sourceComponent: StatsView {}
+                }
             }
         }
 
@@ -1505,7 +1520,12 @@ ApplicationWindow {
             id: captionsDock
             uniqueName: "captions"
             title: "Captions"
-            CaptionsPanel { id: captionsGuest; property size kddockwidgets_min_size: Qt.size(300, 220); anchors.fill: parent }
+            Item {
+                id: captionsGuest
+                property size kddockwidgets_min_size: Qt.size(300, 220)
+                anchors.fill: parent
+                Loader { active: captionsDock.isOpen || item; anchors.fill: parent; sourceComponent: CaptionsPanel {} }
+            }
         }
 
         Component.onCompleted: Qt.callLater(buildLayout)
