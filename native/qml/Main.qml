@@ -1571,6 +1571,7 @@ ApplicationWindow {
         parent: Overlay.overlay
         dockArea: dockArea
         panels: [
+            { dock: videoDock, guest: videoGuest, icon: "monitor" },
             { help: ["Click: edit a scene without showing it.", "Show or double-click: switch to the scene.", "Grid: shows live thumbnails of every scene.", "Right-click: rename, duplicate with linked or independent layers, or delete."], dock: scenesDock, guest: scenesGuest, icon: "clapperboard" },
             { help: ["Inputs: added once, shared by every scene.", "Place it: drag onto the canvas or double-click.", "Per scene: size, crop and filters.", "Files are in Assets. Add text and color from Layers."], dock: poolDock, guest: poolGuest, icon: "folder" },
             { help: ["Project files: this project's assets folder.", "Add files: drag in from File Explorer or use + Asset.", "Place it: drag onto the canvas or double-click.", "Right-click: show in File Explorer or move to Recycle Bin."], dock: assetsDock, guest: assetsGuest, icon: "image" },
