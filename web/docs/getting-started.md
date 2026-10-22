@@ -21,7 +21,7 @@ Don't install LOBS under a path that contains the word "test", including a Windo
 
 ### SmartScreen
 
-The installer isn't code-signed yet. If SmartScreen appears, choose **More info**, then **Run anyway**.
+From 0.3.1 the installer is signed by Logan Affleck. While the signature is new, SmartScreen may still ask once: check that the publisher says **Logan Affleck**, then choose **More info**, then **Run anyway**.
 
 ### What your PC needs
 
