@@ -10,6 +10,7 @@ Rectangle {
     visible: opacity > 0
     opacity: open ? 1 : 0
     property bool open: false
+    signal updateRequested() // the update dialog lives in the main window
     property int section: 0
     property var s: app.settings
     Behavior on opacity { NumberAnimation { duration: page.open ? Pal.slow : Pal.moderate; easing.type: Easing.OutCubic } }
@@ -24,7 +25,7 @@ Rectangle {
         { title: "Video", icon: "monitor", desc: "Output size, frame rate and encoder." },
         { title: "Audio", icon: "audio-lines", desc: "Devices for your global mic and desktop audio." },
         { title: "Hotkeys", icon: "keyboard", desc: "Work even while a game has focus." },
-        { title: "OBS engine", icon: "refresh-cw", desc: "Updates from OBS's official releases." },
+        { title: "Updates", icon: "refresh-cw", desc: "New versions of LOBS, with the OBS engine they were tested with." },
         { title: "About", icon: "info", desc: "Versions, licenses and where LOBS keeps its files." }
     ]
 
@@ -419,72 +420,68 @@ Rectangle {
                         }
                     }
 
-                    // ===== OBS engine =====
+                    // ===== Updates =====
                     ColumnLayout {
                         visible: page.section === 5
                         Layout.fillWidth: true
                         spacing: 0
-                        GroupTitle { text: "Engine" }
+                        GroupTitle { text: "LOBS" }
+                        Card {
+                            SettingRow {
+                                divider: false
+                                title: "LOBS " + appUpdater.current
+                                description: appUpdater.state === "checking" ? "Checking for updates..."
+                                    : appUpdater.state === "available" ? "LOBS " + appUpdater.latest + " is available"
+                                    : appUpdater.state === "downloading" ? "Downloading LOBS " + appUpdater.latest + "... " + Math.round(appUpdater.progress * 100) + "%"
+                                    : appUpdater.state === "ready" ? "LOBS " + appUpdater.latest + " is ready to install"
+                                    : appUpdater.state === "installing" ? "Installing..."
+                                    : appUpdater.state === "upToDate" ? "Up to date" + (appUpdater.lastChecked ? " · checked " + appUpdater.lastChecked : "")
+                                    : appUpdater.lastChecked ? "Last checked " + appUpdater.lastChecked : "Not checked yet"
+                                FButton {
+                                    property bool fillSlot: false
+                                    text: appUpdater.state === "available" || appUpdater.state === "downloading" || appUpdater.state === "ready" ? "Update..." : "Check now"
+                                    variant: appUpdater.state === "available" || appUpdater.state === "ready" ? "primary" : "secondary"
+                                    enabled: ["checking", "installing"].indexOf(appUpdater.state) < 0
+                                    onClicked: appUpdater.state === "available" || appUpdater.state === "downloading" || appUpdater.state === "ready" ? page.updateRequested() : appUpdater.check()
+                                }
+                            }
+                            Text {
+                                visible: appUpdater.message.length > 0
+                                Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 12
+                                wrapMode: Text.WordWrap
+                                color: appUpdater.state === "error" ? "#fbbf24" : Pal.muted
+                                font.family: Pal.font; font.pixelSize: Pal.body
+                                text: appUpdater.message
+                            }
+                        }
+                        GroupTitle { text: "OBS engine" }
                         Card {
                             SettingRow {
                                 divider: false
                                 title: "OBS " + engineUpdater.installed
-                                description: engineUpdater.state === "checking" ? "Checking for updates..."
-                                    : engineUpdater.state === "upToDate" ? "Up to date" + (engineUpdater.lastChecked ? " · checked " + engineUpdater.lastChecked : "")
-                                    : engineUpdater.state === "available" ? "OBS " + engineUpdater.latest + " is available"
-                                    : engineUpdater.state === "downloading" ? "Downloading OBS " + engineUpdater.latest + "... " + Math.round(engineUpdater.progress * 100) + "%"
-                                    : engineUpdater.state === "installing" ? "Installing OBS " + engineUpdater.latest + "..."
-                                    : engineUpdater.state === "testing" ? "Testing OBS " + engineUpdater.latest + " with LOBS..."
-                                    : engineUpdater.state === "needsLobs" ? "Staying on OBS " + engineUpdater.installed
-                                    : engineUpdater.state === "ready" ? "Restart LOBS to switch engines"
-                                    : engineUpdater.lastChecked ? "Last checked " + engineUpdater.lastChecked : "Not checked yet"
-                                FButton {
-                                    property bool fillSlot: false
-                                    text: engineUpdater.state === "available" ? "Download and install"
-                                        : engineUpdater.state === "ready" ? "Restart LOBS" : "Check now"
-                                    variant: engineUpdater.state === "available" || engineUpdater.state === "ready" ? "primary" : "secondary"
-                                    enabled: ["checking", "downloading", "installing", "testing"].indexOf(engineUpdater.state) < 0
-                                    onClicked: engineUpdater.state === "available" ? engineUpdater.install()
-                                        : engineUpdater.state === "ready" ? engineUpdater.restartLobs() : engineUpdater.check()
-                                }
-                            }
-                            Rectangle {
-                                visible: engineUpdater.state === "downloading"
-                                Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 12
-                                implicitHeight: 4; radius: 2; color: Pal.s1
-                                Rectangle { width: parent.width * engineUpdater.progress; height: parent.height; radius: 2; color: Pal.focus }
+                                description: "Comes with LOBS and updates with it, so every release runs the engine it was tested with."
+                                Item {}
                             }
                             Text {
                                 visible: engineUpdater.message.length > 0
                                 Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.bottomMargin: 12
                                 wrapMode: Text.WordWrap
-                                color: engineUpdater.state === "error" || engineUpdater.state === "needsLobs" ? "#fbbf24" : Pal.muted
+                                color: "#fbbf24"
                                 font.family: Pal.font; font.pixelSize: Pal.body
                                 text: engineUpdater.message
-                            }
-                            SettingRow {
-                                title: "Include OBS betas"
-                                description: "Include beta and release-candidate engines."
-                                FSwitch { property bool fillSlot: false; checkable: false; checked: engineUpdater.beta; onClicked: engineUpdater.beta = !engineUpdater.beta }
                             }
                             SettingRow {
                                 visible: engineUpdater.previous.length > 0
                                 title: "Previous engine"
                                 description: "OBS " + engineUpdater.previous + " is kept as a fallback."
-                                FButton { property bool fillSlot: false; text: "Go back to " + engineUpdater.previous; variant: "secondary"; onClicked: engineUpdater.rollback() }
-                            }
-                            SettingRow {
-                                visible: engineUpdater.notesUrl.length > 0 && engineUpdater.state !== "upToDate"
-                                title: "What's new in OBS " + engineUpdater.latest
-                                description: "Release notes on GitHub"
-                                FButton { property bool fillSlot: false; text: "Open"; variant: "ghost"; onClicked: Qt.openUrlExternally(engineUpdater.notesUrl) }
+                                FButton { property bool fillSlot: false; text: engineUpdater.state === "ready" ? "Restart LOBS" : "Go back to " + engineUpdater.previous; variant: "secondary"; onClicked: engineUpdater.state === "ready" ? engineUpdater.restartLobs() : engineUpdater.rollback() }
                             }
                         }
                         Text {
                             Layout.fillWidth: true; Layout.topMargin: 12
                             wrapMode: Text.WordWrap
                             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-                            text: "Checks GitHub for official OBS releases daily and verifies each download's SHA-256. New engines are tested before use. If LOBS fails to start twice with one, it reverts to the previous engine."
+                            text: "Checks LOBS's GitHub releases daily. Updates install only after the download matches its SHA-256 and is signed by LOBS's publisher. If LOBS fails to start twice on a new engine, it goes back to the previous one."
                         }
                     }
 
@@ -495,7 +492,7 @@ Rectangle {
                         spacing: 0
                         GroupTitle { text: "LOBS" }
                         Card {
-                            SettingRow { divider: false; title: "Version"; description: "0.3.1 · Qt 6.11, C++20"; Item {} }
+                            SettingRow { divider: false; title: "Version"; description: appUpdater.current + " · Qt 6.11, C++20"; Item {} }
                             SettingRow { title: "Engine"; description: "OBS " + engineUpdater.installed + " (official release build)"; Item {} }
                             SettingRow { title: "Encoder in use"; description: (app.encoders.find(e => e.value === page.s.resolvedEncoder) || { name: page.s.resolvedEncoder }).name; Item {} }
                         }

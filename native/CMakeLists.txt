@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(LOBS VERSION 0.3.1 LANGUAGES C CXX)
+# The OBS engine each release ships with and is tested against (build.bat installs it).
+set(LOBS_ENGINE_VERSION 32.2.2)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,6 +43,7 @@ qt_add_executable(LOBS WIN32
     src/window_chrome.cpp src/window_chrome.h
     src/captions.cpp src/captions.h
     src/crash_report.cpp src/crash_report.h
+    src/app_updater.cpp src/app_updater.h
     src/rows_model.h
     src/projector.h
     src/browser_view.h
@@ -70,8 +73,8 @@ target_include_directories(LOBS PRIVATE ${LIBOBS_INCLUDE})
 # whisper.cpp (live captions), built by deps/build-whisper.bat
 target_include_directories(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/include)
 target_link_libraries(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/lib/whisper.lib)
-target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS LOBS_VERSION="${PROJECT_VERSION}")
-target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys dwmapi dbghelp)
+target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS LOBS_VERSION="${PROJECT_VERSION}" LOBS_ENGINE_VERSION="${LOBS_ENGINE_VERSION}")
+target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys dwmapi dbghelp wintrust)
 # libobs is loaded from the engine folder chosen at startup (<app>/engine/<version>), so it
 # must not be resolved before main() runs.
 target_link_options(LOBS PRIVATE "/DELAYLOAD:obs.dll")

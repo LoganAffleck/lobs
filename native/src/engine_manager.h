@@ -31,6 +31,9 @@ void markGood(const QString &running); // the engine this process runs started f
 QStringList installed();           // versions on disk, newest first
 QString previous();                // version to roll back to, if any
 bool activate(const QString &version, bool trial);
+// The engine this LOBS release ships with (and was tested with) takes over once after each
+// install or update, even if an earlier engine was picked; the one it replaces stays as the fallback.
+void adoptBundled(const QString &bundled);
 int compareVersions(const QString &a, const QString &b); // <0, 0, >0; "33.0.0-rc2" < "33.0.0"
 int supportedMajor();              // the libobs major version LOBS is built against
 QStringList moduleAllowlist();     // from engine-modules.txt next to LOBS.exe

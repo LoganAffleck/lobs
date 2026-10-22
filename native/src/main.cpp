@@ -3,6 +3,7 @@
 #include "window_chrome.h"
 #include "captions.h"
 #include "crash_report.h"
+#include "app_updater.h"
 #include "app.h"
 
 #include <kddockwidgets/Config.h>
@@ -483,8 +484,10 @@ int main(int argc, char *argv[])
 	engine_store::Selected sel;
 	if (const int ue = int(app.arguments().indexOf("--use-engine")); ue > 0 && ue + 1 < app.arguments().size())
 		sel = {app.arguments()[ue + 1], engine_store::enginesDir() + "/" + app.arguments()[ue + 1]};
-	else
+	else {
+		engine_store::adoptBundled(LOBS_ENGINE_VERSION);
 		sel = engine_store::select();
+	}
 	if (!QFile::exists(sel.root + "/bin/64bit/obs.dll"))
 		sel.version.clear();
 	if (sel.version.isEmpty()) {
@@ -613,6 +616,7 @@ int main(int argc, char *argv[])
 	WindowChrome chrome;
 	Captioner captions(&engine);
 	CrashReport crashReport(crashDir);
+	AppUpdater appUpdater(app.arguments().contains("--updated"));
 	QQmlApplicationEngine qml;
 	KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&qml);
 	PreviewHost previewHost(&engine, &controller);
@@ -642,6 +646,7 @@ int main(int argc, char *argv[])
 	qml.rootContext()->setContextProperty("captions", &captions);
 	qml.rootContext()->setContextProperty("chrome", &chrome);
 	qml.rootContext()->setContextProperty("crashReport", &crashReport);
+	qml.rootContext()->setContextProperty("appUpdater", &appUpdater);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
 	qml.addImageProvider("icon", new IconProvider(root + "/icons"));
@@ -665,13 +670,33 @@ int main(int argc, char *argv[])
 		QTimer::singleShot(3000, [] { *static_cast<volatile int *>(nullptr) = 1; });
 #endif
 	// The UI is up on this engine: it's good (ends a new engine's trial), then look for
-	// OBS updates at most once a day, a little after startup.
+	// LOBS updates at most once a day, a little after startup. The OBS engine updates with
+	// LOBS (each release ships the engine it was tested with), so it isn't checked on its own.
 	QTimer::singleShot(5000, [&]() {
 		if (engine.started())
 			engine_store::markGood(sel.version);
 		if (!selfTest)
-			engineUpdater.checkIfDue();
+			appUpdater.checkIfDue();
 	});
+	QObject::connect(&appUpdater, &AppUpdater::quitForInstall, &app, [&] {
+		if (auto *w = qobject_cast<QQuickWindow *>(qml.rootObjects().value(0)))
+			w->close();
+		else
+			QCoreApplication::quit();
+	});
+	// Self-test of the whole update path against a local feed: check, download, verify, install
+	// (LOBS_UPDATE_AUTO=check: only check).
+	if (qEnvironmentVariableIsSet("LOBS_UPDATE_FEED") && qEnvironmentVariableIsSet("LOBS_UPDATE_AUTO") && !appUpdater.justUpdated()) {
+		QObject::connect(&appUpdater, &AppUpdater::changed, &app, [&] {
+			if (qEnvironmentVariable("LOBS_UPDATE_AUTO") == "check") // stop at the notice, to look at it
+				return;
+			if (appUpdater.state() == "available" && appUpdater.message().isEmpty())
+				appUpdater.download();
+			else if (appUpdater.state() == "ready")
+				QTimer::singleShot(1000, &appUpdater, &AppUpdater::installAndRestart);
+		});
+		QTimer::singleShot(3000, &appUpdater, &AppUpdater::check);
+	}
 
 	// --autotest: exercise the editor through the controller, record, write results, quit.
 	if (app.arguments().contains("--autotest")) {

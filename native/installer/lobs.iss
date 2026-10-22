@@ -4,24 +4,40 @@
 ; doesn't need to be installed.
 
 #define AppName "LOBS"
+#ifndef AppVersion
 #define AppVersion "0.3.1"
+#endif
 #define EngineVersion "32.2.2"
 #define Dist "..\dist"
 
 [Setup]
+; ISCC /DUpdateTrial builds a copy with its own identity, so the update path can be tried
+; end to end without touching a real install.
+#ifdef UpdateTrial
+AppId={{6C0B5A43-3E1D-4E4B-9C59-0B1D5A7A1C99}
+#else
 AppId={{6C0B5A43-3E1D-4E4B-9C59-0B1D5A7A1C21}
+#endif
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion} (OBS engine {#EngineVersion})
 AppPublisher=LOBS
+#ifdef UpdateTrial
+DefaultDirName={localappdata}\Programs\LOBS-UpdateTrial
+#else
 DefaultDirName={localappdata}\Programs\LOBS
+#endif
 DefaultGroupName=LOBS
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#Dist}\installer
+#ifdef UpdateTrial
+OutputBaseFilename=LOBS-UpdateTrial-{#AppVersion}
+#else
 OutputBaseFilename=LOBS-Setup-{#AppVersion}
+#endif
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -55,6 +71,8 @@ Name: "{userdesktop}\LOBS"; Filename: "{app}\LOBS.exe"; Tasks: desktopicon
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing the Microsoft Visual C++ runtime..."; \
   Flags: waituntilterminated shellexec; Verb: runas; Check: NeedsVCRedist
 Filename: "{app}\LOBS.exe"; Description: "Start LOBS"; Flags: nowait postinstall skipifsilent
+; An update from inside LOBS runs this installer quietly; LOBS starts again when it's done.
+Filename: "{app}\LOBS.exe"; Parameters: "--updated"; Flags: nowait; Check: IsLobsUpdate
 
 [UninstallDelete]
 ; Engines downloaded by the in-app updater and the helpers LOBS mirrors from them.
@@ -63,6 +81,11 @@ Type: files; Name: "{app}\obs-*.exe"
 Type: files; Name: "{app}\lobs.log"
 
 [Code]
+function IsLobsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:LOBSUPDATE|0}') = '1';
+end;
+
 function NeedsVCRedist: Boolean;
 var
   Installed, Major, Minor: Cardinal;

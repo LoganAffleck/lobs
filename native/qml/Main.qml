@@ -25,7 +25,7 @@ ApplicationWindow {
 
     property int sceneView: 0 // 0 list, 1 grid
     onSceneViewChanged: app.setGridVisible(sceneView === 1)
-    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
+    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
@@ -231,16 +231,14 @@ ApplicationWindow {
             }
             FButton { text: "Save"; variant: "ghost"; tip: "Save (Ctrl+S)"; onClicked: { if (!app.saveProject()) saveDialog.open() } }
             FButton {
-                visible: ["available", "ready", "downloading", "installing", "testing"].indexOf(engineUpdater.state) >= 0
+                visible: ["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0
                 iconName: "refresh-cw"
-                text: engineUpdater.state === "ready" ? "Restart for OBS " + engineUpdater.latest
-                    : engineUpdater.state === "downloading" ? "OBS " + engineUpdater.latest + " " + Math.round(engineUpdater.progress * 100) + "%"
-                    : engineUpdater.state === "installing" ? "Installing OBS " + engineUpdater.latest
-                    : engineUpdater.state === "testing" ? "Testing OBS " + engineUpdater.latest
-                    : "OBS " + engineUpdater.latest + " available"
+                text: appUpdater.state === "downloading" ? "LOBS " + appUpdater.latest + " " + Math.round(appUpdater.progress * 100) + "%"
+                    : appUpdater.state === "ready" ? "Install LOBS " + appUpdater.latest
+                    : "LOBS " + appUpdater.latest + " available"
                 variant: "ghost"
-                tip: "OBS engine updates. Open Settings > OBS engine."
-                onClicked: { settingsPage.section = 5; settingsPage.open = true }
+                tip: "A new version of LOBS"
+                onClicked: updateDialog.open()
             }
             Rectangle { width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
             FButton {
@@ -1987,7 +1985,7 @@ ApplicationWindow {
         }
     }
 
-    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; z: 500 }
+    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; z: 500; onUpdateRequested: { open = false; updateDialog.open() } }
 
     FDialog {
         id: renameDialog
@@ -2011,6 +2009,51 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: renameDialog.close() }
                 FButton { text: "Rename"; variant: "primary"; onClicked: renameDialog.apply() }
+            }
+        }
+    }
+    // A new LOBS: what's in it, then download, verify and install (never while on air).
+    FDialog {
+        id: updateDialog
+        title: appUpdater.state === "ready" ? "Install LOBS " + appUpdater.latest + "?" : "LOBS " + appUpdater.latest + " is available"
+        width: 420
+        readonly property bool onAir: app.live || app.replayActive || app.vcamActive
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                text: appUpdater.state === "downloading" ? "Downloading... " + Math.round(appUpdater.progress * 100) + "%"
+                    : appUpdater.state === "ready" ? "LOBS closes, installs the update and opens again in about a minute. Your shows and settings stay as they are."
+                    : appUpdater.message || ("You have " + appUpdater.current + ". The update downloads in the background while you keep working.")
+            }
+            Rectangle {
+                visible: appUpdater.state === "downloading"
+                Layout.fillWidth: true
+                implicitHeight: 4; radius: 2; color: Pal.s1
+                Rectangle { width: parent.width * appUpdater.progress; height: parent.height; radius: 2; color: Pal.focus }
+            }
+            Text {
+                visible: updateDialog.onAir && appUpdater.state === "ready"
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: "#fbbf24"; font.family: Pal.font; font.pixelSize: Pal.body
+                text: "Stop streaming, recording, the replay buffer and the virtual camera first. LOBS won't close while they're running."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                FButton { text: "What's new"; variant: "ghost"; visible: appUpdater.notesUrl.length > 0; onClicked: Qt.openUrlExternally(appUpdater.notesUrl) }
+                Item { Layout.fillWidth: true }
+                FButton { text: "Later"; variant: "secondary"; onClicked: updateDialog.close() }
+                FButton {
+                    text: appUpdater.state === "ready" ? "Restart and install" : "Download"
+                    variant: "primary"
+                    visible: appUpdater.state !== "downloading"
+                    enabled: appUpdater.state === "available" || (appUpdater.state === "ready" && !updateDialog.onAir)
+                    onClicked: appUpdater.state === "ready" ? appUpdater.installAndRestart() : appUpdater.download()
+                }
             }
         }
     }

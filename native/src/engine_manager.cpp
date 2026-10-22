@@ -104,6 +104,18 @@ bool activate(const QString &version, bool trial)
 	return true;
 }
 
+void adoptBundled(const QString &bundled)
+{
+	QJsonObject s = readState();
+	if (s["bundled"].toString() == bundled || !valid(bundled))
+		return;
+	activate(bundled, false);
+	s = readState();
+	s["bundled"] = bundled;
+	s.remove("bad"); // a different release: give engines another chance
+	writeState(s);
+}
+
 Selected select()
 {
 	QJsonObject s = readState();

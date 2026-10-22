@@ -35,3 +35,20 @@ LOBS's own account is already set up in `native/installer/signing-metadata.json`
 and `az login` done, both scripts sign with it, no variables needed.
 
 `installer\sign.bat <files>` signs files by hand. It needs `signtool.exe` from the Windows SDK.
+
+## Releasing an update
+
+LOBS checks `https://api.github.com/repos/LoganAffleck/lobs/releases/latest` once a day and offers
+the update in the app. It installs only an asset named `LOBS-Setup-<version>.exe` whose SHA-256
+matches GitHub's and whose signature is from Logan Affleck, so every release must be signed.
+
+1. Bump the version in `native/CMakeLists.txt` and `native/installer/lobs.iss`. To move to a new
+   OBS engine, change `LOBS_ENGINE_VERSION` (CMakeLists), `OBS_VERSION` (build.bat) and
+   `EngineVersion` (lobs.iss) together; the engine ships inside the installer and takes over on update.
+2. `native\build.bat`, then `native\installer\build-installer.bat` (signed; see Code signing).
+3. Tag `v<version>`, push, and publish a GitHub release (not a pre-release) with the installer attached.
+   Everyone sees the update within a day.
+
+To try the whole path without touching a real install: `ISCC /DUpdateTrial /DAppVersion=<v>` builds
+an installer with its own identity; point `LOBS_UPDATE_FEED` at a release JSON on disk, with
+`LOBS_UPDATE_PRETEND_VERSION`, `LOBS_UPDATE_DIR` and `LOBS_UPDATE_AUTO=1` (or `check`).
