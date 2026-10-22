@@ -36,6 +36,7 @@ kbd { background: #222; border: 1px solid var(--line2); border-bottom-width: 2px
 /* Home */
 .hero { text-align: center; overflow-x: clip; } /* the gem may spill below, never sideways */
 .hero h1 { margin: 0 auto; max-width: 900px; text-wrap: balance; font-size: clamp(40px, 6.4vw, 72px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 750; }
+.hero h1 .badge { display: inline-block; vertical-align: 0.9em; margin-left: 0.25em; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(196, 140, 255, 0.45); background: rgba(108, 40, 204, 0.28); color: var(--violet); font-size: 13px; line-height: 1.2; letter-spacing: 0.06em; font-weight: 650; text-transform: uppercase; text-shadow: none; }
 .hero .lede { margin: 22px auto 0; max-width: 640px; font-size: clamp(17px, 2vw, 19px); color: var(--muted); }
 .hero .ctas { margin-top: 32px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .facts { margin-top: 14px; font-size: 13px; color: var(--dim); }

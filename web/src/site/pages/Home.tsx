@@ -30,7 +30,7 @@ export function Home() {
   return (
     <section className="hero">
       <div className="wrap">
-        <h1>Logan's OBS</h1>
+        <h1>Logan's OBS <span className="badge">Beta</span></h1>
         <p className="lede">OBS with a creative UI for building awesome scenes.</p>
         <div className="ctas">
           <a className="sbtn primary" href={DOWNLOAD} download><DownloadIcon />Download for Windows</a>
