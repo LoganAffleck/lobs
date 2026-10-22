@@ -22,7 +22,7 @@ function LayerView({ l, sources, uid }: { l: Layer; sources: Source[]; uid: stri
     case 'group':
       return <>{[...(l.children ?? [])].reverse().map((c) => <LayerView key={c.id} l={c} sources={sources} uid={uid} />)}</>
     case 'color':
-      return <div style={{ ...box, background: l.fill }} />
+      return <div style={{ ...box, background: l.fill }}>{l.src && <img src={l.src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}</div>
     case 'text':
       return (
         <div style={{ ...box, overflow: 'visible', color: l.fill ?? '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap',
@@ -52,7 +52,9 @@ function LayerView({ l, sources, uid }: { l: Layer; sources: Source[]; uid: stri
       )
     }
     case 'image':
-      return <div style={{ ...box, background: 'linear-gradient(135deg,#a465f4,#4f179f)' }} />
+      return l.src
+        ? <div style={box}><img src={l.src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /></div>
+        : <div style={{ ...box, background: 'linear-gradient(135deg,#a465f4,#4f179f)' }} />
     case 'source': {
       const src = sources.find((s) => s.id === l.sourceId)
       if (!src) return null

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Anchor, Btn, Help, Icon, Menu } from '../primitives'
 import { useStore } from '../store'
-import { HELP } from '../Shell'
+import { Group, HELP } from '../Shell'
 import { ScenePicture } from '../ScenePicture'
 import { CANVAS_H, CANVAS_W, editScene, findLayer, type Layer, type Tool } from '../model'
 import type { IconName } from '../icons.gen'
@@ -79,7 +79,8 @@ export function CanvasPanel() {
   const onUp = () => { drag.current = null }
 
   return (
-    <div className="center" data-panel="Canvas">
+    // The video is a dock panel like the others (its own tab), so rows of panels can sit under or over it.
+    <Group tabs={['Video']} id="Canvas" style={{ flex: 1, minWidth: 0 }}>
       {live && (
         <div className="livebar">
           <span className="d" />
@@ -134,6 +135,6 @@ export function CanvasPanel() {
         </div>
       </div>
       {s.toast && <span className="toast">{s.toast}</span>}
-    </div>
+    </Group>
   )
 }

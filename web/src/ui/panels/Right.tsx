@@ -1,7 +1,7 @@
 import { Anchor, Btn, FillSlider, Icon, Menu, NumField, Select, Switch, Badge, Field } from '../primitives'
 import { useSelectedLayer, useStore } from '../store'
 import { Group } from '../Shell'
-import { editScene, flatLayers, iconForLayer, iconForSource, scenesUsing, type Layer, type LinkGroup } from '../model'
+import { editScene, flatLayers, iconForLayer, iconForSource, scenesUsing, type Layer, type LinkGroup, type Source } from '../model'
 
 export function LayersPanel({ style }: { style?: React.CSSProperties }) {
   const { s, d } = useStore()
@@ -54,6 +54,11 @@ function LayerRow({ l, depth }: { l: Layer; depth: number }) {
       <Btn icon={vis ? 'eye' : 'eye-off'} variant="ghost" onClick={() => d({ type: 'toggleVisible', id: l.id })} />
       <Menu id="layer" target={l.id} offset={[60, -6]} entries={[
         { text: 'Rename…' },
+        { text: 'Copy', kbd: 'Ctrl C' },
+        ...(l.background ? [] : [{ text: 'Cut', kbd: 'Ctrl X' }]),
+        { text: 'Paste', kbd: 'Ctrl V' },
+        { text: 'Paste linked', kbd: 'Ctrl Shift V' },
+        { sep: true },
         { text: 'Duplicate' },
         { text: 'Group selection' },
         { text: 'Ungroup', disabled: l.kind !== 'group' },
@@ -124,6 +129,7 @@ function SourceSection({ l }: { l: Layer }) {
       {open && (
         <div style={{ padding: '0 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Select value={src.detail?.split(' · ')[0]} />
+          {src.kind === 'media' && <MediaControls src={src} />}
           <div className="row" style={{ gap: 8 }}>
             <span className="caption grow">{count > 1 ? `Changes here apply in every scene that uses ${src.name}.` : `Changes here apply wherever ${src.name} is used.`}</span>
             <Btn text="Open in Sources" variant="ghost" />
@@ -272,6 +278,23 @@ function ToolDefaults() {
   )
 }
 
+/** Play, restart, stop and seek for a video or audio file, under the file (MediaControls.qml). */
+function MediaControls({ src }: { src: Source }) {
+  const m = src.media ?? { playing: false, timeMs: 0, durationMs: 0 }
+  const fmt = (ms: number) => {
+    const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), mm = Math.floor(t / 60) % 60, ss = String(t % 60).padStart(2, '0')
+    return h ? `${h}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`
+  }
+  return (
+    <div className="mediabar">
+      <Btn icon={m.playing ? 'pause' : 'play'} variant="ghost" />
+      <Btn icon="rotate-ccw" variant="ghost" />
+      <Btn icon="square" variant="ghost" />
+      <div className="grow" style={{ marginLeft: 6, minWidth: 120 }}><FillSlider label="" frac={m.timeMs / Math.max(1, m.durationMs)} value={`${fmt(m.timeMs)} / ${fmt(m.durationMs)}`} /></div>
+    </div>
+  )
+}
+
 function SourceInspector({ id }: { id: string }) {
   const { s, d } = useStore()
   const src = s.sources.find((x) => x.id === id)!
@@ -284,6 +307,7 @@ function SourceInspector({ id }: { id: string }) {
       <span className="caption" style={{ lineHeight: 1.4 }}>{kindLabel} · input settings apply to every scene that uses it. Size, crop and filters are set per layer.</span>
       <Select value={src.detail?.split(' · ')[0]} />
       {src.kind === 'camera' && <div className="row" style={{ gap: 6 }}><Select value="1920×1080" /><Select value="30 fps" /></div>}
+      {src.kind === 'media' && <MediaControls src={src} />}
       <span style={{ fontSize: 13, fontWeight: 550, marginTop: 8 }}>Used in</span>
       {used.map((u) => <Btn key={u.id} text={u.name} variant="ghost" style={{ justifyContent: 'flex-start' }} onClick={() => d({ type: 'editScene', id: u.id })} />)}
       {used.length === 0 && <span className="caption">{video ? 'Not on any scene yet — drag it onto the canvas.' : 'Audio source — always mixed in.'}</span>}

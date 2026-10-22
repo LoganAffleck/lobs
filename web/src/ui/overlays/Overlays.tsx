@@ -147,7 +147,7 @@ function SettingsBody({ i }: { i: number }) {
       <span className="caption" style={{ lineHeight: 1.5 }}>LOBS checks for new OBS releases once a day. Downloads are checked against their SHA-256, tested with LOBS before switching, and LOBS goes back to the previous engine if a new one fails to start twice.</span>
     </>
     default: return <div className="card">
-      <Row t="LOBS" sub="0.1.1 · Qt 6.11, C++20" />
+      <Row t="Version" sub="0.3.1 · Qt 6.11, C++20" />
       <Row t="Engine" sub="OBS 32.2.2 (official release build)" />
       <Row t="Shows and settings" sub="C:\Users\you\AppData\Roaming\LOBS\LOBS" />
       <Row t="Open source" sub="OBS Studio (libobs) GPL-2.0 · LOBS GPL-2.0-or-later · Inter (SIL OFL 1.1) · Lucide icons (ISC)" />
@@ -285,6 +285,26 @@ function NewProject() {
   )
 }
 
+/** The next launch after a crash offers to report it (crashDialog in Main.qml). */
+function Crash() {
+  const { d } = useStore()
+  const close = () => d({ type: 'set', patch: { dialog: null } })
+  return (
+    <Scrim>
+      <div className="dialog" style={{ width: 420 }}>
+        <h3>LOBS closed unexpectedly</h3>
+        <span className="muted" style={{ lineHeight: 1.5 }}>Sorry about that. LOBS saved a crash report on this PC. Reporting it on GitHub helps get it fixed. The issue asks for the log, which is safe to post. Keep the .dmp file private: it can hold what LOBS had in memory, like your stream key.</span>
+        <div className="row" style={{ gap: 4, marginTop: 4 }}>
+          <Btn text="Show files" variant="ghost" />
+          <span className="grow" />
+          <Btn text="Not now" variant="secondary" onClick={close} />
+          <Btn text="Report on GitHub" variant="primary" onClick={close} />
+        </div>
+      </div>
+    </Scrim>
+  )
+}
+
 export function Overlays() {
   const { s } = useStore()
   switch (s.dialog) {
@@ -293,6 +313,7 @@ export function Overlays() {
     case 'settings': return <Settings />
     case 'setup': return <Setup />
     case 'newProject': return <NewProject />
+    case 'crash': return <Crash />
     default: return null
   }
 }

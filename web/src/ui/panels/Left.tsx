@@ -151,7 +151,8 @@ function MixerBody() {
         <span className="meta" style={{ marginLeft: 0 }}>{audio.length === 1 ? '1 input' : `${audio.length} inputs`}</span>
         <span className="grow" />
         <Btn icon="search" variant="ghost" />
-        <Btn icon="wand-sparkles" variant="ghost" />
+        {/* Shows the layout in use (rows here) and flips to the other. */}
+        <Btn icon="rows-3" variant="ghost" />
       </div>
       <div className="mixer">
         {audio.map((a) => {
@@ -160,7 +161,8 @@ function MixerBody() {
             <div key={a.id} className="mixrow">
               <div className="row" style={{ gap: 6 }}>
                 <Icon name={iconForSource(a.kind)} color="var(--muted)" />
-                <span className="grow ellipsis" style={{ fontWeight: 550, color: a.muted ? 'var(--muted)' : undefined }}>{a.name}</span>
+                <span className="grow ellipsis" style={{ fontWeight: 550, color: a.muted ? 'var(--muted)' : undefined, cursor: 'grab' }}>{a.name}</span>
+                {a.pinned && <Icon name="pin" size={12} color="var(--muted)" />}
                 <span className="caption" style={{ width: 46, textAlign: 'right' }}>0.0 dB</span>
                 <Btn icon={a.muted ? 'volume-x' : 'volume-2'} variant="ghost" iconColor={a.muted ? 'var(--danger)' : undefined} />
                 <Btn icon="headphone-off" variant="ghost" />

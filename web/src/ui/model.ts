@@ -6,7 +6,7 @@ import type { IconName } from './icons.gen'
 export type SourceKind = 'camera' | 'display' | 'window' | 'game' | 'browser' | 'mic' | 'desktop_audio' | 'image' | 'media'
 export type LayerKind = 'source' | 'text' | 'color' | 'rect' | 'ellipse' | 'arrow' | 'pencil' | 'image' | 'group'
 /** Stand-in pictures for video sources (the web has no capture devices). */
-export type Art = 'facecam' | 'game' | 'desktop' | 'webcam-utility' | 'browser-alerts' | 'none'
+export type Art = 'facecam' | 'game' | 'steam' | 'webcam-utility' | 'browser-alerts' | 'none'
 
 export interface Source {
   id: string
@@ -14,6 +14,10 @@ export interface Source {
   kind: SourceKind
   /** Shown under the name: the device and size, e.g. "Logitech Brio · 1920×1080". */
   detail?: string
+  /** Pinned to the front of the Audio Mixer. */
+  pinned?: boolean
+  /** Media files: playback position and length, ms. */
+  media?: { playing: boolean; timeMs: number; durationMs: number }
   /** A problem badge instead of the detail ("Not found", "In use"). */
   problem?: string
   muted?: boolean
@@ -58,6 +62,8 @@ export interface Layer {
   filters?: Filter[]
   // Content layers
   fill?: string
+  /** Picture URL, drawn over `fill` (image layers, picture backgrounds). */
+  src?: string
   stroke?: string
   strokeWidth?: number
   text?: string
@@ -66,7 +72,7 @@ export interface Layer {
   points?: [number, number][]
   children?: Layer[]
   expanded?: boolean
-  /** The scene's bottom color layer: stays last, can't be dragged. */
+  /** The scene's bottom color layer: stays last, can't be dragged, starts locked. */
   background?: boolean
 }
 
@@ -94,7 +100,7 @@ export interface MenuState {
   at?: [number, number]
 }
 
-export type Dialog = null | 'addSource' | 'transitions' | 'rename' | 'settings' | 'setup' | 'newProject'
+export type Dialog = null | 'addSource' | 'transitions' | 'rename' | 'settings' | 'setup' | 'newProject' | 'crash'
 
 export interface Outputs {
   streaming: boolean
@@ -156,8 +162,6 @@ export interface UiState {
   settingsSection: number
   setupStep: number
   addKind: SourceKind
-  /** Visible app chrome: 'window' adds the Windows title bar the real screenshots have. */
-  frame: 'window' | 'none'
   /** Size of the layout's side columns, px. */
   layout: { left: number; right: number; scenesH: number; sourcesH: number; layersH: number }
 }

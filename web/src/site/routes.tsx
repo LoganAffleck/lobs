@@ -12,7 +12,7 @@ const SITE = 'LOBS'
 const DEFAULT_DESC = 'A free streaming and recording app for Windows on the OBS engine. Add your webcam once and put it in every scene with its own size, crop and filters.'
 
 export const ROUTES: Route[] = [
-  { path: '/', title: 'LOBS: Built on OBS. Made for creating.', description: DEFAULT_DESC, element: () => <Home /> },
+  { path: '/', title: "LOBS: Logan's OBS", description: DEFAULT_DESC, element: () => <Home /> },
   { path: '/docs/', title: `Docs · ${SITE}`, description: 'How LOBS works, panel by panel.', element: () => <DocsIndex /> },
   ...DOCS.map((d) => ({ path: `/docs/${d.slug}/`, title: `${d.title} · ${SITE} docs`, description: d.description || DEFAULT_DESC, element: () => <DocPage doc={d} /> })),
 ]

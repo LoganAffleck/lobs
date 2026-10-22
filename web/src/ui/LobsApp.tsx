@@ -4,7 +4,7 @@ import { useMemo, type CSSProperties } from 'react'
 import { merge, type UiState } from './model'
 import { sampleState } from './sample'
 import { LobsProvider, useStore } from './store'
-import { Header, StatusBar, WindowFrame } from './Shell'
+import { Header, StatusBar } from './Shell'
 import { AssetsPanel, ScenesPanel, SourcesPanel } from './panels/Left'
 import { InspectorPanel, LayersPanel } from './panels/Right'
 import { CanvasPanel } from './panels/Canvas'
@@ -22,7 +22,6 @@ function Editor({ view }: { view: View }) {
   }
   return (
     <>
-      {s.frame === 'window' && <WindowFrame title={s.title} />}
       <Header />
       <div className="dock" onClick={close}>
         <div className="col" style={{ width: s.layout.left }}>

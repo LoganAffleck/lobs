@@ -13,8 +13,8 @@ import { LOGO } from './logo'
 // one sample a frame blended into a short running average (smooth frost without full
 // accumulation), and no work at all when it's off screen or the tab is hidden.
 
-// The hero shows only the stone's lower half (its top runs off the screen), so its lights sit
-// low, where their reflections and the bloom they make land on the part people see.
+// The editor preview covers the stone's middle, so only its rim shows. The lights sit low, so
+// their reflections and bloom land on the part below the preview.
 const HERO_LIGHT: Partial<GemParams> = { keyElevation: -30, keyAzimuth: 0, lightHeight: -60 }
 
 export interface HeroGemOptions {
@@ -196,7 +196,7 @@ export function mountHeroGem(canvas: HTMLCanvasElement, opts: HeroGemOptions): (
 
   // Pointer input. Clicks on the page's own controls, text and the editor model are left alone.
   const target = opts.target ?? canvas
-  const skip = (e: PointerEvent) => !!(e.target as Element).closest?.('a, button, input, select, textarea, h1, p, .stagewrap, .ctas')
+  const skip = (e: PointerEvent) => !!(e.target as Element).closest?.('a, button, input, select, textarea, h1, p, .appframe, .ctas')
   let lastX = 0, lastMove = 0
   const onMove = (e: PointerEvent) => {
     const r = target.getBoundingClientRect()

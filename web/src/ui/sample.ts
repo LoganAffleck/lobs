@@ -11,7 +11,7 @@ const colorCorrection = (brightness = 0.04, contrast = 0.1, saturation = 0.15): 
   ],
 })
 
-const bg = (id: string, fill: string): Layer => ({ id, name: 'Background', kind: 'color', x: 0, y: 0, w: 1920, h: 1080, fill, color: '#fbbf24', background: true })
+const bg = (id: string, fill: string): Layer => ({ id, name: 'Background', kind: 'color', x: 0, y: 0, w: 1920, h: 1080, fill, color: '#fbbf24', background: true, locked: true })
 
 /** The show new docs, shots and videos start from (the app's own sample show, a little fuller). */
 export function sampleState(): UiState {
@@ -19,8 +19,8 @@ export function sampleState(): UiState {
     title: 'LOBS',
     sources: [
       { id: 'src_cam', name: 'Facecam', kind: 'camera', detail: 'Logitech Brio · 1920×1080', art: 'facecam', size: [1920, 1080] },
-      { id: 'src_game', name: 'Game Capture', kind: 'game', detail: 'Hollow Knight · 1920×1080', art: 'game', size: [1920, 1080] },
-      { id: 'src_display', name: 'Display 1', kind: 'display', detail: 'DELL U2723QE · 2560×1440', art: 'desktop', size: [2560, 1440] },
+      { id: 'src_game', name: 'Game Capture', kind: 'game', detail: 'Learn GDScript From Zero · 1920×1080', art: 'game', size: [1920, 1080] },
+      { id: 'src_steam', name: 'Steam', kind: 'window', detail: '[steamwebhelper.exe]: Steam · 2000×1451', art: 'steam', size: [2000, 1451] },
       { id: 'src_alerts', name: 'Alerts', kind: 'browser', detail: 'streamelements.com/overlay', art: 'browser-alerts', size: [1920, 1080] },
       { id: 'src_mic', name: 'Mic', kind: 'mic', detail: 'Shure MV7', level: [-14, -15] },
       { id: 'src_desk', name: 'Desktop Audio', kind: 'desktop_audio', detail: 'Windows default device', level: [-24, -23] },
@@ -31,7 +31,7 @@ export function sampleState(): UiState {
         name: 'Starting Soon',
         layers: [
           { id: 'ly_soon_title', name: 'Title', kind: 'text', x: 560, y: 430, w: 800, h: 150, text: 'Starting soon', fill: '#ffffff', font: { family: 'Inter', size: 120, bold: true }, color: '#22c55e' },
-          { id: 'ly_soon_sub', name: 'Schedule', kind: 'text', x: 660, y: 600, w: 600, h: 60, text: 'Tonight: Path of Pain, no damage', fill: '#c4b5fd', font: { family: 'Inter', size: 40 }, color: '#22c55e' },
+          { id: 'ly_soon_sub', name: 'Schedule', kind: 'text', x: 660, y: 600, w: 600, h: 60, text: 'Tonight: learning GDScript from zero', fill: '#c4b5fd', font: { family: 'Inter', size: 40 }, color: '#22c55e' },
           bg('ly_soon_bg', '#1d1b2e'),
         ],
       },
@@ -44,8 +44,8 @@ export function sampleState(): UiState {
             id: 'ly_chat_cam', name: 'Facecam', kind: 'source', sourceId: 'src_cam', x: 1200, y: 560, w: 640, h: 360, radius: 6, color: '#ef4444',
             filters: [colorCorrection()], links: { filters: ['Gameplay'] },
           },
-          { id: 'ly_chat_desk', name: 'Display 1', kind: 'source', sourceId: 'src_display', x: 80, y: 120, w: 1040, h: 585, radius: 2, color: '#3b82f6' },
-          bg('ly_chat_bg', '#1d1b2e'),
+          { id: 'ly_chat_steam', name: 'Steam', kind: 'source', sourceId: 'src_steam', x: 80, y: 100, w: 1048, h: 760, radius: 2, color: '#3b82f6' },
+          { ...bg('ly_chat_bg', '#1d1b2e'), src: '/art/background.jpg' },
         ],
       },
       {
@@ -123,7 +123,6 @@ export function sampleState(): UiState {
     settingsSection: 0,
     setupStep: 0,
     addKind: 'camera',
-    frame: 'none',
     layout: { left: 320, right: 340, scenesH: 220, sourcesH: 300, layersH: 300 },
   }
 }

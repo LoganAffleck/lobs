@@ -44,6 +44,7 @@ try {
     await page.goto(`${base}/shot.html?shot=${encodeURIComponent(name)}`)
     await page.waitForFunction(() => window.__shotReady !== undefined, null, { timeout: 15000 })
     await page.evaluate(() => window.__shotReady)
+    await page.evaluate(() => Promise.all([...document.images].map((i) => i.decode().catch(() => {}))))
     // Hold animations at their end so menus and dialogs aren't caught mid-fade.
     await page.addStyleTag({ content: '*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; }' })
     await page.screenshot({ path: join(out, `${name}.png`), clip: c ? { x: c[0], y: c[1], width: c[2], height: c[3] } : undefined })

@@ -8,26 +8,18 @@ export const HELP: Record<string, string[]> = {
   Scenes: ['Click: edit a scene without showing it.', 'Show or double-click: switch to the scene.', 'Grid: shows live thumbnails of every scene.', 'Right-click: rename, duplicate with linked or independent layers, or delete.'],
   Sources: ['Inputs: added once, shared by every scene.', 'Place it: drag onto the canvas or double-click.', 'Per scene: size, crop and filters.', 'Files are in Assets. Add text and color from Layers.'],
   Assets: ["Project files: this project's assets folder.", 'Add files: drag in from File Explorer or use + Asset.', 'Place it: drag onto the canvas or double-click.', 'Right-click: show in File Explorer or move to Recycle Bin.'],
-  Layers: ['Order: layers higher in the list draw on top.', 'Linked: settings shared with another scene.', 'Shortcuts: Ctrl+G group, Ctrl+Shift+G ungroup, Ctrl+D duplicate, Delete remove.', 'Copy to: copy layers to another scene.'],
+  Layers: ['Order: layers higher in the list draw on top.', 'Linked: settings shared with another scene.', 'Shortcuts: Ctrl+C / Ctrl+V copy and paste (Ctrl+Shift+V pastes linked), Ctrl+D duplicate, Ctrl+G group, Delete remove.', 'Copy to: copy layers to another scene.'],
   Inspector: ['This scene: layer changes apply here only.', 'Linked: shared with another scene. Unlink to separate.', 'Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.', 'Source: select one in Sources to edit its input.'],
   'Audio Mixer': ['Global: Mic and Desktop Audio play in every scene.', 'Scene audio: plays only in scenes that contain it.', 'Tracks: track 1 goes to the stream; recordings can use tracks 1-6.', 'Monitor: hear it in headphones. Monitor only keeps it out of output.', 'Fader: set the level. Meter shows peak dB.'],
   History: ['Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.', 'Jump: click a step to go back to it.'],
+  Stats: ["Frames missed: the PC couldn't render in time.", 'Frames skipped: the encoder fell behind.', "Dropped frames: the network couldn't keep up.", 'Orange: more than 1%, worth a look.'],
+  Captions: ['Speech to text from one audio source, on this PC.', 'Send to stream: viewers turn on CC to see them.', 'Language: pick it, or let LOBS detect it.', 'Text shows up a few seconds after speech.'],
   Canvas: ['Move: drag a layer. Snaps to edges and layers.', 'Resize: drag a corner. Shift: free resize.', 'Ctrl: drag without snapping.', 'Groups: click selects the group. Each double-click goes one level deeper.', 'Nudge: arrow keys move 1 px, Shift+arrows 10 px.', 'Live lock: hold Alt to move layers while live.', 'Show: switch to this scene.'],
 }
 
-const PANELS = ['Scenes', 'Sources', 'Assets', 'Layers', 'Inspector', 'Audio Mixer', 'History', 'Chat', 'Stream info']
-
-export function WindowFrame({ title }: { title: string }) {
-  return (
-    <div className="winbar">
-      <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#8b5cf6" /><circle cx="6" cy="6" r="3" fill="#e9d5ff" /></svg>
-      <span className="grow">{title}</span>
-      <span className="ctl"><svg width="10" height="10"><path d="M0 5h10" stroke="currentColor" /></svg></span>
-      <span className="ctl"><svg width="10" height="10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" /></svg></span>
-      <span className="ctl"><svg width="10" height="10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" /></svg></span>
-    </div>
-  )
-}
+const PANELS = ['Scenes', 'Sources', 'Assets', 'Layers', 'Inspector', 'Audio Mixer', 'History', 'Stats', 'Captions', 'Chat', 'Stream info']
+// Closed in the default layout (the Window menu opens them).
+const CLOSED = ['Stats', 'Captions', 'Chat', 'Stream info']
 
 function Seg({ icon, text, on, dot = '#22c55e', onClick }: { icon: IconName; text: string; on: boolean; dot?: string; onClick: () => void }) {
   return (
@@ -48,8 +40,12 @@ export function Header() {
   const hov = (b: string) => s.hover?.button === b
   return (
     <div className="header">
-      <span className="brand">LOBS</span>
-      <Btn icon="settings" variant="ghost" style={{ marginRight: 8 }} hov={hov('settings')} onClick={() => d({ type: 'set', patch: { dialog: 'settings' } })} />
+      {/* The top bar is the title bar: the app's mark, name and Settings are one button. */}
+      <button className={`brand ${hov('settings') ? 'hov' : ''}`} data-ui="settings" onClick={() => d({ type: 'set', patch: { dialog: 'settings' } })}>
+        <img src="/brand/lobs-gem-64.png" alt="" width={20} height={20} draggable={false} />
+        LOBS
+        <Icon name="settings" size={14} color={hov('settings') ? 'var(--fg)' : 'var(--muted)'} />
+      </button>
       <Btn text="New" variant="ghost" hov={hov('New')} onClick={() => d({ type: 'set', patch: { dialog: 'newProject' } })} />
       <Btn text="Open" variant="ghost" hov={hov('Open')} />
       <Anchor>
@@ -66,7 +62,7 @@ export function Header() {
       <Anchor>
         <Btn text="Window" variant="ghost" sel={s.menu?.id === 'window'} onClick={() => menu('window')} />
         <Menu id="window" width={240} entries={[
-          ...PANELS.map((p) => ({ text: p, sel: !['Chat', 'Stream info'].includes(p) })),
+          ...PANELS.map((p) => ({ text: p, sel: !CLOSED.includes(p) })),
           { sep: true },
           { text: 'Show all panels' },
           { text: 'Reset layout' },
@@ -90,6 +86,11 @@ export function Header() {
           {!o.streaming ? 'Go live' : o.confirmingEnd ? 'Click again to end stream' : `LIVE  ${o.streamTime ?? '00:00:00'}`}
           {o.streaming && !o.confirmingEnd && <span className="kbps">{Math.round(o.kbps ?? 0)} kbps</span>}
         </button>
+      </div>
+      <div className="winbtns">
+        <span className="winbtn"><Icon name="minus" size={15} color="var(--muted)" /></span>
+        <span className="winbtn"><Icon name="square" size={15} color="var(--muted)" /></span>
+        <span className="winbtn close"><Icon name="x" size={15} color="var(--muted)" /></span>
       </div>
     </div>
   )
