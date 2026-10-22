@@ -25,7 +25,7 @@ ApplicationWindow {
 
     property int sceneView: 0 // 0 list, 1 grid
     onSceneViewChanged: app.setGridVisible(sceneView === 1)
-    readonly property bool dialogOpen: setupWizard.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
+    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
@@ -102,7 +102,7 @@ ApplicationWindow {
         }
     }
     // First run: the setup assistant, once the layout is up.
-    Timer { interval: 900; running: !app.uiFlag("setup/done", false) && app.envValue("LOBS_NO_SETUP") === ""; onTriggered: setupWizard.open() }
+    Timer { id: setupTimer; interval: 900; running: !app.uiFlag("setup/done", false) && app.envValue("LOBS_NO_SETUP") === ""; onTriggered: setupWizard.open() }
     // A press on empty space anywhere (panel gaps, around the canvas, blank list area) deselects.
     // It sits under all content, so only presses nothing else takes reach it; it never consumes one.
     background: Rectangle {
@@ -2011,6 +2011,32 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: renameDialog.close() }
                 FButton { text: "Rename"; variant: "primary"; onClicked: renameDialog.apply() }
+            }
+        }
+    }
+    // Last run crashed: offer to report it (a minidump and the log are in the crash folder).
+    FDialog {
+        id: crashDialog
+        title: "LOBS closed unexpectedly"
+        width: 420
+        closePolicy: Popup.NoAutoClose
+        // After the setup assistant on a first run, so one doesn't cover the other.
+        Timer { interval: 900; running: crashReport.pending && !setupTimer.running && !setupWizard.visible && !crashDialog.visible; onTriggered: crashDialog.open() }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                text: "Sorry about that. LOBS saved a crash report on this PC. Reporting it on GitHub helps get it fixed. The issue asks for the log, which is safe to post. Keep the .dmp file private: it can hold what LOBS had in memory, like your stream key."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                FButton { text: "Show files"; variant: "ghost"; onClicked: crashReport.openFolder() }
+                Item { Layout.fillWidth: true }
+                FButton { text: "Not now"; variant: "secondary"; onClicked: { crashReport.dismiss(); crashDialog.close() } }
+                FButton { text: "Report on GitHub"; variant: "primary"; onClicked: { crashReport.report(); crashReport.dismiss(); crashDialog.close() } }
             }
         }
     }

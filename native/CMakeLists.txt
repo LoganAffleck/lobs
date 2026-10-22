@@ -40,6 +40,7 @@ qt_add_executable(LOBS WIN32
     src/rows_model.cpp
     src/window_chrome.cpp src/window_chrome.h
     src/captions.cpp src/captions.h
+    src/crash_report.cpp src/crash_report.h
     src/rows_model.h
     src/projector.h
     src/browser_view.h
@@ -69,8 +70,8 @@ target_include_directories(LOBS PRIVATE ${LIBOBS_INCLUDE})
 # whisper.cpp (live captions), built by deps/build-whisper.bat
 target_include_directories(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/include)
 target_link_libraries(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/lib/whisper.lib)
-target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys dwmapi)
+target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS LOBS_VERSION="${PROJECT_VERSION}")
+target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::Network KDAB::kddockwidgets ${LIBOBS_IMPLIB} crypt32 version delayimp shell32 ole32 propsys dwmapi dbghelp)
 # libobs is loaded from the engine folder chosen at startup (<app>/engine/<version>), so it
 # must not be resolved before main() runs.
 target_link_options(LOBS PRIVATE "/DELAYLOAD:obs.dll")

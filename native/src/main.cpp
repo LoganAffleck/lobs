@@ -2,6 +2,7 @@
 // item is where libobs renders the edited scene, and where canvas mouse input lands.
 #include "window_chrome.h"
 #include "captions.h"
+#include "crash_report.h"
 #include "app.h"
 
 #include <kddockwidgets/Config.h>
@@ -553,6 +554,8 @@ int main(int argc, char *argv[])
 	log.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
 	g_log = &log;
 	base_set_log_handler(logHandler, nullptr);
+	const QString crashDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/crashes";
+	crash_report::install(crashDir, root + "/lobs.log");
 
 	blog(LOG_INFO, "[lobs] startup: app setup done");
 	if (splash)
@@ -571,6 +574,7 @@ int main(int argc, char *argv[])
 	blog(LOG_INFO, "[lobs] startup: engine up");
 	if (splash)
 		splash->step("Loading your show");
+	crash_report::install(crashDir, root + "/lobs.log"); // again: the engine's modules may have set their own
 	EngineUpdater engineUpdater(sel);
 
 	// Self-tests work on a throwaway document, so they never touch the user's show.
@@ -608,6 +612,7 @@ int main(int argc, char *argv[])
 	// read them while the windows close.
 	WindowChrome chrome;
 	Captioner captions(&engine);
+	CrashReport crashReport(crashDir);
 	QQmlApplicationEngine qml;
 	KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&qml);
 	PreviewHost previewHost(&engine, &controller);
@@ -636,6 +641,7 @@ int main(int argc, char *argv[])
 	qml.rootContext()->setContextProperty("Pal", palMap);
 	qml.rootContext()->setContextProperty("captions", &captions);
 	qml.rootContext()->setContextProperty("chrome", &chrome);
+	qml.rootContext()->setContextProperty("crashReport", &crashReport);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
 	qml.addImageProvider("icon", new IconProvider(root + "/icons"));
@@ -653,6 +659,10 @@ int main(int argc, char *argv[])
 #ifdef LOBS_TESTS
 	if (scenario)
 		lobs_test::startScenario(app, controller, engine, qml, app.arguments()[scenarioAt + 1], app.arguments()[scenarioAt + 2]);
+#endif
+#ifdef LOBS_TESTS
+	if (qEnvironmentVariableIsSet("LOBS_CRASH_TEST")) // checks the crash report end to end
+		QTimer::singleShot(3000, [] { *static_cast<volatile int *>(nullptr) = 1; });
 #endif
 	// The UI is up on this engine: it's good (ends a new engine's trial), then look for
 	// OBS updates at most once a day, a little after startup.
