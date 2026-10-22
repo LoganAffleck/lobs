@@ -30,4 +30,8 @@ installer when one of these is set (otherwise it builds unsigned and says so):
 - **A certificate in your Windows certificate store** (OV or EV, USB tokens included): set
   `LOBS_SIGN_THUMBPRINT` to its SHA-1 thumbprint.
 
+LOBS's own account is already set up in `native/installer/signing-metadata.json`: with the Artifact
+(Trusted) Signing client tools installed (`winget install Microsoft.Azure.ArtifactSigningClientTools`)
+and `az login` done, both scripts sign with it, no variables needed.
+
 `installer\sign.bat <files>` signs files by hand. It needs `signtool.exe` from the Windows SDK.

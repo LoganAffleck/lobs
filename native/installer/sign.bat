@@ -6,6 +6,9 @@ rem   LOBS_SIGN_THUMBPRINT      SHA-1 thumbprint of a code signing certificate i
 rem                             certificate store (an OV/EV certificate, USB tokens included)
 rem With neither set, nothing is signed (exit code 0) so local builds still work.
 setlocal
+rem LOBS's own Azure account (signing-metadata.json) is used when its signing tools are installed.
+set "DEFAULT_DLIB=%LOCALAPPDATA%\Microsoft\MicrosoftArtifactSigningClientTools\Azure.CodeSigning.Dlib.dll"
+if "%LOBS_SIGN_AZURE_METADATA%%LOBS_SIGN_THUMBPRINT%"=="" if exist "%DEFAULT_DLIB%" ( set "LOBS_SIGN_AZURE_METADATA=%~dp0signing-metadata.json" & set "LOBS_SIGN_AZURE_DLIB=%DEFAULT_DLIB%" )
 if "%LOBS_SIGN_AZURE_METADATA%%LOBS_SIGN_THUMBPRINT%"=="" ( echo sign: no certificate set up, leaving unsigned & exit /b 0 )
 set SIGNTOOL=
 for /d %%v in ("%ProgramFiles(x86)%\Windows Kits\10\bin\10.*") do if exist "%%v\x64\signtool.exe" set "SIGNTOOL=%%v\x64\signtool.exe"
