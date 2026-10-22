@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(LOBS VERSION 0.3.1 LANGUAGES C CXX)
+project(LOBS VERSION 0.3.2 LANGUAGES C CXX)
 # The OBS engine each release ships with and is tested against (build.bat installs it).
 set(LOBS_ENGINE_VERSION 32.2.2)
 
