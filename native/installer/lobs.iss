@@ -4,7 +4,7 @@
 ; doesn't need to be installed.
 
 #define AppName "LOBS"
-#define AppVersion "0.3.0"
+#define AppVersion "0.3.1"
 #define EngineVersion "32.2.2"
 #define Dist "..\dist"
 
