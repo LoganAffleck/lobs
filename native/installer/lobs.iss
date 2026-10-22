@@ -28,6 +28,11 @@ WizardStyle=modern
 SetupIconFile=..\resources\lobs.ico
 LicenseFile=..\..\LICENSE
 UninstallDisplayIcon={app}\LOBS.exe
+#ifdef Sign
+; The installer and its uninstaller are signed with sign.bat (build-installer.bat passes it in).
+SignTool=lobs
+SignedUninstaller=yes
+#endif
 CloseApplications=yes
 RestartApplications=no
 

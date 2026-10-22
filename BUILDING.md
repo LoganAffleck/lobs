@@ -17,3 +17,17 @@ Qt 6.11.1 for MSVC 2022 x64 at `C:\Qt\6.11.1\msvc2022_64`, and Inno Setup 6 for 
    release into `native\deps\downloads\obs\`, and `vc_redist.x64.exe` into `native\deps\redist\`.
 5. `native\build.bat` builds and deploys to `native\dist\LOBS`.
 6. `native\installer\build-installer.bat` makes `native\dist\installer\LOBS-Setup-<version>.exe`.
+
+## Code signing
+
+Unsigned installers get a SmartScreen warning. `build-installer.bat` signs LOBS's own files and the
+installer when one of these is set (otherwise it builds unsigned and says so):
+
+- **Azure Trusted Signing** (cheapest, about $10/month; SmartScreen trusts it quickly): set up an
+  account and certificate profile in Azure, install the Trusted Signing client tools, sign in with
+  `az login`, then set `LOBS_SIGN_AZURE_DLIB` to `Azure.CodeSigning.Dlib.dll` and
+  `LOBS_SIGN_AZURE_METADATA` to a `metadata.json` naming your endpoint, account and profile.
+- **A certificate in your Windows certificate store** (OV or EV, USB tokens included): set
+  `LOBS_SIGN_THUMBPRINT` to its SHA-1 thumbprint.
+
+`installer\sign.bat <files>` signs files by hand. It needs `signtool.exe` from the Windows SDK.
