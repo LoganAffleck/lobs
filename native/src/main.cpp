@@ -50,6 +50,11 @@
 #include <QThreadPool>
 #include <QTimer>
 #include <QWindow>
+#include <QRasterWindow>
+#include <QPainter>
+#include <QScreen>
+
+#include <memory>
 
 #include <windows.h>
 #ifdef LOBS_TESTS
@@ -60,6 +65,8 @@ QString installEngineZip(const QString &zip, const QString &version, QString *no
 
 static QFile *g_log = nullptr;
 
+static QElapsedTimer g_uptime; // log lines carry ms since launch, to see where startup goes
+
 static void logHandler(int level, const char *fmt, va_list args, void *)
 {
 	char buf[4096];
@@ -67,7 +74,7 @@ static void logHandler(int level, const char *fmt, va_list args, void *)
 	if (g_log) {
 		static const char *names[] = {"error", "warning", "info", "debug"};
 		const int idx = level <= LOG_ERROR ? 0 : level <= LOG_WARNING ? 1 : level <= LOG_INFO ? 2 : 3;
-		QTextStream(g_log) << names[idx] << ": " << buf << "\n";
+		QTextStream(g_log) << "[" << g_uptime.elapsed() << "ms] " << names[idx] << ": " << buf << "\n";
 		g_log->flush();
 	}
 }
@@ -380,8 +387,57 @@ static int runEngineSmokeTest(QGuiApplication &app, Engine &engine, const QStrin
 	return app.exec();
 }
 
+/// Shown the moment LOBS starts, until the main window draws its first frame: the logo and
+/// the step startup is on. A plain raster window, so it needs no QML and shows in milliseconds.
+class Splash : public QRasterWindow {
+public:
+	explicit Splash(const QString &iconDir)
+	{
+		setFlags(Qt::SplashScreen | Qt::FramelessWindowHint);
+		resize(360, 200);
+		if (QScreen *s = QGuiApplication::primaryScreen())
+			setPosition(s->availableGeometry().center() - QPoint(width() / 2, height() / 2));
+		m_logo.load(iconDir + "/lobs-128.png"); // drawn at 64: sharp on high-DPI screens
+		show();
+		step("Starting");
+	}
+	void step(const QString &text)
+	{
+		m_text = text;
+		update();
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); // paint now: the next step blocks
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		QPainter p(this);
+		p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+		p.fillRect(QRect(QPoint(), size()), QColor("#1e1e1e"));
+		p.setPen(QColor("#1fffffff"));
+		p.drawRect(QRect(QPoint(), size()).adjusted(0, 0, -1, -1));
+		p.drawImage(QRect(width() / 2 - 32, 44, 64, 64), m_logo);
+		QFont f = QGuiApplication::font();
+		f.setPixelSize(20);
+		f.setWeight(QFont::DemiBold);
+		p.setFont(f);
+		p.setPen(QColor("#f5f5f5"));
+		p.drawText(QRect(0, 116, width(), 28), Qt::AlignCenter, "LOBS");
+		f.setPixelSize(12);
+		f.setWeight(QFont::Normal);
+		p.setFont(f);
+		p.setPen(QColor("#a3a3a3"));
+		p.drawText(QRect(0, 150, width(), 20), Qt::AlignCenter, m_text + QString::fromUtf8("…"));
+	}
+
+private:
+	QImage m_logo;
+	QString m_text;
+};
+
 int main(int argc, char *argv[])
 {
+	g_uptime.start();
 	QGuiApplication app(argc, argv);
 	app.setOrganizationName("LOBS");
 	app.setApplicationName("LOBS");
@@ -489,11 +545,18 @@ int main(int argc, char *argv[])
 			icon.addFile(root + QString("/icons/lobs-%1.png").arg(s), QSize(s, s));
 		QGuiApplication::setWindowIcon(icon);
 	}
+	// No splash for headless runs (self-tests, smoke tests): nobody's waiting on them.
+	std::unique_ptr<Splash> splash;
+	if (!isSelfTestRun(app.arguments()) && !app.arguments().contains("--engine-smoketest"))
+		splash = std::make_unique<Splash>(root + "/icons");
 	QFile log(root + "/lobs.log");
 	log.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
 	g_log = &log;
 	base_set_log_handler(logHandler, nullptr);
 
+	blog(LOG_INFO, "[lobs] startup: app setup done");
+	if (splash)
+		splash->step("Starting the video engine");
 	Engine engine;
 	qmlRegisterType<BrowserView>("LOBS.Web", 1, 0, "BrowserView");
 	qmlRegisterType<RowsModel>("LOBS.Models", 1, 0, "RowsModel");
@@ -505,6 +568,9 @@ int main(int argc, char *argv[])
 		engine.resetVideo(); // apply saved output size and FPS
 		BrowserView::setEngineReady(true);
 	}
+	blog(LOG_INFO, "[lobs] startup: engine up");
+	if (splash)
+		splash->step("Loading your show");
 	EngineUpdater engineUpdater(sel);
 
 	// Self-tests work on a throwaway document, so they never touch the user's show.
@@ -523,6 +589,9 @@ int main(int argc, char *argv[])
 	if (const int st = int(app.arguments().indexOf("--engine-smoketest")); st > 0 && st + 1 < app.arguments().size())
 		return runEngineSmokeTest(app, engine, docPath, app.arguments()[st + 1]);
 	App controller(&engine, docPath);
+	blog(LOG_INFO, "[lobs] startup: show loaded");
+	if (splash)
+		splash->step("Opening the workspace");
 
 	KDDockWidgets::initFrontend(KDDockWidgets::FrontendType::QtQuick);
 	auto &dockConfig = KDDockWidgets::Config::self();
@@ -573,8 +642,14 @@ int main(int argc, char *argv[])
 	qml.loadFromModule("LOBS", "Main");
 	if (qml.rootObjects().isEmpty())
 		return 1;
-	if (auto *mainWindow = qobject_cast<QQuickWindow *>(qml.rootObjects().first()))
+	blog(LOG_INFO, "[lobs] startup: UI built");
+	if (auto *mainWindow = qobject_cast<QQuickWindow *>(qml.rootObjects().first())) {
+		QObject::connect(mainWindow, &QQuickWindow::frameSwapped, mainWindow, [&splash] {
+			blog(LOG_INFO, "[lobs] startup: first frame");
+			QTimer::singleShot(0, [&splash] { splash.reset(); });
+		}, Qt::SingleShotConnection);
 		chrome.attach(mainWindow); // the top bar is the title bar
+	}
 #ifdef LOBS_TESTS
 	if (scenario)
 		lobs_test::startScenario(app, controller, engine, qml, app.arguments()[scenarioAt + 1], app.arguments()[scenarioAt + 2]);
