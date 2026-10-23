@@ -431,7 +431,11 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Not covered by any story:** the 0.3.x features: the self-updater (ab33024, which also swaps the OBS engine), crash reports (be68555), the splash window, the video panel's tab drag (d993b40), the title-bar top bar, and Audio Mixer reorder and pin (22fc1d5). Their stories were written by the feature commits themselves, or don't exist, so they've had no independent QA.
 
 ## LOBS-039 · S3 · Each layer click keeps twice as much memory since the filter catalog (70256d3)
-- **Story:** RG-05 (click check) · **Status:** Confirmed, 5 of 5 runs on `main` 3ca3966 · regression from 70256d3 ("Layer filters match OBS's")
+- **Fix pass 3:** Fixed in the `Fix LOBS-039` commit · verified in `runs/20261023-165825` (RG-05 passes) and `runs/20261023-170101` (FX-01…06u).
+  - **Cause (measured, not the leads below):** the leak was in the UI. With `t.blockAppSignals` on, 100 clicks kept nothing (`_probe-clicks.js`); with the Inspector unloaded, nothing either. One of the 9 clicked layers shows 10 filters through a link. Each visit built 10 filter cards with their controls, and each move away destroyed them, keeping about 5 MB per round trip. This is older than 70256d3 (about 0.35 MB/click on bd7182d), and 70256d3 made each card bigger: Color Correction went from 5 settings to 8, two of them color fields. `t.churn` shows `FColorField` keeping about 28 KB per create/destroy (its picker `Popup` was built with the field). The other controls keep about 2 KB each in a real card, but much more in the live Inspector.
+  - **Fix:** filter cards and their setting rows are kept once built. A layer with fewer filters hides the extra ones, which keep their last filter so their controls aren't rebuilt (`Main.qml`, Filters section). `FColorField` builds its picker the first time it opens.
+  - **Result (`_probe-clicks.js`, settled MB per 100 clicks):** +97/+63/+72 before → **+33 once (building the cards), then +0/−1/+5**. RG-05 clicks pass. New UI checks: FX-05u (a reused card shows the new layer's filter and values) and FX-06u (the picker opens, applies a typed hex and opens again).
+- **Story:** RG-05 (click check) · **Status:** Fixed (above) · was: Confirmed, 5 of 5 runs on `main` 3ca3966, regression from 70256d3 ("Layer filters match OBS's")
 - **Measured (heavy, 100 `selectLayer` calls on scene 2, settled memory):**
 
   | Build | MB kept per click | Runs |
@@ -440,7 +444,7 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
   | `main` 3ca3966 (adds 70256d3) | **0.91–0.97** ❌ (limit 0.5) | `runs/20261023-160612`, `-161523`, `-161620`, `-161712`, `-161806` |
 
   Switching is unaffected (0.15–0.23 MB/switch), and `25-filters` passes.
-- **Leads (from the diff, not profiled):** the Inspector view is rebuilt on every selection, and 70256d3 added to it:
+- **Leads (from the diff, not profiled; wrong, see the fix above):** the Inspector view is rebuilt on every selection, and 70256d3 added to it:
   1. a `FileDialog` (`filterFilePicker`, [Main.qml](../native/qml/Main.qml)), which is a native dialog helper per Inspector build;
   2. `options: app.filterTypes()`, a fresh list for the "Add filter…" select each time;
   3. one `Loader` per filter setting, now up to about 10 for Chroma Key and Color Correction (was 3–4), plus `FColorField`/`FSelect` controls with popups.

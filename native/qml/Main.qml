@@ -1800,13 +1800,25 @@ ApplicationWindow {
                     visible: sv.d.mode === "layer"
                     title: "Filters"; group: "filters"; linkedWith: sv.d.linkFilters || ""; sections: sv.d.sections || ({})
                     Repeater {
+                        id: filterCards
                         // Keyed by position, not by the filter objects: values change on every slider
                         // move, and a new model array would recreate the slider mid-drag.
-                        model: (sv.d.filters || []).length
+                        // Cards are kept once built and hidden when a layer has fewer filters:
+                        // building and dropping them on every click kept memory each time (LOBS-039).
+                        readonly property int shown: (sv.d.filters || []).length
+                        property int built: 0
+                        onShownChanged: built = Math.max(built, shown)
+                        Component.onCompleted: built = shown
+                        model: built
                         delegate: Rectangle {
                             id: card
                             required property int index
-                            readonly property var modelData: (sv.d.filters || [])[index] || ({ enabled: false, label: "", params: [] })
+                            // A hidden card keeps its last filter, so its controls stay built.
+                            property var modelData: ({ enabled: false, label: "", params: [] })
+                            readonly property var live: (sv.d.filters || [])[index]
+                            onLiveChanged: if (live) modelData = live
+                            Component.onCompleted: if (live) modelData = live
+                            visible: index < filterCards.shown
                             Layout.fillWidth: true
                             implicitHeight: fcol.implicitHeight + 16
                             radius: Pal.radius + 2
@@ -1825,13 +1837,22 @@ ApplicationWindow {
                                     FButton { iconName: "trash-2"; variant: "ghost"; onClicked: app.removeFilter(card.index); tip: "Remove filter" }
                                 }
                                 Repeater {
-                                    model: card.modelData.params.length
+                                    id: paramRows
+                                    // Kept like the cards: a filter with fewer settings hides the rest.
+                                    readonly property int shown: card.modelData.params.length
+                                    property int built: 0
+                                    onShownChanged: built = Math.max(built, shown)
+                                    Component.onCompleted: built = shown
+                                    model: built
                                     // One control per setting, by kind (see native/src/model/video_fx.h).
                                     delegate: Loader {
                                         required property int index
                                         Layout.fillWidth: true
-                                        readonly property var p: card.modelData.params[index] || ({ key: "", kind: "slider", value: 0, visible: false })
-                                        visible: p.visible
+                                        property var p: ({ key: "", kind: "slider", value: 0, visible: false })
+                                        readonly property var live: card.modelData.params[index]
+                                        onLiveChanged: if (live) p = live
+                                        Component.onCompleted: if (live) p = live
+                                        visible: index < paramRows.shown && p.visible
                                         active: p.visible
                                         sourceComponent: p.kind === "color" ? colorParam : p.kind === "choice" ? choiceParam : p.kind === "file" ? fileParam
                                                        : p.kind === "toggle" ? toggleParam : numParam

@@ -140,3 +140,51 @@ story("FX-04", "OBS import brings every catalog filter over with its settings", 
 	check("none of them is reported as missing controls", !/has no LOBS controls/.test(app.toast), app.toast);
 	t.removeFile(path);
 });
+
+// LOBS-039: filter cards and their controls are reused between layers, not rebuilt. A reused
+// card must show the new layer's filter and settings, and nothing from the last one.
+story("FX-05u", "Moving between layers shows each layer's own filter cards and settings", () => {
+	fresh();
+	app.editScene(t.doc().sceneOrder[0]);
+	const two = placeColor("Two filters", "#ff0000");
+	sel(two); app.addFilter("color"); app.addFilter("sharpness");
+	const one = placeColor("One filter", "#00ff00");
+	sel(one); app.addFilter("chroma_key");
+	const none = placeColor("No filters", "#0000ff");
+	const shows = label => t.items(label).some(i => i.text === label);
+	const seen = () => ({ cc: shows("Color Correction"), sharpen: shows("Sharpen"), chroma: shows("Chroma Key"),
+	                      gamma: shows("Gamma"), similarity: shows("Similarity"), multiply: shows("Color multiply") });
+	sel(two); t.wait(200);
+	eq("two filters: Color Correction and Sharpen", seen(), { cc: true, sharpen: true, chroma: false, gamma: true, similarity: false, multiply: true });
+	sel(one); t.wait(200);
+	eq("then one filter: only Chroma Key and its settings", seen(), { cc: false, sharpen: false, chroma: true, gamma: true, similarity: true, multiply: false });
+	sel(none); t.wait(200);
+	eq("then none: no cards", seen(), { cc: false, sharpen: false, chroma: false, gamma: false, similarity: false, multiply: false });
+	sel(two); t.wait(200);
+	eq("and back: both cards again", seen(), { cc: true, sharpen: true, chroma: false, gamma: true, similarity: false, multiply: true });
+	app.setFilterValue(1, "amount", 0.5, true); t.wait(200);
+	check("a reused card's slider shows the new value", t.items("0.50").length > 0, t.items("0.50").map(i => i.cls));
+});
+
+// FColorField builds its picker on first open (LOBS-039): it must still open, apply a color
+// typed in its hex box and close, and open again later.
+story("FX-06u", "A color field's picker opens, applies a typed color, and opens again", () => {
+	fresh();
+	app.editScene(t.doc().sceneOrder[0]);
+	const r = placeColor("Picked", "#123456");
+	sel(r); t.wait(200);
+	const src = () => t.doc().sources[t.doc().instances[r].sourceId].settings.color;
+	check("the color field shows the layer's color", t.items("#123456").length > 0, t.items("#123456").map(i => i.cls));
+	t.click("#123456"); t.wait(300);
+	check("clicking it opens the picker", t.items("Swatches").length > 0);
+	const hex = t.items("#123456").filter(i => /Text(Field|Input)|FInput/.test(i.cls))[0];
+	check("the picker has a hex box with the color", !!hex, t.items("#123456").map(i => i.cls));
+	if (!hex) return;
+	t.clickAt(hex.x + hex.w / 2, hex.y + hex.h / 2); t.key("Ctrl+A"); t.typeText("#abcdef"); t.key("Return"); t.wait(300);
+	eq("Enter in the hex box applies the color", src(), "#abcdef");
+	check("and closes the picker", t.items("Swatches").length === 0);
+	sel(placeColor("Other", "#00ff00")); t.wait(200); sel(r); t.wait(200);
+	t.click("#ABCDEF"); t.wait(300);
+	check("it opens again on a later visit", t.items("Swatches").length > 0);
+	t.key("Escape"); t.wait(200);
+});
