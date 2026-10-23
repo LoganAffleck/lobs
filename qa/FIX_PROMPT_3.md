@@ -1,6 +1,6 @@
 # Fix pass 3: prompt for the main agent
 
-QA ran the full suite on v0.3.2 (`b60b9e5`, `runs/20261023-155329`): 97 pass, 3 fail. Read the last two sections of `qa/BUGS.md` first (LOBS-038 and "QA run at HEAD `b60b9e5`"), then the entries named below. The ground rules from `qa/FIX_PROMPT.md` still apply:
+QA ran the full suite on `main` (`3ca3966`: v0.3.2 + layer filters + LOBS-037, `runs/20261023-160612`): 101 pass, 4 fail. Read the last three entries of `qa/BUGS.md` first (LOBS-038, "QA run at HEAD `b60b9e5`" and LOBS-039), then the entries named below. The ground rules from `qa/FIX_PROMPT.md` still apply:
 - prove each fix with the named story;
 - don't weaken tests (a real test fix goes in its own `qa: test fix` commit);
 - one bug per commit;
@@ -33,11 +33,11 @@ QA's probes in `qa/scenarios/90-regression.js` stay as they are. If you think on
 - **Expected direction:** don't create text renderers for scenes that aren't showing (park them like LOBS-034 parks filters), or share one renderer per text source rather than one per layer. Report what's left with a cause.
 - **Done when:** GDI on stress is under 1,000 after open, PF-01…07-stress still pass, and text renders the same (compare the snapshots in `20-scenes-layers`).
 
-## 4. Memory per layer click is close to its limit (RG-05)
+## 4. Memory per layer click doubled with the filter catalog (LOBS-039, RG-05)
 
-- With RG-05 measuring settled memory now, clicks retain **0.41–0.48 MB each** (limit 0.5): runs `20261023-154700` … `-155109`. The old reading hid this.
-- **Do:** heap-profile 100 `selectLayer` calls on the heavy show. Find out what each click keeps: Inspector bindings, history, selection snapshots, or QML objects.
-- **Done when:** you report the cause, and RG-05 click retention is under 0.25 MB, or you explain why ~0.45 MB is the bounded cost of something that stops growing.
+- RG-05's click check fails on `main`: **0.91–0.97 MB kept per click** (limit 0.5), 5 of 5 runs. Before 70256d3 it was 0.40–0.48. See LOBS-039 for runs and leads (a `FileDialog` and `app.filterTypes()` per Inspector build, and more `Loader`s per filter).
+- **Do:** heap-profile 100 `selectLayer` calls on the heavy show, find what each click keeps, and fix it without changing the filter UI.
+- **Done when:** RG-05 passes 3 runs in a row, with click retention back under 0.5 MB. Aim for under 0.25 MB, or explain why ~0.4 MB is bounded and stops growing. `25-filters` still passes.
 
 ## 5. Optional, only if time allows
 - **LOBS-036:** share instances individually in `Doc` so an edit copies one layer, not the whole 3,270-entry table. Then raise the history cap again. PF-06-stress must stay passing.

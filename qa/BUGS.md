@@ -429,3 +429,21 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Stress resources after open:** still **2,006 GDI objects and 237,807 handles**, 4.1 GB private (LOBS-025; unchanged).
 - **Passing and better than targets:** stress open 2.5 s, select scene p95 53 ms, Show p95 39 ms, linked edit across 100 scenes p95 65 ms, autosave stall max 56 ms, 181 KB per edit (LOBS-036 cap: 65 steps).
 - **Not covered by any story:** the 0.3.x features: the self-updater (ab33024, which also swaps the OBS engine), crash reports (be68555), the splash window, the video panel's tab drag (d993b40), the title-bar top bar, and Audio Mixer reorder and pin (22fc1d5). Their stories were written by the feature commits themselves, or don't exist, so they've had no independent QA.
+
+## LOBS-039 · S3 · Each layer click keeps twice as much memory since the filter catalog (70256d3)
+- **Story:** RG-05 (click check) · **Status:** Confirmed, 5 of 5 runs on `main` 3ca3966 · regression from 70256d3 ("Layer filters match OBS's")
+- **Measured (heavy, 100 `selectLayer` calls on scene 2, settled memory):**
+
+  | Build | MB kept per click | Runs |
+  |---|---|---|
+  | v0.3.2 b60b9e5 + LOBS-037 | 0.40–0.48 ✅ | `runs/20261023-155329`, `-154700` … `-155109` |
+  | `main` 3ca3966 (adds 70256d3) | **0.91–0.97** ❌ (limit 0.5) | `runs/20261023-160612`, `-161523`, `-161620`, `-161712`, `-161806` |
+
+  Switching is unaffected (0.15–0.23 MB/switch), and `25-filters` passes.
+- **Leads (from the diff, not profiled):** the Inspector view is rebuilt on every selection, and 70256d3 added to it:
+  1. a `FileDialog` (`filterFilePicker`, [Main.qml](../native/qml/Main.qml)), which is a native dialog helper per Inspector build;
+  2. `options: app.filterTypes()`, a fresh list for the "Add filter…" select each time;
+  3. one `Loader` per filter setting, now up to about 10 for Chroma Key and Color Correction (was 3–4), plus `FColorField`/`FSelect` controls with popups.
+
+  Heavy has 200 filters across its layers, so most clicks build several filter cards.
+- **Suggested fix:** one `FileDialog` for the window, outside the Inspector component. Read `filterTypes()` once (it's a static catalog). Make sure filter-card popups are created on open, not with the card. Confirm with a heap profile of 100 clicks before and after.
