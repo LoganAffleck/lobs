@@ -58,14 +58,20 @@ Rectangles round their own corners, so the stroke follows the curve.
 
 ## Filters
 
-Click **Add filter…** to add one of four video filters to this layer. Each filter card has an on/off switch and **Remove filter**.
+Click **Add filter…** to add a video filter to this layer. These are OBS's own filters, with OBS's settings and defaults. Each filter card has an on/off switch and **Remove filter**.
 
 | Filter | Parameters (range, default) |
 |---|---|
-| **Color Correction** | Brightness, Contrast, Saturation, Gamma (-1 to 1, default 0); Hue (-180 to 180, default 0) |
-| **Chroma Key** | Key color (text field, default #00ff00); Similarity (1 to 1000, default 400); Smoothness (1 to 1000, default 80) |
-| **Sharpen** | Amount (0 to 1, default 0.08) |
-| **LUT** | Path to the LUT file (text field); Amount (0 to 1, default 1.0) |
+| **Color Correction** | Gamma (-3 to 3); Contrast (-4 to 4); Brightness (-1 to 1); Saturation (-1 to 5); Hue shift (-180° to 180°), all default 0; Opacity (default 100%); Color multiply (default white); Color add (default black) |
+| **Chroma Key** | Key color (Green, Blue, Magenta or Custom color, default Green); Custom color (shown for Custom color, default #00ff00); Similarity (1 to 1000, default 400); Smoothness (1 to 1000, default 80); Spill reduction (1 to 1000, default 100); Opacity (default 100%); Contrast (-4 to 4), Brightness and Gamma (-1 to 1), default 0 |
+| **Color Key** | Key color (Green, Blue, Red, Magenta or Custom color, default Green); Custom color; Similarity (1 to 1000, default 80); Smoothness (1 to 1000, default 50); Opacity, Contrast, Brightness and Gamma as in Chroma Key |
+| **Luma Key** | Luma max (default 1); Luma max smooth (default 0); Luma min (default 0); Luma min smooth (default 0), all 0 to 1 |
+| **Image Mask/Blend** | Type (alpha mask from the color or alpha channel, or blend by multiply, add or subtract; default color channel); Image (file); Color (default white); Opacity (default 100%); Stretch image (default off) |
+| **Sharpen** | Sharpness (0 to 1, default 0.08) |
+| **Scroll** | Horizontal and Vertical speed (-500 to 500, default 0); Limit width and Limit height (off), with Width and Height in px (default 100) when on; Loop (default on) |
+| **Scaling/Aspect Ratio** | Scale filtering (Point, Bilinear, Bicubic, Lanczos or Area, default Bicubic); Resolution (None, Canvas size, an aspect ratio or a size, default None); Undistort center (Bicubic and Lanczos only, default off) |
+| **Apply LUT** | LUT file (.cube or .png); Amount (0 to 1, default 1) |
+| **Render Delay** | Delay (0 to 500 ms, default 0) |
 
 Filters imported from OBS that LOBS doesn't support are kept, but have no controls. See [Importing from OBS](/docs/importing-from-obs/).
 

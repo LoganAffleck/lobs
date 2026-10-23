@@ -11,7 +11,7 @@ LOBS 0.1 is an early preview. These are the known limits in 0.1.1.
 - **The Lagging figure overstates lag.** The status bar counts every frame since LOBS started, so a hiccup at startup keeps showing.
 - **Recordings and replays carry audio track 1 only.** The mixer offers tracks 1 to 6, but no output uses tracks 2 to 6 yet.
 - **The canvas is fixed at 1920×1080.** The output resolution in Settings > Video scales it.
-- **Four video filters.** Color Correction, Chroma Key, Sharpen and LUT. Other filters imported from OBS have no controls.
+- **Some OBS video filters have no controls yet.** Crop/Pad (use the layer's crop), Video Delay (Async), HDR Tone Mapping, NVIDIA Background Removal and Video Denoise/Upscale, and plugin filters can't be added in LOBS. Imported ones are kept, but have no controls.
 - **No nested scenes.** OBS groups are flattened when you import.
 - **No way to add a color layer.** Color layers come only from the Background layer or an OBS import. The Background layer can be hidden but not deleted.
 - **Linked duplicates don't link groups.** With **Duplicate with linked layers**, layers inside groups are linked, but the groups themselves aren't.

@@ -1,7 +1,9 @@
 #include "obs_import.h"
 #include "audio_fx.h"
+#include "video_fx.h"
 
 #include <QJsonArray>
+#include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -15,15 +17,6 @@ QString abgrToHex(qint64 v)
 {
 	const uint n = uint(v);
 	return QString("#%1%2%3").arg(n & 255, 2, 16, QChar('0')).arg((n >> 8) & 255, 2, 16, QChar('0')).arg((n >> 16) & 255, 2, 16, QChar('0'));
-}
-
-QString keyColor(const QJsonObject &s)
-{
-	const QString t = s["key_color_type"].toString("green");
-	if (t == "blue") return "#0000ff";
-	if (t == "magenta") return "#ff00ff";
-	if (t == "custom") return abgrToHex(s["key_color"].toInteger(0x00ff00));
-	return "#00ff00";
 }
 
 // LOBS kind + settings for an OBS input, or an empty kind if LOBS has no equivalent.
@@ -75,22 +68,29 @@ QString convertInput(const QString &id, const QJsonObject &s, QVariantMap &out)
 // LOBS filter for an OBS filter, or nullopt (audio filters, unsupported effects).
 std::optional<Filter> convertFilter(const QString &id, const QJsonObject &s)
 {
-	Filter f{uid("flt_"), {}, true, {}};
-	if (id.startsWith("color_filter")) {
-		f.type = "color";
-		f.settings = {{"brightness", s["brightness"].toDouble()}, {"contrast", s["contrast"].toDouble()}, {"saturation", s["saturation"].toDouble()},
-			      {"gamma", s["gamma"].toDouble()}, {"hue", s["hue_shift"].toDouble()}};
-	} else if (id.startsWith("chroma_key_filter")) {
-		f.type = "chroma_key";
-		f.settings = {{"key_color", keyColor(s)}, {"similarity", s["similarity"].toInt(400)}, {"smoothness", s["smoothness"].toInt(80)}};
-	} else if (id.startsWith("sharpness_filter")) {
-		f.type = "sharpness";
-		f.settings = {{"amount", s["sharpness"].toDouble(0.08)}};
-	} else if (id == "clut_filter") {
-		f.type = "lut";
-		f.settings = {{"path", s["image_path"].toString()}, {"amount", s["clut_amount"].toDouble(1)}};
-	} else {
+	const VfxType *t = videoFxForObs(id);
+	if (!t)
 		return std::nullopt;
+	// Version 1 filters (from old collections) stored opacity as 0..100.
+	const bool v1 = !id.endsWith("_v2") && t->obsId.endsWith("_v2");
+	Filter f{uid("flt_"), t->type, true, {}};
+	for (const VfxParam &p : t->params) {
+		// OBS leaves settings at their default out of the file, so a missing key means OBS's default.
+		const QJsonValue v = s[p.obsKey.isEmpty() ? p.key : p.obsKey];
+		if (v.isUndefined())
+			f.settings[p.key] = p.def;
+		else if (p.kind == "color")
+			f.settings[p.key] = abgrToHex(v.toInteger());
+		else if (p.key == "opacity" && v1)
+			f.settings[p.key] = v.toDouble() / 100;
+		else
+			f.settings[p.key] = v.toVariant();
+	}
+	// Scaling: OBS stores "None" and the canvas choice as localized text; keep sizes and ratios.
+	if (t->type == "scale") {
+		const QString r = s["resolution"].toString();
+		static const QRegularExpression size("^\\d+[x:]\\d+$");
+		f.settings["resolution"] = size.match(r).hasMatch() ? r : r.contains("Canvas", Qt::CaseInsensitive) ? QString("canvas") : QString();
 	}
 	return f;
 }

@@ -1,5 +1,6 @@
 #include "app.h"
 #include "model/audio_fx.h"
+#include "model/video_fx.h"
 #include "shellmeta.h"
 #include "shapes.h"
 #include "projector.h"
@@ -46,22 +47,10 @@
 
 using namespace lobs;
 
-static QVariantMap filterDefaults(const QString &type)
-{
-	if (type == "color") return {{"brightness", 0.0}, {"contrast", 0.0}, {"saturation", 0.0}, {"gamma", 0.0}, {"hue", 0.0}};
-	if (type == "chroma_key") return {{"key_color", "#00ff00"}, {"similarity", 400}, {"smoothness", 80}};
-	if (type == "sharpness") return {{"amount", 0.08}};
-	if (type == "lut") return {{"path", ""}, {"amount", 1.0}};
-	return {};
-}
-
 static QString filterLabel(const QString &type)
 {
-	if (type == "color") return "Color Correction";
-	if (type == "chroma_key") return "Chroma Key";
-	if (type == "sharpness") return "Sharpen";
-	if (type == "lut") return "LUT";
-	return type;
+	const VfxType *t = videoFx(type);
+	return t ? t->label : type;
 }
 
 static Doc loadDoc(const QString &path)
@@ -492,11 +481,11 @@ QVariantMap App::inspector() const
 			QVariantList fs;
 			for (const Filter &f : d.filters(i)) {
 				QVariantList params;
-				const QVariantMap def = filterDefaults(f.type);
-				for (auto it = def.begin(); it != def.end(); ++it) {
-					const QVariant val = f.settings.value(it.key(), *it);
-					params << QVariantMap{{"key", it.key()}, {"value", val}, {"string", it->typeId() == QMetaType::QString}};
-				}
+				if (const VfxType *t = videoFx(f.type))
+					for (const VfxParam &p : t->params)
+						params << QVariantMap{{"key", p.key}, {"label", p.label}, {"kind", p.kind}, {"value", videoFxValue(f.settings, p)},
+								      {"min", p.min}, {"max", p.max}, {"decimals", p.decimals}, {"scale", p.scale}, {"suffix", p.suffix},
+								      {"options", p.options}, {"fileFilter", p.fileFilter}, {"visible", videoFxParamActive(f.settings, *t, p)}};
 				fs << QVariantMap{{"type", f.type}, {"label", filterLabel(f.type)}, {"enabled", f.enabled}, {"params", params}};
 			}
 			m["filters"] = fs;
@@ -525,9 +514,12 @@ QString App::editSceneName() const
 	return doc().scenes.value(m_editScene).name;
 }
 
-QStringList App::filterTypes() const
+QVariantList App::filterTypes() const
 {
-	return {"color", "chroma_key", "sharpness", "lut"};
+	QVariantList out;
+	for (const VfxType &t : videoFxTypes())
+		out << QVariantMap{{"name", t.label}, {"value", t.type}};
+	return out;
 }
 
 // ---------- scenes ----------
@@ -1506,10 +1498,10 @@ void App::addFilter(const QString &type)
 	if (!liveEditAllowed(m_selection))
 		return;
 	const QString id = singleSelection();
-	if (id.isEmpty() || !filterTypes().contains(type))
+	if (id.isEmpty() || !videoFx(type))
 		return;
 	QVector<Filter> fs = doc().filters(doc().instances[id]);
-	fs << Filter{uid("flt_"), type, true, filterDefaults(type)};
+	fs << Filter{uid("flt_"), type, true, videoFxDefaults(type)};
 	m_store.commit("Add " + filterLabel(type), [&](Doc &d) { d.setFilters(id, fs); });
 }
 

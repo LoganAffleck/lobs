@@ -146,6 +146,7 @@ public:
 	Q_INVOKABLE void setOpacity(double value, bool final);
 	Q_INVOKABLE void setVisibleFlag(bool visible);
 	Q_INVOKABLE void fit(const QString &mode);
+	Q_INVOKABLE QVariantList filterTypes() const; // [{name, value}] for the Add filter menu
 	Q_INVOKABLE void addFilter(const QString &type);
 	Q_INVOKABLE void removeFilter(int index);
 	Q_INVOKABLE void toggleFilter(int index);
@@ -448,7 +449,6 @@ private:
 	QString topAncestor(const QString &id) const;
 	int hitHandle(QPointF canvasPt) const; // 0..3 corner, -1 none
 	QString singleSelection() const;
-	QStringList filterTypes() const;
 
 	Engine *m_engine;
 	lobs::Store m_store;
