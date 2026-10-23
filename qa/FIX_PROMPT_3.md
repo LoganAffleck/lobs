@@ -9,7 +9,7 @@ QA ran the full suite on v0.3.2 (`b60b9e5`, `runs/20261023-155329`): 97 pass, 3 
 
 QA's probes in `qa/scenarios/90-regression.js` stay as they are. If you think one is wrong, say why.
 
-**Before you start:** your branch needs LOBS-037 (5c2c0f0, RTWQ startup, on `claude/objective-lalande-e97fbe`) and the RG-05 test fix (236af61, on `claude/festive-morse-31888a`). Without LOBS-037, about 1 run in 12 sits out the whole timeout while LOBS hangs on exit. Without the RG-05 fix, RG-05 fails at random. Both branches add an entry at the end of BUGS.md, so expect a small conflict there.
+**Before you start:** work from `main`. It has LOBS-037 (the RTWQ exit fix), the RG-05 test fix and the new layer filters (`70256d3`, `25-filters.js`), so start from its latest full run rather than `20261023-155329`.
 
 ## 1. Drag frame time on the heavy show (LOBS-024, PF-04-heavy)
 
