@@ -633,6 +633,8 @@ int main(int argc, char *argv[])
 	WindowChrome chrome;
 	Captioner captions(&engine);
 	CrashReport crashReport(crashDir);
+	if (selfTest) // a self-test never waits on the crash prompt (it covered every later test's window, LOBS-041);
+		crashReport.dismiss(); // run.ps1 reports crashes, and the dump stays in the folder
 	AppUpdater appUpdater(app.arguments().contains("--updated"));
 	QQmlApplicationEngine qml;
 	KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&qml);

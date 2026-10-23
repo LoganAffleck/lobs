@@ -66,3 +66,10 @@ story("H-06", "short recording lands in the run folder", () => {
 	check("recording ok", r.ok, r);
 	check("inside run folder", String(r.path).replace(/\\/g, "/").indexOf(t.out("rec").replace(/\\/g, "/")) === 0, r.path);
 });
+
+// LOBS-041: after any crashed self-test, later ones opened "LOBS closed unexpectedly" over the
+// window, and every story that clicks or types failed.
+story("H-07", "No crash prompt covers a self-test's window", () => {
+	t.wait(1500); // the prompt opens 900 ms after startup when a crash is pending
+	eq("no crash report dialog", t.items("Report on GitHub").length, 0);
+});
