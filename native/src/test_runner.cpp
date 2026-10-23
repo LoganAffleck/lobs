@@ -151,6 +151,19 @@ public:
 		return now() - start;
 	}
 	// Frame presentation times (ms) since the last call: for frame-interval measurement.
+	// Logs through libobs from several threads at once, as OBS's own threads do (LOBS-040).
+	Q_INVOKABLE int logStorm(int threads, int lines)
+	{
+		std::vector<std::thread> ts;
+		for (int i = 0; i < threads; ++i)
+			ts.emplace_back([i, lines] {
+				for (int k = 0; k < lines; ++k)
+					blog(LOG_DEBUG, "[storm] thread %d line %d", i, k);
+			});
+		for (std::thread &th : ts)
+			th.join();
+		return threads * lines;
+	}
 	// The main window's screen refresh rate (Hz): frame-time budgets are in refreshes, not a fixed 16.7 ms.
 	Q_INVOKABLE double screenHz() const
 	{

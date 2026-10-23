@@ -451,3 +451,10 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 
   Heavy has 200 filters across its layers, so most clicks build several filter cards.
 - **Suggested fix:** one `FileDialog` for the window, outside the Inspector component. Read `filterTypes()` once (it's a static catalog). Make sure filter-card popups are created on open, not with the card. Confirm with a heap profile of 100 clicks before and after.
+
+## LOBS-040 · S2 · LOBS can crash when OBS threads log at the same time
+- **Area:** stability / logging · **Found:** fix pass 3, a full 63-perf-stress-b run died in PF-03-stress (`runs/20261023-171134`) · **Story:** LG-01 (`80-misc.js`) · **Status:** Fixed in the `Fix LOBS-040` commit · verified in 5 of 5 LG-01 runs (32 threads × 20,000 lines)
+- **Crash (minidump `lobs-20261023-171143.dmp`):** an OBS task-queue thread → `blog` → LOBS's `logHandler` → `QTextStream(QIODevice*)` → `QObject::disconnect` → access violation in Qt's connection list.
+- **Cause:** `logHandler` ([main.cpp](../native/src/main.cpp)) runs on whichever thread libobs logs from: audio, video, task queues. It built a `QTextStream` on the shared `QFile` for every line, with no lock. Each stream connects to the file's `aboutToClose` when built and disconnects when dropped, and the file's writes aren't thread-safe either. Two threads logging at once corrupt the heap.
+- **Repro:** `t.logStorm(32, 20000)` (a test hook that calls `blog` from 32 threads) killed LOBS in 1 of 3 runs before the fix, with exit 0xC0000374 (heap corruption, so no crash report). A heavy show makes this more likely: the crash run logged thousands of filter removals while parking scenes.
+- **Fix:** each line is built in a local buffer and written in one `write` under a mutex. Teardown clears `g_log` under the same lock. After: 5 of 5 runs pass, and all 640,000 storm lines are in the log whole, none interleaved.

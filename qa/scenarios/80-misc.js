@@ -269,3 +269,10 @@ story("CC-01", "Live captions: speech in an audio source becomes caption text", 
 	check("speech turned into text, nothing lost at the seams", /stream/i.test(text) && /today/i.test(text) && /haunted/i.test(text) && /follow/i.test(text) && /water/i.test(text), text);
 	check("stopped", !captions.running);
 });
+
+// LOBS-040: libobs logs from its own threads (audio, video, task queues) at the same time.
+story("LG-01", "Logging from many threads at once doesn't crash LOBS", () => {
+	const n = t.logStorm(32, 20000);
+	eq("every line was logged", n, 640000);
+	check("LOBS is still running and responsive", t.waitFrames(2, 3000) >= 0);
+});

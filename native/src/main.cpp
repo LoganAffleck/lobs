@@ -31,6 +31,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QMutex>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
@@ -66,6 +67,7 @@
 QString installEngineZip(const QString &zip, const QString &version, QString *note);
 
 static QFile *g_log = nullptr;
+static QMutex g_logLock; // libobs logs from its own threads; QFile isn't thread-safe (LOBS-040)
 
 static QElapsedTimer g_uptime; // log lines carry ms since launch, to see where startup goes
 
@@ -76,8 +78,14 @@ static void logHandler(int level, const char *fmt, va_list args, void *)
 	if (g_log) {
 		static const char *names[] = {"error", "warning", "info", "debug"};
 		const int idx = level <= LOG_ERROR ? 0 : level <= LOG_WARNING ? 1 : level <= LOG_INFO ? 2 : 3;
-		QTextStream(g_log) << "[" << g_uptime.elapsed() << "ms] " << names[idx] << ": " << buf << "\n";
-		g_log->flush();
+		// One write per line under a lock. A QTextStream per line connected to and disconnected
+		// from the shared QFile on every call, which corrupted the heap when threads logged at once.
+		const QByteArray line = "[" + QByteArray::number(g_uptime.elapsed()) + "ms] " + names[idx] + ": " + buf + "\n";
+		QMutexLocker lock(&g_logLock);
+		if (g_log) {
+			g_log->write(line);
+			g_log->flush();
+		}
 	}
 }
 
@@ -1341,7 +1349,10 @@ int main(int argc, char *argv[])
 			shutdown();
 		FreeLibrary(rtwq);
 	}
-	g_log = nullptr;
+	{
+		QMutexLocker lock(&g_logLock); // an engine thread may still be logging
+		g_log = nullptr;
+	}
 	return rc;
 }
 
