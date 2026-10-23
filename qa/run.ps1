@@ -2,7 +2,8 @@
 #   qa\run.ps1                    all scenarios in qa\scenarios
 #   qa\run.ps1 10-linking         one scenario (name without .js)
 # Output: qa\runs\<timestamp>\<scenario>\results.json (+ snapshots, recordings, profile)
-param([string[]]$Names, [int]$TimeoutMin = 40)
+#   -ExitSec 30                   seconds LOBS gets to exit after its stories finish (else HUNG_ON_EXIT)
+param([string[]]$Names, [int]$TimeoutMin = 40, [int]$ExitSec = 30)
 
 $root = Split-Path $PSScriptRoot -Parent
 $exe = Join-Path $root "native\dist\LOBS-qa\LOBS.exe"
@@ -17,14 +18,26 @@ foreach ($s in $scripts) {
     New-Item -ItemType Directory -Force $out | Out-Null
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $p = Start-Process $exe -ArgumentList "--scenariotest", "`"$s`"", "`"$out`"" -PassThru
-    $exited = $p.WaitForExit($TimeoutMin * 60000)
-    if (-not $exited) { $p.Kill(); $code = "TIMEOUT" } else { $code = $p.ExitCode }
+    $null = $p.Handle # keeps ExitCode readable after exit
+    # Once results.json says "done" the runner quits; LOBS must be gone within $ExitSec (LOBS-037).
+    $deadline = $sw.Elapsed.TotalSeconds + $TimeoutMin * 60
+    $doneAt = $null; $code = $null
+    while ($true) {
+        if ($p.WaitForExit(1000)) { $code = $p.ExitCode; break }
+        if (-not $doneAt -and (Test-Path "$out\results.json")) {
+            try { if ((Get-Content "$out\results.json" -Raw -Encoding utf8 | ConvertFrom-Json).status -eq "done") { $doneAt = $sw.Elapsed.TotalSeconds } } catch {}
+        }
+        if ($doneAt -and $sw.Elapsed.TotalSeconds - $doneAt -gt $ExitSec) { $p.Kill(); $code = "HUNG_ON_EXIT"; break }
+        if ($sw.Elapsed.TotalSeconds -gt $deadline) { $p.Kill(); $code = "TIMEOUT"; break }
+    }
+    $exitAfter = if ($doneAt) { [int]($sw.Elapsed.TotalSeconds - $doneAt) } else { $null }
     $r = $null
     if (Test-Path "$out\results.json") { $r = Get-Content "$out\results.json" -Raw -Encoding utf8 | ConvertFrom-Json }
     # Exit codes 0/1 come from the runner; anything else (or status != done) means LOBS died mid-run.
     $crashed = ($code -ne 0 -and $code -ne 1) -or -not $r -or $r.status -ne "done"
+    if ($code -eq "HUNG_ON_EXIT") { Write-Host "  HUNG     $name finished its stories but LOBS didn't exit within $ExitSec s" }
     $summary += [pscustomobject]@{
-        Scenario = $name; Exit = $code; Crashed = $crashed; Seconds = [int]$sw.Elapsed.TotalSeconds
+        Scenario = $name; Exit = $code; Crashed = $crashed; ExitSec = $exitAfter; Seconds = [int]$sw.Elapsed.TotalSeconds
         Pass = $r.totals.pass; Fail = $r.totals.fail; Other = $r.totals.other
     }
     if ($r) {
