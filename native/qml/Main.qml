@@ -481,6 +481,7 @@ ApplicationWindow {
                     }
                     FluidList {
                         id: poolList
+                        readonly property var levels: app.levels // read once per update, not once per meter (LOBS-025)
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         // Video first, then audio, with a divider between; the filter narrows it.
@@ -561,7 +562,7 @@ ApplicationWindow {
                                             model: 2
                                             delegate: Rectangle {
                                                 required property int index
-                                                readonly property real db: (app.levels[modelData.id] || [-60, -60])[index]
+                                                readonly property real db: (poolList.levels[modelData.id] || [-60, -60])[index]
                                                 width: (parent.width - 2) / 2; height: 3; radius: 1.5; color: Pal.s4
                                                 Rectangle {
                                                     width: parent.width * Math.max(0, Math.min(1, (parent.db + 60) / 60)); height: parent.height; radius: 1.5

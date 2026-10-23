@@ -249,3 +249,23 @@ story("CP-01u", "Ctrl+C then Ctrl+V through the window copies the selected layer
 	t.key("Ctrl+Z"); t.wait(200);
 	eq("Ctrl+Z undoes the paste", t.doc().scenes[A].layers.length, n);
 });
+
+// LOBS-025: during a canvas drag the Inspector's transform fields follow on their own
+// (app.inspectorTransform), and the rest of the Inspector catches up after the drag.
+story("IN-02u", "Inspector X and Y follow a canvas drag, and the Inspector is right after it", () => {
+	fresh();
+	app.editScene(t.doc().sceneOrder[0]);
+	const r = placeColor("Dragged", "#ff00ff");
+	sel(r); app.setTransform("w", 400); app.setTransform("h", 300); app.setTransform("x", 100); app.setTransform("y", 100); t.wait(200);
+	t.click("Inspector"); t.wait(300); // earlier stories bring Stats or History to the front of its tab group
+	const tr0 = eff(r, "transform");
+	t.canvasDrag(tr0.x + 50, tr0.y + 50, tr0.x + 50 + 123, tr0.y + 50 + 77, 30, "", -1);
+	t.wait(300);
+	const tr = eff(r, "transform");
+	eq("the drag moved the layer", [Math.round(tr.x - tr0.x), Math.round(tr.y - tr0.y)], [123, 77]);
+	check("Inspector X shows the new x", t.items(String(Math.round(tr.x))).length > 0, { x: Math.round(tr.x), seen: t.items("Dragged").map(i => i.cls), field: t.items("label=X").map(i => i.text) });
+	check("Inspector Y shows the new y", t.items(String(Math.round(tr.y))).length > 0, t.items(String(Math.round(tr.y))).map(i => i.cls));
+	eq("app.inspector has the final position after the drag", [Math.round(app.inspector.x), Math.round(app.inspector.y)], [Math.round(tr.x), Math.round(tr.y)]);
+	eq("app.inspectorTransform agrees", [Math.round(app.inspectorTransform.x), Math.round(app.inspectorTransform.y)], [Math.round(tr.x), Math.round(tr.y)]);
+	check("the drag is one undo step", app.undoLabel !== "", app.undoLabel);
+});

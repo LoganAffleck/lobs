@@ -106,12 +106,10 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	m_inspectorTimer.setSingleShot(true);
 	m_inspectorTimer.setInterval(16);
 	connect(&m_inspectorTimer, &QTimer::timeout, this, [this] {
-		const QVariant v = QVariant::fromValue(inspector());
-		QVariant &old = m_modelCache["inspector"];
-		if (!old.isValid() || old != v) {
-			old = v;
-			emit inspectorChanged();
-		}
+		QElapsedTimer pt;
+		pt.start();
+		pushInspector(true);
+		m_perfInspectorUs += pt.nsecsElapsed() / 1000;
 	});
 	connect(engine, &Engine::statsChanged, this, &App::engineChanged);
 	connect(engine, &Engine::statusChanged, this, &App::engineChanged);
@@ -171,8 +169,8 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 QVariantMap App::takePerfCounters()
 {
 	const QVariantMap m{{"changes", m_perfChanges}, {"applyMs", m_perfApplyUs / 1000.0}, {"editSceneMs", m_perfEditUs / 1000.0},
-			    {"hotkeysMs", m_perfHotkeyUs / 1000.0}, {"qmlMs", m_perfQmlUs / 1000.0}};
-	m_perfApplyUs = m_perfEditUs = m_perfHotkeyUs = m_perfQmlUs = m_perfChanges = 0;
+			    {"hotkeysMs", m_perfHotkeyUs / 1000.0}, {"qmlMs", m_perfQmlUs / 1000.0}, {"inspectorMs", m_perfInspectorUs / 1000.0}};
+	m_perfApplyUs = m_perfEditUs = m_perfHotkeyUs = m_perfQmlUs = m_perfInspectorUs = m_perfChanges = 0;
 	return m;
 }
 
@@ -253,7 +251,7 @@ void App::refreshModels()
 		if (!m_inspectorTimer.isActive())
 			m_inspectorTimer.start();
 	} else {
-		push("inspector", QVariant::fromValue(inspector()), &App::inspectorChanged);
+		pushInspector(false);
 	}
 	push("history", QVariant::fromValue(history()), &App::historyChanged);
 	if (dragging)
@@ -261,6 +259,38 @@ void App::refreshModels()
 	push("mixer", QVariant::fromValue(mixer()), &App::mixerChanged);
 	push("transitions", QVariant::fromValue(transitions()), &App::transitionsChanged);
 	push("hotkeyActions", QVariant::fromValue(hotkeyActions()), &App::hotkeyActionsChanged);
+}
+
+// The Inspector's transform fields read inspectorTransform, which follows every change. While a
+// canvas drag moves one layer only its transform changes, so that's all that is rebuilt: the
+// whole Inspector (link info naming every scene, filter cards) cost ~6 ms a frame in QML on the
+// stress show, plus ~1.5 ms to build (LOBS-025). After the drag it's compared whole again.
+void App::pushInspector(bool dragging)
+{
+	auto pushTransform = [this](const QVariantMap &tr) {
+		QVariant &old = m_modelCache["inspectorTransform"];
+		if (!old.isValid() || old.toMap() != tr) {
+			old = tr;
+			emit inspectorTransformChanged();
+		}
+	};
+	const QString id = singleSelection();
+	if (dragging && !id.isEmpty()) {
+		const Transform t = doc().bounds(id);
+		pushTransform({{"x", t.x}, {"y", t.y}, {"w", t.w}, {"h", t.h}, {"rot", t.rot}});
+		return;
+	}
+	const QVariantMap m = inspector();
+	QVariantMap tr;
+	for (const char *k : {"x", "y", "w", "h", "rot"})
+		if (m.contains(QLatin1String(k)))
+			tr[QLatin1String(k)] = m.value(QLatin1String(k));
+	pushTransform(tr);
+	QVariant &old = m_modelCache["inspector"];
+	if (!old.isValid() || old.toMap() != m) {
+		old = m;
+		emit inspectorChanged();
+	}
 }
 
 void App::autosave()

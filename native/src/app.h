@@ -25,6 +25,8 @@ class App : public QObject {
 	Q_PROPERTY(QVariantList pool READ poolCached NOTIFY poolChanged)
 	Q_PROPERTY(QVariantList layers READ layersCached NOTIFY layersChanged)
 	Q_PROPERTY(QVariantMap inspector READ inspectorCached NOTIFY inspectorChanged)
+	// The selection's x, y, w, h and rot alone: follows a canvas drag every frame (LOBS-025).
+	Q_PROPERTY(QVariantMap inspectorTransform READ inspectorTransform NOTIFY inspectorTransformChanged)
 	Q_PROPERTY(QVariantList history READ historyCached NOTIFY historyChanged)
 	Q_PROPERTY(int historyIndex READ historyIndex NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneId READ editSceneId NOTIFY docChanged)
@@ -411,6 +413,7 @@ signals:
 	void poolChanged();
 	void layersChanged();
 	void inspectorChanged();
+	void inspectorTransformChanged();
 	void historyChanged();
 	void mixerChanged();
 	void transitionsChanged();
@@ -501,6 +504,7 @@ private:
 	QHash<QString, QVariant> m_modelCache; // last value of each list sent to QML
 	QTimer m_inspectorTimer; // drags: Inspector updates once per frame
 	void refreshModels();
+	void pushInspector(bool dragging);
 	QString m_hotkeySig; // scenes and sources the global hotkeys were built for
 	bool m_autosaveFailed = false; // toast once per failing streak
 	bool m_autosaveBusy = false, m_autosaveAgain = false; // a background autosave is writing
@@ -534,7 +538,7 @@ private:
 	bool m_cropMode = false;
 	int m_perfMoves = 0;
 	qint64 m_perfTotalUs = 0, m_perfMaxUs = 0;
-	qint64 m_perfApplyUs = 0, m_perfEditUs = 0, m_perfHotkeyUs = 0, m_perfQmlUs = 0; // drag timing, logged on release
+	qint64 m_perfApplyUs = 0, m_perfEditUs = 0, m_perfHotkeyUs = 0, m_perfQmlUs = 0, m_perfInspectorUs = 0; // drag timing, logged on release
 	qint64 m_perfCommitUs = 0, m_perfChanges = 0;
 	bool m_modelsStale = false; // a drag skipped some list refreshes; refreshModels() catches up after
 public:
@@ -544,6 +548,7 @@ public:
 	QVariantList scenesCached() const { const QVariant v = m_modelCache.value(QStringLiteral("scenes")); return v.isValid() ? v.toList() : scenes(); }
 	QVariantList poolCached() const { const QVariant v = m_modelCache.value(QStringLiteral("pool")); return v.isValid() ? v.toList() : pool(); }
 	QVariantList layersCached() const { const QVariant v = m_modelCache.value(QStringLiteral("layers")); return v.isValid() ? v.toList() : layers(); }
+	QVariantMap inspectorTransform() const { return m_modelCache.value(QStringLiteral("inspectorTransform")).toMap(); }
 	QVariantMap inspectorCached() const { const QVariant v = m_modelCache.value(QStringLiteral("inspector")); return v.isValid() ? v.toMap() : inspector(); }
 	QVariantList historyCached() const { const QVariant v = m_modelCache.value(QStringLiteral("history")); return v.isValid() ? v.toList() : history(); }
 	QVariantList mixerCached() const { const QVariant v = m_modelCache.value(QStringLiteral("mixer")); return v.isValid() ? v.toList() : mixer(); }

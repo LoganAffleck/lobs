@@ -16,6 +16,9 @@ Item {
     // app.mixer converts the whole list to JavaScript on every read, so read it once per change:
     // src(i) on a big show used to rebuild it per call and left seconds of garbage (LOBS-025).
     readonly property var mix: app.mixer
+    // Same for the meters: app.levels changes 20 times a second, and each strip reading it
+    // converted the whole map, every source's levels, per strip (LOBS-025).
+    readonly property var lv: app.levels
     // Drag to reorder (strips sideways, rows up and down). Off while the search filters the list.
     property string dragId: ""
     property int dropIndex: -1
@@ -175,7 +178,7 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: 14
                             value: mv.posFromLin(row.s.volume)
-                            levels: app.levels[row.s.id] || [-60, -60]
+                            levels: mv.lv[row.s.id] || [-60, -60]
                             muted: row.s.muted
                             onMoved: (v) => app.setAudio(row.s.id, "volume", mv.linFromPos(v), false)
                             onReleased: (v) => app.setAudio(row.s.id, "volume", mv.linFromPos(v), true)
@@ -255,7 +258,7 @@ Item {
                             Layout.fillHeight: true
                             implicitWidth: 22
                             value: mv.posFromLin(strip.s.volume)
-                            levels: app.levels[strip.s.id] || [-60, -60]
+                            levels: mv.lv[strip.s.id] || [-60, -60]
                             muted: strip.s.muted
                             onMoved: (v) => app.setAudio(strip.s.id, "volume", mv.linFromPos(v), false)
                             onReleased: (v) => app.setAudio(strip.s.id, "volume", mv.linFromPos(v), true)

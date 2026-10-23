@@ -11,6 +11,7 @@
 
 #include <obs.h>
 
+#include <QMetaMethod>
 #include <QMutex>
 #include <QScreen>
 #include <QQmlContext>
@@ -151,6 +152,23 @@ public:
 		return now() - start;
 	}
 	// Frame presentation times (ms) since the last call: for frame-interval measurement.
+	// Diagnostics: emits each of the controller's parameterless signals n times and returns the ms
+	// it took, which is what the UI's bindings on it cost per emission (they update synchronously).
+	Q_INVOKABLE QVariantMap signalCost(int n)
+	{
+		QVariantMap out;
+		const QMetaObject *mo = m_c.metaObject();
+		for (int i = QObject::staticMetaObject.methodCount(); i < mo->methodCount(); ++i) {
+			const QMetaMethod mm = mo->method(i);
+			if (mm.methodType() != QMetaMethod::Signal || mm.parameterCount() != 0)
+				continue;
+			const double a = now();
+			for (int k = 0; k < n; ++k)
+				mm.invoke(&m_c, Qt::DirectConnection);
+			out[QString::fromLatin1(mm.name())] = (now() - a) / n;
+		}
+		return out;
+	}
 	// Logs through libobs from several threads at once, as OBS's own threads do (LOBS-040).
 	Q_INVOKABLE int logStorm(int threads, int lines)
 	{
