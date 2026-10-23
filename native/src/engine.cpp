@@ -382,7 +382,8 @@ void Engine::apply(const Doc &doc)
 				const int lines = int(src.settings.value("text").toString().count('\n')) + 1;
 				const QJsonObject ts = textSettings(src, int(std::lround(tt.h / lines)));
 				const QString textSig = QJsonDocument(ts).toJson(QJsonDocument::Compact);
-				childName = inst.id + ":text";
+				// A new name after parking, so the instance looks its renderer up again.
+				childName = inst.id + ":text" + (it.textGen ? QString("#%1").arg(it.textGen) : QString());
 				obs_data_t *td = toData(ts);
 				if (!it.text)
 					it.text = obs_source_create("text_gdiplus_v3", childName.toUtf8().constData(), td, nullptr);
@@ -688,6 +689,15 @@ void Engine::parkHiddenFilters()
 		if (it.opacityFilter)
 			obs_source_release(it.opacityFilter), it.opacityFilter = nullptr;
 		it.filterSig.clear();
+		// A text layer's renderer holds GDI objects (DC, font, bitmap): ~2.5 per layer, and Windows
+		// allows 10,000 per process. The stress show's 818 text layers held 2,000 (LOBS-025).
+		if (it.text) {
+			obs_source_remove(it.text);
+			obs_source_release(it.text);
+			it.text = nullptr;
+			it.textSig.clear();
+			++it.textGen;
+		}
 		it.parked = true;
 	}
 	if (waiting)

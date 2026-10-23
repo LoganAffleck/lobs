@@ -350,6 +350,34 @@ story("LY-07", "A scene that stops showing gives back its render memory and look
 	check("where the layers overlap, the top one still draws on top", before2 === after2 && before2 !== before, [before2, after2]);
 });
 
+story("LY-08", "A text layer's renderer is freed while its scene is hidden and draws the same when it returns (LOBS-025)", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A); app.take();
+	const B = mkScene("Away");
+	app.editScene(A);
+	const txt = addKind("text", "Parked text", "LOBS QA").inst;
+	setT(txt, "x", 100); setT(txt, "y", 100); setT(txt, "w", 700); setT(txt, "h", 200);
+	t.waitFrames(4, 3000);
+	// A grid of samples across the text: glyph edges, so a missing or different render shows.
+	const grid = name => { const shot = t.snapshot(A, name, 0), out = [];
+		for (let gy = 0; gy < 5; ++gy) for (let gx = 0; gx < 14; ++gx) out.push(t.pixel(shot, 110 + gx * 48, 115 + gy * 40).hex);
+		return out; };
+	const before = grid("ly08-before.png");
+	check("the text drew something", new Set(before).size > 1, before.slice(0, 6));
+	const texts0 = t.engineStats().layers.texts;
+	app.editScene(B); app.take(); t.wait(1500); t.waitFrames(2, 2000);
+	const away = t.engineStats().layers;
+	t.metric("whileAway", away);
+	check("its text renderer is freed while the scene is hidden", away.texts < texts0, [texts0, away.texts]);
+	app.editScene(A); app.take(); t.waitFrames(6, 3000); t.wait(300);
+	const after = grid("ly08-after.png");
+	eq("it draws the same when the scene shows again", after, before);
+	eq("and has its renderer back", t.engineStats().layers.texts, texts0);
+	app.setSourceSetting(t.doc().instances[txt].sourceId, "text", "CHANGED"); t.waitFrames(4, 3000); t.wait(300);
+	check("editing the text after that still redraws it", !sameJson(grid("ly08-edited.png"), before));
+});
+
 story("UH-03", "A normal show keeps the full 200 undo steps (LOBS-036 caps only very big shows)", () => {
 	fresh();
 	const A = t.doc().sceneOrder[0];

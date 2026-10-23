@@ -195,6 +195,7 @@ private:
 		obs_source *inst = nullptr;
 		obs_source *text = nullptr; // per-layer text renderer (text sources only)
 		QString textSig;
+		int textGen = 0; // bumped when parking frees the text renderer; the next one gets a new name
 		obs_source *shape = nullptr; // per-layer vector graphic (shape sources only)
 		QString shapeSig;
 		obs_scene_item *item = nullptr;
