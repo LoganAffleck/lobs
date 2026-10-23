@@ -494,6 +494,15 @@ int main(int argc, char *argv[])
 		MessageBoxW(nullptr, L"LOBS couldn't find its OBS engine. Reinstall LOBS to restore it.", L"LOBS", MB_ICONERROR);
 		return 3;
 	}
+	// Start the RTWQ work-queue platform for the whole run, as OBS's own main() does. win-wasapi
+	// uses RTWQ whenever RTWorkQ.dll is already loaded when a source is created; without our
+	// reference, the DLL only gets loaded (and started) later by a Media Foundation user, such as
+	// CEF for a browser source, and once that shuts RTWQ down, RTWQ sources never run their work
+	// items again, so destroying one at exit waits forever (LOBS-037).
+	const HMODULE rtwq = LoadLibraryW(L"RTWorkQ.dll");
+	if (rtwq)
+		if (auto startup = reinterpret_cast<HRESULT(STDAPICALLTYPE *)()>(GetProcAddress(rtwq, "RtwqStartup")))
+			startup();
 	const QString engineBin = sel.root + "/bin/64bit";
 	SetDllDirectoryW(reinterpret_cast<const wchar_t *>(QDir::toNativeSeparators(engineBin).utf16()));
 	// libobs starts its helper programs (recording muxer, encoder probes) from the folder of
@@ -1327,6 +1336,11 @@ int main(int argc, char *argv[])
 	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
 	captions.stop(); // its audio tap is on an engine input
 	engine.shutdown();
+	if (rtwq) {
+		if (auto shutdown = reinterpret_cast<HRESULT(STDAPICALLTYPE *)()>(GetProcAddress(rtwq, "RtwqShutdown")))
+			shutdown();
+		FreeLibrary(rtwq);
+	}
 	g_log = nullptr;
 	return rc;
 }
