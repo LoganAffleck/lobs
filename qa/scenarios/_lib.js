@@ -93,3 +93,15 @@ function skipSetup() {
 	if (t.items("Skip setup").length) { t.click("Skip setup"); t.wait(300); }
 	return t.items("Welcome to LOBS").length === 0;
 }
+// Private MB once memory stops moving: under 5 MB of change across 4 s, giving up at 15 s.
+// Freed memory goes back to Windows late and in steps: it holds about 3 s after hidden scenes
+// park, then drops a few hundred MB about 1 s at a time (LOBS-038). GC doesn't hurry it.
+function settledMB() {
+	t.gc(); const s = [];
+	for (let k = 0; k < 30; ++k) {
+		t.wait(500); s.push(t.proc().privateMB);
+		const w = s.slice(-9);
+		if (w.length === 9 && Math.max.apply(null, w) - Math.min.apply(null, w) < 5) return w[8];
+	}
+	return s[s.length - 1];
+}

@@ -85,16 +85,13 @@ story("RG-04", "Live lock: Alt overrides, as the toast promises", () => {
 story("RG-05", "Leak: memory stays flat over 100 switches and 100 clicks (heavy)", () => {
 	app.open(t.url(t.scriptDir() + "/../runs/fixtures/heavy/heavy.lobs.json")); t.waitFrames(2, 5000); t.wait(1000);
 	const ids = t.doc().sceneOrder;
-	t.gc && t.gc(); t.wait(500);
-	const m0 = t.proc().privateMB, sw = [];
+	const m0 = settledMB(), sw = [];
 	for (let k = 0; k < 100; ++k) { const a = t.now(); app.editScene(ids[(k * 37) % ids.length]); t.waitFrames(1, 1000); sw.push(t.now() - a); }
-	t.gc && t.gc(); t.wait(1000);
-	const m1 = t.proc().privateMB;
+	const m1 = settledMB();
 	app.editScene(ids[1]); t.wait(200);
 	const L = app.layers.map(l => l.id), cl = [];
 	for (let k = 0; k < 100; ++k) { const a = t.now(); app.selectLayer(L[k % L.length], false); t.waitFrames(1, 1000); cl.push(t.now() - a); }
-	t.gc && t.gc(); t.wait(1000);
-	const m2 = t.proc().privateMB;
+	const m2 = settledMB();
 	t.metric("switch", stats(sw)); t.metric("click", stats(cl));
 	t.metric("memory", { start: Math.round(m0), after100Switches: Math.round(m1), after100Clicks: Math.round(m2) });
 	check("≤ 0.5 MB retained per switch", (m1 - m0) / 100 <= 0.5, ((m1 - m0) / 100).toFixed(2) + " MB/switch");
