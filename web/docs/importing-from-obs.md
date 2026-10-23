@@ -43,7 +43,7 @@ When it's done, a toast reads "Imported N scenes and M sources from OBS "&lt;nam
 - Each layer's position, scale, alignment, bounding box, rotation, flip, crop, visibility and lock. Sizes settle once each source reports its real size, which can take up to 10 seconds.
 - Audio settings: volume, mute, mono, balance, sync offset, monitoring and tracks.
 - Global audio devices (Desktop Audio 1 and 2, Mic/Aux 1 to 4). Audio inputs that OBS had inside scenes become global sources, so they play in every scene and aren't placed on the canvas.
-- Video filters: **Color Correction**, **Chroma Key** and **Sharpen** become LOBS filters. **Apply LUT** becomes **LUT**. A relative Crop/Pad filter is merged into the layer's crop.
+- Video filters: **Color Correction**, **Chroma Key**, **Color Key**, **Luma Key**, **Image Mask/Blend**, **Sharpen**, **Scroll**, **Scaling/Aspect Ratio**, **Apply LUT** and **Render Delay** become LOBS filters with all their settings. A relative Crop/Pad filter is merged into the layer's crop.
 - If a source with filters appears in several scenes, its filters are [linked](/docs/inspector/#linking-sections) across those scenes.
 - Audio filters: noise suppression, noise gate, gain, EQ, compressor, expander, limiter and NVIDIA effects get LOBS controls.
 

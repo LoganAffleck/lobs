@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "model/audio_fx.h"
+#include "model/video_fx.h"
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -206,27 +207,27 @@ static obs_data_t *toData(const QJsonObject &o)
 	return obs_data_create_from_json(QJsonDocument(o).toJson(QJsonDocument::Compact).constData());
 }
 
-static obs_data_t *filterData(const Filter &f, QString &kind)
+static obs_data_t *filterData(const Doc &doc, const Filter &f, QString &kind)
 {
-	const QVariantMap &s = f.settings;
+	const VfxType *t = videoFx(f.type);
+	if (!t)
+		return nullptr;
+	kind = t->obsId;
 	QJsonObject o;
-	if (f.type == "color") {
-		kind = "color_filter_v2";
-		o = {{"brightness", s.value("brightness").toDouble()}, {"contrast", s.value("contrast").toDouble()}, {"saturation", s.value("saturation").toDouble()},
-		     {"gamma", s.value("gamma").toDouble()}, {"hue_shift", s.value("hue").toDouble()}};
-	} else if (f.type == "chroma_key") {
-		kind = "chroma_key_filter_v2";
-		o = {{"key_color_type", "custom"}, {"key_color", hexToAbgr(s.value("key_color", "#00ff00").toString()) & 0xFFFFFF},
-		     {"similarity", s.value("similarity", 400).toInt()}, {"smoothness", s.value("smoothness", 80).toInt()}};
-	} else if (f.type == "sharpness") {
-		kind = "sharpness_filter_v2";
-		o = {{"sharpness", s.value("amount", 0.08).toDouble()}};
-	} else if (f.type == "lut") {
-		kind = "clut_filter";
-		o = {{"image_path", s.value("path").toString()}, {"clut_amount", s.value("amount", 1).toDouble()}};
-	} else {
-		return nullptr; // blur etc. need extra modules
+	for (const VfxParam &p : t->params) {
+		const QVariant v = videoFxValue(f.settings, p);
+		const QString key = p.obsKey.isEmpty() ? p.key : p.obsKey;
+		if (p.kind == "color")
+			o[key] = double(hexToAbgr(v.toString()) & 0xFFFFFF);
+		else if (p.kind == "toggle")
+			o[key] = v.toBool();
+		else if (p.kind == "slider")
+			o[key] = p.decimals == 0 ? QJsonValue(qint64(std::llround(v.toDouble()))) : QJsonValue(v.toDouble());
+		else
+			o[key] = v.toString();
 	}
+	if (f.type == "scale" && o["resolution"].toString() == "canvas")
+		o["resolution"] = QString("%1x%2").arg(doc.canvasW).arg(doc.canvasH);
 	return toData(o);
 }
 
@@ -445,7 +446,7 @@ void Engine::apply(const Doc &doc)
 			}
 			const bool needOpacity = leaf.opacity < 0.999 || it.opacityFilter; // kept once made
 			QString shapeSig = QString(maskPath.isEmpty() ? "-" : "M") + (needOpacity ? "O" : "-");
-			QString valueSig;
+			QString valueSig = QString("%1x%2").arg(doc.canvasW).arg(doc.canvasH); // a Scaling filter can follow the canvas
 			for (const Filter &f : fs) {
 				shapeSig += "|" + f.id + f.type;
 				valueSig += "|" + QString(f.enabled ? "1" : "0") + QJsonDocument(QJsonObject::fromVariantMap(f.settings)).toJson(QJsonDocument::Compact);
@@ -471,7 +472,7 @@ void Engine::apply(const Doc &doc)
 				}
 				for (const Filter &f : fs) {
 					QString kind;
-					obs_data_t *d = filterData(f, kind);
+					obs_data_t *d = filterData(doc, f, kind);
 					if (!d)
 						continue;
 					obs_source_t *fsrc = obs_source_create_private(kind.toUtf8().constData(), f.id.toUtf8().constData(), d);
@@ -497,7 +498,7 @@ void Engine::apply(const Doc &doc)
 					if (!fsrc)
 						continue;
 					QString kind;
-					if (obs_data_t *d = filterData(f, kind)) {
+					if (obs_data_t *d = filterData(doc, f, kind)) {
 						obs_source_update(fsrc, d);
 						obs_data_release(d);
 					}
@@ -645,15 +646,19 @@ void Engine::setInk(const QVector<QPointF> &pts, const QString &color, double wi
 
 QVariantMap Engine::layerResources() const
 {
-	int parked = 0, withFilters = 0, filters = 0, texts = 0, shapes = 0, showing = 0;
+	int parked = 0, withFilters = 0, filters = 0, unknownFilters = 0, texts = 0, shapes = 0, showing = 0;
 	for (const Item &it : m_items) {
 		parked += it.parked;
 		const int n = it.inst ? int(obs_source_filter_count(it.inst)) : 0;
 		withFilters += n > 0, filters += n;
+		// libobs keeps a filter whose id no loaded module registers, but it draws nothing.
+		if (n)
+			obs_source_enum_filters(it.inst, [](obs_source_t *, obs_source_t *f, void *p) { *static_cast<int *>(p) += !obs_source_get_display_name(obs_source_get_id(f)); }, &unknownFilters);
 		texts += !!it.text, shapes += !!it.shape;
 		showing += it.inst && obs_source_showing(it.inst);
 	}
-	return {{"layers", int(m_items.size())}, {"parked", parked}, {"withFilters", withFilters}, {"filters", filters}, {"texts", texts}, {"shapes", shapes}, {"showing", showing}};
+	return {{"layers", int(m_items.size())}, {"parked", parked}, {"withFilters", withFilters}, {"filters", filters}, {"unknownFilters", unknownFilters},
+		{"texts", texts}, {"shapes", shapes}, {"showing", showing}};
 }
 
 void Engine::parkHiddenFilters()

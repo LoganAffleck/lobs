@@ -1601,13 +1601,6 @@ ApplicationWindow {
     }
 
     // ---------------- inspector ----------------
-    function filterRange(key) {
-        if (key === "hue") return [-180, 180, 0]
-        if (key === "similarity" || key === "smoothness") return [1, 1000, 0]
-        if (key === "amount") return [0, 1, 2]
-        return [-1, 1, 2]
-    }
-    function filterLabel(key) { return key.charAt(0).toUpperCase() + key.slice(1).replace("_", " ") }
 
     Component {
         id: inspectorView
@@ -1833,28 +1826,66 @@ ApplicationWindow {
                                 }
                                 Repeater {
                                     model: card.modelData.params.length
+                                    // One control per setting, by kind (see native/src/model/video_fx.h).
                                     delegate: Loader {
                                         required property int index
                                         Layout.fillWidth: true
-                                        readonly property var p: card.modelData.params[index] || ({ key: "", value: 0, string: false })
-                                        sourceComponent: p.string ? stringParam : numParam
+                                        readonly property var p: card.modelData.params[index] || ({ key: "", kind: "slider", value: 0, visible: false })
+                                        visible: p.visible
+                                        active: p.visible
+                                        sourceComponent: p.kind === "color" ? colorParam : p.kind === "choice" ? choiceParam : p.kind === "file" ? fileParam
+                                                       : p.kind === "toggle" ? toggleParam : numParam
                                         Component {
                                             id: numParam
                                             FFillSlider {
-                                                label: win.filterLabel(p.key)
-                                                from: win.filterRange(p.key)[0]; to: win.filterRange(p.key)[1]; decimals: win.filterRange(p.key)[2]
+                                                label: p.label
+                                                from: p.min; to: p.max; decimals: p.decimals; displayScale: p.scale; suffix: p.suffix
                                                 value: Number(p.value)
                                                 onMoved: (v) => app.setFilterValue(card.index, p.key, v, false)
                                                 onReleased: (v) => app.setFilterValue(card.index, p.key, v, true)
                                             }
                                         }
                                         Component {
-                                            id: stringParam
-                                            FInput {
-                                                placeholderText: win.filterLabel(p.key)
-                                                text: String(p.value)
-                                                onEditingFinished: app.setFilterValue(card.index, p.key, text, true)
+                                            id: colorParam
+                                            RowLayout {
+                                                spacing: 6
+                                                Text { text: p.label; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.fillWidth: true }
+                                                FColorField { color: String(p.value); onPicked: (c) => app.setFilterValue(card.index, p.key, c, true) }
                                             }
+                                        }
+                                        Component {
+                                            id: choiceParam
+                                            RowLayout {
+                                                spacing: 6
+                                                Text { text: p.label; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 90 }
+                                                FSelect {
+                                                    Layout.fillWidth: true
+                                                    options: p.options
+                                                    currentValue: String(p.value)
+                                                    placeholder: String(p.value) // a value from an OBS import that isn't in the list
+                                                    onPicked: (v) => app.setFilterValue(card.index, p.key, v, true)
+                                                }
+                                            }
+                                        }
+                                        Component {
+                                            id: fileParam
+                                            RowLayout {
+                                                spacing: 6
+                                                FInput {
+                                                    Layout.fillWidth: true
+                                                    placeholderText: p.label
+                                                    text: String(p.value)
+                                                    onEditingFinished: if (text !== String(p.value)) app.setFilterValue(card.index, p.key, text, true)
+                                                }
+                                                FButton {
+                                                    iconName: "folder-open"; variant: "ghost"; tip: "Choose " + p.label.toLowerCase()
+                                                    onClicked: filterFilePicker.pick(card.index, p.key, p.label, p.fileFilter)
+                                                }
+                                            }
+                                        }
+                                        Component {
+                                            id: toggleParam
+                                            FSwitch { text: p.label; checkable: false; checked: !!p.value; onClicked: app.setFilterValue(card.index, p.key, !p.value, true) }
                                         }
                                     }
                                 }
@@ -1864,8 +1895,19 @@ ApplicationWindow {
                     FSelect {
                         Layout.fillWidth: true
                         placeholder: "Add filter…"
-                        options: [{ name: "Color Correction", value: "color" }, { name: "Chroma Key", value: "chroma_key" }, { name: "Sharpen", value: "sharpness" }, { name: "LUT", value: "lut" }]
+                        options: app.filterTypes()
                         onPicked: (v) => app.addFilter(v)
+                    }
+                    FileDialog {
+                        id: filterFilePicker
+                        property int filterIndex: -1
+                        property string key
+                        function pick(index, k, label, filter) {
+                            filterIndex = index; key = k; title = label
+                            nameFilters = [filter, "All files (*)"]
+                            open()
+                        }
+                        onAccepted: app.setFilterValue(filterIndex, key, decodeURIComponent(selectedFile.toString().replace(/^file:\/{3}/, "")), true)
                     }
                 }
 

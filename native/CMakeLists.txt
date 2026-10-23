@@ -54,6 +54,7 @@ qt_add_executable(LOBS WIN32
     src/model/store.cpp
     src/model/obs_import.cpp
     src/model/store.h
+    src/model/video_fx.h
 )
 qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     qml/Main.qml
