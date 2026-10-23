@@ -223,6 +223,7 @@ function broken · S3 minor/workaround exists · S4 cosmetic. Bugs are reported,
 | OS handles after opening heavy | — | 4.9k → **48.6k** (note; watch on stress) |
 
 ## LOBS-024 · S2 · The editor runs at about 8 fps on a heavy project (drag, scrub, click, edit)
+- **Fix pass 3:** PF-04-heavy passes (`runs/20261023-175335`, `-175429`): drag frame p50 16.66 ms, p95 17.2–17.3 ms, max 18.9 ms, 0 lagged frames. Every frame is within one refresh. The failure was the harness (4b6ef3e, `qa: test fix`): moves on a 16 ms timer left some frames without a move, so they rendered nothing and the check read a 33 ms gap. PF-04 now drives one move per frame, and its budget is in screen refreshes plus 2 ms for timestamp jitter.
 - **Area:** performance · **Stories:** PF-03, PF-04, PF-05, PF-06 · **Status:** Fixed in 76589e2 (heavy); PF-04-heavy UI frame p95 34 ms vs 16.7 target, see report · verified in `runs/20261020-181644` (was: Confirmed (`runs/20261020-155724/62-perf-heavy-b`, fresh process; `runs/probe-select`))
 - **Measured, heavy project (40 scenes / 424 layers), against the targets:**
 
@@ -241,6 +242,10 @@ function broken · S3 minor/workaround exists · S4 cosmetic. Bugs are reported,
 - **Suggested direction:** separate signals (`selectionChanged`, `editSceneChanged`, `docChanged`), incremental engine apply for the instance that changed, and hotkeys rebuilt only when scenes or sources are added or removed.
 
 ## LOBS-025 · S1 · The stress project (200 scenes, 3,270 layers) is unusable
+- **Fix pass 3:** PF-04-stress passes 3 of 3 (`runs/20261023-174942`, `-175100`, `-175217`): drag frame p95 **23.3–24.0 ms** [≤ 35.3], was 50.3. GDI after open **382** (was 2,006), handles 196,384 (was 237,807).
+  - **Drag (38a3cff):** with the UI's signals blocked the drag was already 16.8 ms p95 (`_probe-drag-frames.js`). The UI cost had two parts. First, every drag frame rebuilt the whole Inspector, and QML re-evaluated it all (link info naming 100 scenes), about 7 ms a frame. Its transform fields now read `app.inspectorTransform`, the only part rebuilt mid-drag. Second, each mixer strip read `app.levels`, converting the whole map per strip, 20 times a second; it's now read once per list. IN-02u checks the Inspector after a drag.
+  - **GDI (fd66e18):** each of the 818 text layers kept a `text_gdiplus` renderer (~2.5 GDI objects). Parking now frees it, and it's rebuilt when the scene shows. LY-08 checks it draws the same on return. Open and switch times are unchanged.
+  - **Still open:** levels still cost about 10 ms per update on stress (`t.signalCost`). The stress fixture gives all 704 sources an `audio` block (`gen_project.py` writes one per source), so the mixer has 704 strips, and LOBS marks a source `hasAudio` whenever the block exists. Real color, text and image sources have no audio. Either fix the generator or make the loader ignore `audio` on kinds that can't play sound; both are a QA or product call. Also open: handles still follow the OBS source count, and the LOBS-036 per-layer sharing.
 - **Area:** performance / scale · **Stories:** PF-01, PF-02 (stress) · **Status:** Partly fixed in 76589e2. Stress still misses targets (PF-01/02/03/04/06-stress) · verified in `runs/20261020-181644` (was: Confirmed (`runs/20261020-160525/61-perf-stress`))
 - **Measured:**
   - Open → interactive: **12.3–17.1 s** (p50 13.0 s; target ≤ 10 s).
@@ -431,7 +436,7 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Not covered by any story:** the 0.3.x features: the self-updater (ab33024, which also swaps the OBS engine), crash reports (be68555), the splash window, the video panel's tab drag (d993b40), the title-bar top bar, and Audio Mixer reorder and pin (22fc1d5). Their stories were written by the feature commits themselves, or don't exist, so they've had no independent QA.
 
 ## LOBS-039 · S3 · Each layer click keeps twice as much memory since the filter catalog (70256d3)
-- **Fix pass 3:** Fixed in the `Fix LOBS-039` commit · verified in `runs/20261023-165825` (RG-05 passes) and `runs/20261023-170101` (FX-01…06u).
+- **Fix pass 3:** Fixed in be63a42 · verified in `runs/20261023-165825` (RG-05 passes) and `runs/20261023-170101` (FX-01…06u).
   - **Cause (measured, not the leads below):** the leak was in the UI. With `t.blockAppSignals` on, 100 clicks kept nothing (`_probe-clicks.js`); with the Inspector unloaded, nothing either. One of the 9 clicked layers shows 10 filters through a link. Each visit built 10 filter cards with their controls, and each move away destroyed them, keeping about 5 MB per round trip. This is older than 70256d3 (about 0.35 MB/click on bd7182d), and 70256d3 made each card bigger: Color Correction went from 5 settings to 8, two of them color fields. `t.churn` shows `FColorField` keeping about 28 KB per create/destroy (its picker `Popup` was built with the field). The other controls keep about 2 KB each in a real card, but much more in the live Inspector.
   - **Fix:** filter cards and their setting rows are kept once built. A layer with fewer filters hides the extra ones, which keep their last filter so their controls aren't rebuilt (`Main.qml`, Filters section). `FColorField` builds its picker the first time it opens.
   - **Result (`_probe-clicks.js`, settled MB per 100 clicks):** +97/+63/+72 before → **+33 once (building the cards), then +0/−1/+5**. RG-05 clicks pass. New UI checks: FX-05u (a reused card shows the new layer's filter and values) and FX-06u (the picker opens, applies a typed hex and opens again).
@@ -453,14 +458,14 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 - **Suggested fix:** one `FileDialog` for the window, outside the Inspector component. Read `filterTypes()` once (it's a static catalog). Make sure filter-card popups are created on open, not with the card. Confirm with a heap profile of 100 clicks before and after.
 
 ## LOBS-040 · S2 · LOBS can crash when OBS threads log at the same time
-- **Area:** stability / logging · **Found:** fix pass 3, a full 63-perf-stress-b run died in PF-03-stress (`runs/20261023-171134`) · **Story:** LG-01 (`80-misc.js`) · **Status:** Fixed in the `Fix LOBS-040` commit · verified in 5 of 5 LG-01 runs (32 threads × 20,000 lines)
+- **Area:** stability / logging · **Found:** fix pass 3, a full 63-perf-stress-b run died in PF-03-stress (`runs/20261023-171134`) · **Story:** LG-01 (`80-misc.js`) · **Status:** Fixed in 8f840e0 · verified in 5 of 5 LG-01 runs (32 threads × 20,000 lines)
 - **Crash (minidump `lobs-20261023-171143.dmp`):** an OBS task-queue thread → `blog` → LOBS's `logHandler` → `QTextStream(QIODevice*)` → `QObject::disconnect` → access violation in Qt's connection list.
 - **Cause:** `logHandler` ([main.cpp](../native/src/main.cpp)) runs on whichever thread libobs logs from: audio, video, task queues. It built a `QTextStream` on the shared `QFile` for every line, with no lock. Each stream connects to the file's `aboutToClose` when built and disconnects when dropped, and the file's writes aren't thread-safe either. Two threads logging at once corrupt the heap.
 - **Repro:** `t.logStorm(32, 20000)` (a test hook that calls `blog` from 32 threads) killed LOBS in 1 of 3 runs before the fix, with exit 0xC0000374 (heap corruption, so no crash report). A heavy show makes this more likely: the crash run logged thousands of filter removals while parking scenes.
 - **Fix:** each line is built in a local buffer and written in one `write` under a mutex. Teardown clears `g_log` under the same lock. After: 5 of 5 runs pass, and all 640,000 storm lines are in the log whole, none interleaved.
 
 ## LOBS-041 · S3 (QA harness) · After one crashed self-test, every later one opens the crash prompt over its window
-- **Area:** test hygiene / crash reports (be68555) · **Found:** fix pass 3 · **Story:** H-07 (`00-harness.js`) · **Status:** Fixed in the `Fix LOBS-041` commit · verified in a run that started with an unseen dump (00-harness + 40-ui, 20/20 pass)
+- **Area:** test hygiene / crash reports (be68555) · **Found:** fix pass 3 · **Story:** H-07 (`00-harness.js`) · **Status:** Fixed in 3c490b3 · verified in a run that started with an unseen dump (00-harness + 40-ui, 20/20 pass)
 - **Symptom:** after the LOBS-040 crash at 17:11, 12 of 14 `40-ui` stories failed in every run: clicks, shortcuts and menus did nothing. Code from before the crash failed the same way.
 - **Cause:** self-tests keep their own crash folder (`%LOCALAPPDATA%\qttest\LOBS\LOBS\crashes`). Any dump newer than `seen.txt` makes `crashReport.pending` true, and 900 ms after startup Main.qml opens the "Report on GitHub" dialog. No test dismisses it, so the modal stays over the window for the whole run, and for every run after.
 - **Fix:** in a self-test, `main.cpp` marks a pending crash as seen instead of offering it. The dump stays in the folder, and `run.ps1` already reports crashes (exit code, `Crashed`).
