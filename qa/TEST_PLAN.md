@@ -59,7 +59,7 @@ Generate two synthetic projects:
 
 | Metric | Realistic heavy | Stress |
 |---|---|---|
-| UI frame time during drag/scrub | p95 ≤16.7 ms, p99 ≤33 ms | p95 ≤33 ms |
+| UI frame time during drag/scrub (in screen refreshes: 16.7 ms = one at 60 Hz; +1 ms jitter) | p95 ≤16.7 ms, p99 ≤33 ms | p95 ≤33 ms |
 | Scene switch (cut) | ≤100 ms | ≤250 ms |
 | Linked-edit propagation | ≤100 ms | ≤250 ms |
 | Selection→inspector, single undo/redo, Sources search keystroke | ≤100 ms | ≤200 ms |

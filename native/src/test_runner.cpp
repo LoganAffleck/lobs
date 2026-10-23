@@ -12,6 +12,7 @@
 #include <obs.h>
 
 #include <QMutex>
+#include <QScreen>
 #include <QQmlContext>
 #include <QDateTime>
 #include <QDir>
@@ -150,6 +151,12 @@ public:
 		return now() - start;
 	}
 	// Frame presentation times (ms) since the last call: for frame-interval measurement.
+	// The main window's screen refresh rate (Hz): frame-time budgets are in refreshes, not a fixed 16.7 ms.
+	Q_INVOKABLE double screenHz() const
+	{
+		QQuickWindow *w = mainWindow();
+		return w && w->screen() ? w->screen()->refreshRate() : 60.0;
+	}
 	Q_INVOKABLE QVariantList takeFrameTimes()
 	{
 		QVariantList out;
@@ -343,6 +350,9 @@ public:
 
 	// ---------- canvas input (through the controller, as the preview window delivers it) ----------
 	// Canvas pixel coordinates. mods: "shift", "ctrl", "alt" joined by '+'. Returns per-move ms.
+	// stepMs > 0 waits that long between moves; stepMs < 0 waits for the next rendered frame,
+	// as a real mouse drag does (Qt delivers one move per frame). A timer can't pace moves to
+	// the screen: Windows timers tick every ~15.6 ms, so some frames get no move and render nothing.
 	Q_INVOKABLE QVariantMap canvasDrag(double x0, double y0, double x1, double y1, int steps = 20, const QString &mods = {}, int stepMs = 0)
 	{
 		const Qt::KeyboardModifiers m = parseMods(mods);
@@ -356,6 +366,8 @@ public:
 			moves << now() - a;
 			if (stepMs > 0)
 				wait(stepMs);
+			else if (stepMs < 0)
+				waitFrames(1, 1000);
 		}
 		const double r = now();
 		m_c.canvasRelease();

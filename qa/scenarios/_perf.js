@@ -120,13 +120,18 @@ function runPerf(profile, B, opts) {
 		const tr = eff(cams[0], "transform");
 		t.takeFrameTimes();
 		const lag = lagDelta(() => {
-			const r = t.canvasDrag(tr.x + 50, tr.y + 50, tr.x - 400, tr.y - 300, 120, "", 16);
+			// One move per rendered frame, like a mouse (LOBS-024: a 16 ms timer left frames without a move).
+			const r = t.canvasDrag(tr.x + 50, tr.y + 50, tr.x - 400, tr.y - 300, 120, "", -1);
 			t.metric("dragMoveCallMs", stats(r.moves));
 		});
 		const ft = t.takeFrameTimes();
 		const iv = [];
 		for (let k = 1; k < ft.length; ++k) iv.push(ft[k] - ft[k - 1]);
-		budgetCheck("uiFrameIntervalDuringDrag", stats(iv), B.frame95, B.frame99);
+		// Budgets are in screen refreshes (frame95: 16.7 = one at 60 Hz), so a 59 Hz screen gets
+		// 16.95 ms, plus 1 ms for timestamp jitter. A dropped frame adds a whole refresh, far more.
+		const hz = t.screenHz(), refresh = 1000 / hz, inRefreshes = ms => Math.round((Math.round(ms / 16.7) * refresh + 1) * 100) / 100;
+		t.metric("screenHz", hz);
+		budgetCheck("uiFrameIntervalDuringDrag", stats(iv), inRefreshes(B.frame95), inRefreshes(B.frame99));
 		t.metric("renderLagDuringDrag", lag);
 		// Inspector scrub: 120 steps, one undo step at the end.
 		const h0 = app.history.length;
