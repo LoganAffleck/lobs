@@ -24,15 +24,14 @@ Text, color, image, media and shape layers have their own content, so their fiel
 
 | Field | What it sets |
 |---|---|
-| **X**, **Y** | Position in px. |
-| **W**, **H** | Size in px. Minimum 1. |
+| **Position** (**X**, **Y**) | Where the layer's top-left corner sits, in canvas pixels. |
+| **Size** (**W**, **H**) | In canvas pixels. Minimum 1. |
 | **Rotate** | -360 to 360 degrees. |
 
 - The lock between **W** and **H** keeps proportions. It's on by default, and LOBS remembers your choice.
-- **Mirror left to right** and **Mirror top to bottom** flip the layer.
-- **Fit** fits the layer inside the canvas, keeping proportions. **Fill** covers the canvas. Both also center the layer and reset rotation.
-- **Center** centers it.
-- **Reset** restores the source's own proportions.
+- The button at the end of **Position** centers the layer on the canvas.
+- Under **Size**: **Fit** fits the layer inside the canvas, keeping proportions, and **Fill** covers the canvas. Both also center the layer and reset rotation. **Original** restores the source's own proportions.
+- The two buttons beside **Rotate** flip the layer: **Mirror left to right** and **Mirror top to bottom**.
 
 For a group, only **X** and **Y** apply. They move the whole group.
 
@@ -49,10 +48,11 @@ Crop is available once the source has reported its size. Text, shape and color l
 
 ![Cropping a layer on the canvas](shot:crop)
 
-- Presets: **Full** (no crop), **16:9**, **4:3**, **1:1** (Square) and **9:16** (Vertical). A preset crops around the center and keeps the layer's scale.
-- **Crop** turns on crop mode. Drag the edges or corners on the canvas. Click **Done**, or press Enter or Esc, to finish.
-- **L**, **T**, **R** and **B** set the crop from each edge in px.
-- **Corner radius** runs from 0 to 50% of the layer's short side. At 50 it reads **Round** (a circle or a pill). The square and circle buttons set 0 and 50.
+- **Crop** turns on crop mode. Drag the edges or corners on the canvas. Click **Done**, or press Enter or Esc, to finish. On a mirrored layer, the edge you drag is the one that's cropped.
+- The small button beside it names the current crop (**None**, **16:9**, ..., **Custom**) and opens the presets and exact values:
+  - Presets: **None**, **16:9**, **4:3**, **1:1** (Square) and **9:16** (Vertical). A preset crops around the center and keeps the layer's scale.
+  - **L**, **T**, **R** and **B** set the crop from each edge of the source, in source pixels.
+- **Corners** runs from 0 to 50% of the layer's short side. It reads **Square** at 0 and **Round** at 50 (a circle or a pill).
 
 Rectangles round their own corners, so the stroke follows the curve.
 

@@ -243,14 +243,14 @@
 .lobs .sec .sh .t { flex: 1; font-size: 13px; font-weight: 550; }
 .lobs .linkchip { color: var(--fg); }
 .lobs .linkchip .ico { color: var(--link) !important; }
-.lobs .tgrid { display: grid; grid-template-columns: 1fr var(--ctl) 1fr; gap: 6px; }
-.lobs .cgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .lobs .fcard { padding: 8px; border-radius: 10px; background: var(--s3); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .lobs .srchead { padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; }
 .lobs .srchead:hover { background: var(--hover); }
 .lobs .srchead .t { font-size: 13px; font-weight: 550; }
 .lobs .kv { display: flex; align-items: center; gap: 6px; }
 .lobs .kv > .k { width: 44px; color: var(--muted); font-size: 11px; flex: none; }
+.lobs .kv > .k.rl { width: 52px; } /* the Inspector's row labels: Position, Size, Rotate, Crop, Corners */
+.lobs .kv > .input { flex: 1; min-width: 0; }
 .lobs .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border-strong); flex: none; }
 
 /* Status bar */

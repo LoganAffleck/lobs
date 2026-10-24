@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Anchor, Btn, FillSlider, Icon, Menu, NumField, Select, Switch, Badge, Field } from '../primitives'
 import { useSelectedLayer, useStore } from '../store'
 import { Group } from '../Shell'
@@ -153,6 +154,7 @@ function LayerInspector({ l }: { l: Layer }) {
   const near = (r: number) => Math.abs(va - r) < 0.01
   const cropped = !!(c.l || c.t || c.r || c.b)
   const radius = l.radius ?? 0
+  const [cropOpen, setCropOpen] = useState(false)
   const shape = l.kind === 'rect' || l.kind === 'ellipse' || l.kind === 'arrow' || l.kind === 'pencil'
   return (
     <>
@@ -177,54 +179,44 @@ function LayerInspector({ l }: { l: Layer }) {
         </div>
       )}
 
+      {/* As the app: one labeled row per property, each action beside the value it changes. */}
       <Section title="Transform" group="transform" l={l} changed={!!l.rot}>
-        <div className="tgrid">
-          <NumField label="X" suffix="px" value={l.x} />
-          <span />
-          <NumField label="Y" suffix="px" value={l.y} />
-          <NumField label="W" suffix="px" value={l.w} />
-          <Btn icon={s.lockAspect ? 'link-2' : 'unlink-2'} variant="ghost" sel={s.lockAspect} onClick={() => d({ type: 'set', patch: { lockAspect: !s.lockAspect } })} />
-          <NumField label="H" suffix="px" value={l.h} />
-          <NumField label="Rotate" suffix="°" value={l.rot ?? 0} />
-          <span />
-          <div className="row" style={{ gap: 2 }}>
-            <Btn icon="flip-horizontal-2" variant="ghost" sel={l.flipH} onClick={() => d({ type: 'setLayer', id: l.id, patch: { flipH: !l.flipH } })} />
-            <Btn icon="flip-vertical-2" variant="ghost" sel={l.flipV} onClick={() => d({ type: 'setLayer', id: l.id, patch: { flipV: !l.flipV } })} />
-          </div>
-        </div>
-        <div className="row" style={{ gap: 4 }}>
-          <Btn icon="scan" text="Fit" fill />
-          <Btn icon="expand" text="Fill" fill />
-          <Btn icon="crosshair" text="Center" fill />
-          <Btn icon="ratio" text="Reset" fill />
-        </div>
+        <div className="kv"><span className="k rl">Position</span>
+          <NumField label="X" value={l.x} /><NumField label="Y" value={l.y} />
+          <Btn icon="crosshair" variant="ghost" /></div>
+        <div className="kv"><span className="k rl">Size</span>
+          <NumField label="W" value={l.w} /><NumField label="H" value={l.h} />
+          <Btn icon={s.lockAspect ? 'link-2' : 'unlink-2'} variant="ghost" sel={s.lockAspect} onClick={() => d({ type: 'set', patch: { lockAspect: !s.lockAspect } })} /></div>
+        <div className="kv" style={{ gap: 4 }}><span className="k rl" />
+          <Btn text="Fit" variant="ghost" /><Btn text="Fill" variant="ghost" /><Btn text="Original" variant="ghost" /></div>
+        <div className="kv"><span className="k rl">Rotate</span>
+          <NumField label="" suffix="°" value={l.rot ?? 0} />
+          <Btn icon="flip-horizontal-2" variant="ghost" sel={l.flipH} onClick={() => d({ type: 'setLayer', id: l.id, patch: { flipH: !l.flipH } })} />
+          <Btn icon="flip-vertical-2" variant="ghost" sel={l.flipV} onClick={() => d({ type: 'setLayer', id: l.id, patch: { flipV: !l.flipV } })} /></div>
       </Section>
 
       <Section title={croppable ? 'Crop & corners' : 'Corners'} group="crop" l={l} changed={cropped || radius > 0}>
         {croppable && (
           <>
-            <div className="row" style={{ gap: 4 }}>
-              <Btn text="Full" variant="ghost" sel={!cropped} />
-              <Btn text="16:9" variant="ghost" sel={cropped && near(16 / 9)} />
-              <Btn text="4:3" variant="ghost" sel={near(4 / 3)} />
-              <Btn text="1:1" variant="ghost" sel={near(1)} />
-              <Btn text="9:16" variant="ghost" sel={near(9 / 16)} />
-              <span className="grow" />
-              <Btn icon="crop" text={s.cropMode ? 'Done' : 'Crop'} variant={s.cropMode ? 'primary' : 'secondary'} onClick={() => d({ type: 'set', patch: { cropMode: !s.cropMode } })} />
-            </div>
-            <div className="cgrid">
-              <NumField label="L" suffix="px" value={c.l} />
-              <NumField label="T" suffix="px" value={c.t} />
-              <NumField label="R" suffix="px" value={c.r} />
-              <NumField label="B" suffix="px" value={c.b} />
-            </div>
+            <div className="kv"><span className="k rl">Crop</span>
+              <Btn icon="crop" text={s.cropMode ? 'Done' : 'Crop'} variant={s.cropMode ? 'primary' : 'secondary'} fill onClick={() => d({ type: 'set', patch: { cropMode: !s.cropMode } })} />
+              <Btn icon={cropOpen ? 'chevron-up' : 'chevron-down'} text={!cropped ? 'None' : near(16 / 9) ? '16:9' : near(4 / 3) ? '4:3' : near(1) ? '1:1' : near(9 / 16) ? '9:16' : 'Custom'} variant="ghost" onClick={() => setCropOpen(!cropOpen)} /></div>
+            {cropOpen && (
+              <>
+                <div className="kv" style={{ gap: 4 }}><span className="k rl" />
+                  <Btn text="None" variant="ghost" sel={!cropped} />
+                  <Btn text="16:9" variant="ghost" sel={cropped && near(16 / 9)} />
+                  <Btn text="4:3" variant="ghost" sel={near(4 / 3)} />
+                  <Btn text="1:1" variant="ghost" sel={near(1)} />
+                  <Btn text="9:16" variant="ghost" sel={near(9 / 16)} /></div>
+                <div className="kv"><span className="k rl" />
+                  <NumField label="L" value={c.l} /><NumField label="T" value={c.t} /><NumField label="R" value={c.r} /><NumField label="B" value={c.b} /></div>
+              </>
+            )}
           </>
         )}
-        <div className="row" style={{ gap: 6 }}>
-          <div className="grow"><FillSlider label="Corner radius" frac={radius / 50} value={radius >= 49.5 ? 'Round' : `${Math.round(radius)}%`} /></div>
-          <Btn icon="square" variant="ghost" sel={!radius} onClick={() => d({ type: 'setLayer', id: l.id, patch: { radius: 0 } })} />
-          <Btn icon="circle" variant="ghost" sel={radius >= 49.5} onClick={() => d({ type: 'setLayer', id: l.id, patch: { radius: 50 } })} />
-        </div>
+        <div className="kv"><span className="k rl">Corners</span>
+          <div className="grow"><FillSlider label="" frac={radius / 50} value={radius <= 0.5 ? 'Square' : radius >= 49.5 ? 'Round' : `${Math.round(radius)}%`} /></div></div>
       </Section>
 
       <Section title="Filters" group="filters" l={l} changed={(l.filters?.length ?? 0) > 0}>
