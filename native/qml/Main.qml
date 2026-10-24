@@ -1399,7 +1399,7 @@ ApplicationWindow {
                         title: ""
                         meta: app.editSceneName
                         FButton { iconName: "group"; variant: "ghost"; onClicked: app.groupSelected(); tip: chrome.keys("Group  Ctrl G") }
-                        FButton { iconName: "copy"; variant: "ghost"; onClicked: copyMenu.popup(); tip: "Copy to another scene" }
+                        FButton { iconName: "copy"; variant: "ghost"; onClicked: copyMenu.popup(this, 0, height + 4); tip: "Copy to another scene" } // under the button, not wherever the pointer is
                         FButton { iconName: "trash-2"; variant: "ghost"; onClicked: app.deleteSelected(); tip: "Delete  Del" }
                         FMenu {
                             id: copyMenu
