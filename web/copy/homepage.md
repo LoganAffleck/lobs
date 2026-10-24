@@ -8,5 +8,5 @@ OBS with a creative UI for building awesome scenes.
 
 **[Download for Windows]**
 
-Free · Open source · Windows 64-bit · v0.4.0 preview
+Free · Open source · Windows 64-bit · v0.4.1 preview
 
