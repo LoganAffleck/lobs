@@ -1,5 +1,7 @@
 #include "shapes.h"
 
+#include <QFont>
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QPainterPath>
 #include <QVariantList>
@@ -41,6 +43,40 @@ static QPainterPath smoothPath(const QVector<QPointF> &pts)
 		path.quadTo(pts[i], (pts[i] + pts[i + 1]) / 2);
 	path.lineTo(pts.last());
 	return path;
+}
+
+QImage renderText(const QVariantMap &st, int width, int height, double lineHeight)
+{
+	const QStringList lines = st.value("text").toString().split('\n');
+	const int n = int(std::max<qsizetype>(1, lines.size()));
+	const double linePx = std::max(4.0, lineHeight > 0 ? lineHeight : double(height) / n);
+	QFont f(st.value("font").toString());
+	f.setPixelSize(std::max(1, int(std::lround(linePx))));
+	f.setBold(st.value("bold", true).toBool());
+	f.setItalic(st.value("italic").toBool());
+	const QFontMetricsF fm(f);
+	const double k = linePx / std::max(1.0, fm.lineSpacing());
+	double wmax = 0;
+	for (const QString &l : lines)
+		wmax = std::max(wmax, fm.horizontalAdvance(l));
+	if (width <= 0)
+		width = int(std::ceil(wmax * k));
+	// The text fills the box's width, as text scaled to its layer does on Windows: a box laid out
+	// with another machine's font (a little narrower or wider) never cuts the text off.
+	const double kx = wmax > 0 ? width / wmax : k;
+	if (height <= 0)
+		height = int(std::lround(linePx * n));
+	QImage img(std::max(1, width), std::max(1, height), QImage::Format_ARGB32_Premultiplied);
+	img.fill(Qt::transparent);
+	QPainter p(&img);
+	p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing);
+	p.scale(kx, k);
+	p.setFont(f);
+	p.setPen(QColor(st.value("textColor", "#ffffff").toString()));
+	for (int i = 0; i < lines.size(); ++i)
+		p.drawText(QPointF(0, i * fm.lineSpacing() + fm.ascent()), lines[i]);
+	p.end();
+	return img.convertToFormat(QImage::Format_ARGB32); // straight alpha for the GPU, as shapes
 }
 
 QImage renderShape(const QVariantMap &st, int width, int height)

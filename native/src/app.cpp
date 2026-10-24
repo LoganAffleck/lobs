@@ -85,12 +85,34 @@ static QString firstRealDevice(Engine *engine, const QString &kind)
 }
 
 /// Sources that need a device but have none (e.g. a show made on another PC) get this PC's first real device.
+/// A device saved on the other platform (a show made on Windows opened on a Mac, or back): its id
+/// can't name anything here, unlike a device that's just unplugged ("Not connected").
+static bool isOtherPlatformDevice(const QString &kind, const QString &dev)
+{
+#ifdef Q_OS_WIN
+	// macOS: display and camera UUIDs, window numbers.
+	static const QRegularExpression uuid("^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$", QRegularExpression::CaseInsensitiveOption);
+	return uuid.match(dev).hasMatch() || (kind == "window" && !dev.isEmpty() && dev.toULongLong() > 0);
+#else
+	// Windows: device paths (\\?\usb#..., \\?\DISPLAY#...), WASAPI ids ({0.0.1.00000000}.{...}),
+	// windows as "title:class:program.exe".
+	return dev.startsWith("\\\\?\\") || dev.contains('#') || dev.startsWith('{') || (kind == "window" && dev.contains(':'));
+#endif
+}
+
+/// Sources that need a device but have none (e.g. a show made on another PC) get this PC's first
+/// real device; a window source is left for you to pick.
 static Doc withDefaultDevices(Doc d, Engine *engine)
 {
-	for (Source &s : d.sources)
-		if ((s.kind == "camera" || s.kind == "display" || s.kind == "mic" || s.kind == "desktop_audio") && s.settings.value("device").toString().isEmpty())
+	for (Source &s : d.sources) {
+		if (!QStringList{"camera", "display", "window", "mic", "desktop_audio"}.contains(s.kind))
+			continue;
+		if (isOtherPlatformDevice(s.kind, s.settings.value("device").toString()))
+			s.settings.remove("device");
+		if (s.kind != "window" && s.settings.value("device").toString().isEmpty())
 			if (const QString dev = firstRealDevice(engine, s.kind); !dev.isEmpty())
 				s.settings["device"] = dev;
+	}
 	return d;
 }
 
@@ -2051,7 +2073,11 @@ bool App::open(const QUrl &url)
 QVariantList App::obsCollections() const
 {
 	QVariantList out;
+#ifdef Q_OS_WIN
 	const QDir dir(qEnvironmentVariable("APPDATA") + "/obs-studio/basic/scenes");
+#else
+	const QDir dir(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/obs-studio/basic/scenes"); // ~/Library/Application Support
+#endif
 	for (const QFileInfo &fi : dir.entryInfoList({"*.json"}, QDir::Files, QDir::Time)) {
 		QFile f(fi.filePath());
 		if (!f.open(QIODevice::ReadOnly))
@@ -2329,7 +2355,10 @@ void App::refreshSourceStatus()
 			continue;
 		const QString dev = s.settings.value("device").toString();
 		QString detail, status, statusText;
-		if (!Permissions::allows(s.kind)) {
+		if (!m_engine->kindAvailable(s.kind)) {
+			status = "missing", statusText = "Not on this OS";
+			detail = s.kind == "game" ? "Game Capture is Windows-only" : "Not available here";
+		} else if (!Permissions::allows(s.kind)) {
 			const QString p = Permissions::forKind(s.kind);
 			status = "permission", statusText = "Needs access";
 			detail = "Allow " + Permissions::title(p) + " for LOBS";

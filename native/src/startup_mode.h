@@ -7,7 +7,7 @@
 // is never looked at: a folder or user name containing "test" must not count).
 inline bool isSelfTestRun(const QStringList &arguments)
 {
-	static const QStringList flags = {"--autotest", "--assettest", "--browsertest", "--engine-smoketest", "--enginetest", "--featuretest",
+	static const QStringList flags = {"--autotest", "--assettest", "--browsertest", "--captiontest", "--crossplatformtest", "--engine-smoketest", "--enginetest", "--featuretest",
 					  "--foldertest", "--importtest", "--scenariotest", "--snapshot", "--streamtest", "--texttest", "--tooltest"};
 	const QStringList args = arguments.mid(1);
 	for (const QString &a : args)

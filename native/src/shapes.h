@@ -12,6 +12,12 @@
 
 QImage renderShape(const QVariantMap &settings, int width, int height);
 
+// A text layer (text, font, bold, italic, textColor), laid out as the editor lays it out: the box
+// is (lines x line height) tall, the font's em is the line height, and the text is scaled so its
+// line spacing fills one line; its width fills the box. lineHeight <= 0 takes it from height;
+// width <= 0 makes the box as wide as the text.
+QImage renderText(const QVariantMap &settings, int width, int height, double lineHeight = 0);
+
 struct LaserPoint {
 	QPointF at;     // canvas px
 	qint64 timeMs;  // when it was drawn

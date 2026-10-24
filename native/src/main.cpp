@@ -1118,6 +1118,7 @@ int main(int argc, char *argv[])
 			auto check = [&](const QString &name, bool ok, const QString &detail = {}) { checks << QJsonObject{{"name", name}, {"ok", ok}, {"detail", detail}}; };
 			const QString iid = controller.property("lobsTestInst").toString();
 			if (obs_source_t *t = obs_get_source_by_name((iid + ":text").toUtf8().constData())) {
+#ifdef Q_OS_WIN
 				obs_data_t *st = obs_source_get_settings(t);
 				obs_data_t *font = obs_data_get_obj(st, "font");
 				const QString face = obs_data_get_string(font, "face"), style = obs_data_get_string(font, "style");
@@ -1127,6 +1128,9 @@ int main(int argc, char *argv[])
 				check("text color (BGR)", (color & 0xFFFFFF) == 0x0000FF, QString::number(color & 0xFFFFFF, 16));
 				obs_data_release(font);
 				obs_data_release(st);
+#else // LOBS draws text itself (renderText): no OBS text settings to read, the pixels say it all
+				check("text drawn by LOBS", QByteArray(obs_source_get_id(t)) == "lobs_frame", obs_source_get_id(t));
+#endif
 				obs_source_release(t);
 			} else {
 				check("text renderer exists", false);
@@ -1139,6 +1143,97 @@ int main(int argc, char *argv[])
 					red += c.red() > 180 && c.green() < 80 && c.blue() < 80;
 				}
 			check("red text renders", red > 20, QString("%1 red samples").arg(red));
+			bool all = true;
+			for (const QJsonValue c : checks)
+				all &= c.toObject()["ok"].toBool();
+			QFile f(report);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write(QJsonDocument(QJsonObject{{"ok", all}, {"checks", checks}}).toJson());
+			f.close();
+			QTimer::singleShot(300, &app, &QGuiApplication::quit);
+		});
+	}
+
+	// --captiontest <speech.wav> <report.json>: live captions on a media source playing the clip
+	// (CC-01 without the QA harness; the model comes from LOBS_WHISPER_MODEL or the data folder).
+	if (const int ct = int(app.arguments().indexOf("--captiontest")); ct > 0 && ct + 2 < app.arguments().size()) {
+		const QString wav = app.arguments()[ct + 1], report = app.arguments()[ct + 2];
+		QTimer::singleShot(2000, &app, [&, wav, report]() {
+			controller.newDocument();
+			controller.addSource("media", "Speech", wav, true);
+			const QString sid = controller.doc().sourceOrder.last();
+			controller.take(); // on program, so the clip plays
+			controller.mediaCommand(sid, "restart");
+			const bool started = captions.start(sid);
+			auto *poll = new QTimer(&app);
+			auto *clock = new QElapsedTimer;
+			clock->start();
+			QObject::connect(poll, &QTimer::timeout, &app, [&, poll, clock, started, report]() {
+				QString text;
+				for (const QVariant &l : captions.lines())
+					text += l.toMap().value("text").toString() + " ";
+				if (!text.contains("water", Qt::CaseInsensitive) && clock->elapsed() < 60000)
+					return;
+				poll->stop();
+				captions.stop();
+				bool all = true; // a word from each phrase: nothing lost at the seams
+				for (const char *w : {"stream", "today", "haunted", "follow", "water"})
+					all &= text.contains(QLatin1String(w), Qt::CaseInsensitive);
+				QFile f(report);
+				f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+				f.write(QJsonDocument(QJsonObject{{"ok", started && all}, {"started", started}, {"model", captions.modelState()},
+								  {"seconds", clock->elapsed() / 1000.0}, {"status", captions.status()}, {"text", text.trimmed()}}).toJson());
+				f.close();
+				QTimer::singleShot(300, &app, &QGuiApplication::quit);
+			});
+			poll->start(250);
+		});
+	}
+
+	// --crossplatformtest <report.json>: a show's devices saved on the other platform (Windows ids on
+	// a Mac, Mac ids on Windows) give way to this machine's, a window waits to be picked, and a
+	// kind this platform can't capture gets no stand-in. On the throwaway show; nothing is saved.
+	if (const int cp = int(app.arguments().indexOf("--crossplatformtest")); cp > 0 && cp + 1 < app.arguments().size()) {
+		const QString report = app.arguments()[cp + 1];
+		QTimer::singleShot(2000, &app, [&, report]() {
+			controller.newDocument();
+#ifdef Q_OS_WIN
+			const QVariantMap foreign{{"camera", "0FD4B3A2-236E-492B-8CE5-255DD288CE50"}, {"display", "37D8832A-2D66-02CA-B9F7-8F30A301B230"}, {"window", "12345"}};
+#else
+			const QVariantMap foreign{{"camera", "@device:pnp:\\\\?\\usb#vid_046d&pid_085e#abc#{65e8773d}\\global"},
+						  {"display", "\\\\?\\DISPLAY#DELA0A3#5&2a2b3c4d&0&UID4353#{e6f07b5f}"},
+						  {"window", "OBS 32.0:Qt663QWindowIcon:obs64.exe"},
+						  {"mic", "{0.0.1.00000000}.{4b2c7a1e-1111-2222-3333-444455556666}"}};
+#endif
+			QJsonArray checks;
+			auto check = [&](const QString &name, bool ok, const QString &detail = {}) { checks << QJsonObject{{"name", name}, {"ok", ok}, {"detail", detail}}; };
+			QHash<QString, QString> ids; // kind -> source id
+			for (auto it = foreign.cbegin(); it != foreign.cend(); ++it) {
+				controller.addSource(it.key(), "", "", true);
+				const QString sid = controller.doc().sourceOrder.last();
+				controller.setSourceSetting(sid, "device", it.value());
+				ids[it.key()] = sid;
+			}
+			// A device that's this machine's own stays as it is (an unplugged one would too).
+			controller.addSource("camera", "Local camera", "", true);
+			const QString local = controller.doc().sourceOrder.last(), localDev = controller.doc().sources[local].settings.value("device").toString();
+			controller.fillMissingDevices(); // what loading a show runs
+			const lobs::Doc &d = controller.doc();
+			for (auto it = ids.cbegin(); it != ids.cend(); ++it) {
+				const QString dev = d.sources[it.value()].settings.value("device").toString();
+				if (it.key() == "window")
+					check("window: other-platform id cleared, waits for a pick", dev.isEmpty(), dev);
+				else
+					check(it.key() + ": other-platform id replaced", dev != foreign[it.key()].toString(), dev.isEmpty() ? "(none on this machine)" : dev);
+			}
+			check("this machine's camera kept", d.sources[local].settings.value("device").toString() == localDev, localDev);
+#ifndef Q_OS_WIN
+			controller.addSource("game", "Game", "", true);
+			const QString game = controller.doc().sourceOrder.last();
+			obs_source_t *g = obs_get_source_by_name(game.toUtf8().constData());
+			check("game capture: no stand-in source on macOS", !g, g ? obs_source_get_id(g) : "none");
+			obs_source_release(g);
+#endif
 			bool all = true;
 			for (const QJsonValue c : checks)
 				all &= c.toObject()["ok"].toBool();

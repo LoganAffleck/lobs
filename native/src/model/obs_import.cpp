@@ -23,12 +23,28 @@ QString abgrToHex(qint64 v)
 QString convertInput(const QString &id, const QJsonObject &s, QVariantMap &out)
 {
 	const auto dev = [&](const char *key) {
-		if (const QString v = s[key].toString(); !v.isEmpty())
-			out["device"] = v;
+		// Text on Windows; numbers on macOS (window ids), kept as text like every device id.
+		const QJsonValue v = s[key];
+		if (const QString t = v.isDouble() ? QString::number(v.toInteger()) : v.toString(); !t.isEmpty() && t != "0")
+			out["device"] = t;
 	};
 	if (id == "dshow_input") return dev("video_device_id"), "camera";
 	if (id == "monitor_capture") return dev("monitor_id"), "display";
 	if (id == "window_capture") return dev("window"), "window";
+	// macOS. ScreenCaptureKit: type 0 display, 1 window, 2 application (LOBS captures windows, so
+	// an application capture comes over as a window source waiting for a pick).
+	if (id == "screen_capture") {
+		const int type = s["type"].toInt();
+		if (type == 0)
+			return dev("display_uuid"), "display";
+		if (type == 1)
+			dev("window");
+		return "window";
+	}
+	if (id == "display_capture") return dev("display_uuid"), "display";
+	if (id == "macos-avcapture" || id == "macos-avcapture-fast" || id.startsWith("av_capture_input")) return dev("device"), "camera";
+	if (id == "coreaudio_input_capture") return dev("device_id"), "mic";
+	if (id == "coreaudio_output_capture" || id == "sck_audio_capture") return dev("device_id"), "desktop_audio";
 	if (id == "game_capture") {
 		out["mode"] = s["capture_mode"].toString("any_fullscreen");
 		dev("window");
@@ -55,7 +71,8 @@ QString convertInput(const QString &id, const QJsonObject &s, QVariantMap &out)
 		out["text"] = s["text"].toString();
 		out["font"] = font["face"].toString("Arial");
 		out["size"] = font["size"].toInt(256);
-		out["textColor"] = abgrToHex(s.contains("color") ? s["color"].toInteger() : 0xFFFFFF);
+		// GDI+ keeps one color; FreeType (macOS, Linux) a top-to-bottom gradient: its top color.
+		out["textColor"] = abgrToHex(s.contains("color") ? s["color"].toInteger() : s.contains("color1") ? s["color1"].toInteger() : 0xFFFFFF);
 		out["bold"] = (font["flags"].toInt() & 1) != 0;
 		out["italic"] = (font["flags"].toInt() & 2) != 0;
 		return "text";

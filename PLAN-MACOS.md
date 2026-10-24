@@ -158,17 +158,27 @@ Done (2026-10-24), checked by hand:
 - File > Open Recent (last 10 shows still on disk, Clear Menu); Window menu has Minimize ⌘M,
   Zoom and Enter/Exit Full Screen ⌃⌘F.
 
-### Phase 3 — Feature parity
-- **Text:** move text layers off GDI+. FreeType2 has fewer options (no per-side outline width,
-  different background handling). Either map LOBS's text settings onto `text_ft2_source_v2` per
-  platform, or render text ourselves (we already draw shapes) so it looks identical on both.
-  **Recommendation:** render it ourselves; text that looks different per OS breaks shared projects.
-- Keychain for the stream key; global hotkeys; live captions (whisper + Metal); browser source
-  and Twitch panels (CEF helper apps must be in the bundle and signed with entitlements).
-- OBS import: read `~/Library/Application Support/obs-studio/basic/scenes` and map macOS OBS
-  source IDs (resolves the "macOS-only sources don't come over" gap in `PLAN.md`).
-- Opening a project made on the other OS: devices won't match, so show "pick a camera" on those
-  sources instead of failing.
+### Phase 3 — Feature parity (in progress)
+
+Done (2026-10-24):
+- Text: on macOS LOBS draws text layers itself (`renderText`, like shapes) into a lobs_frame,
+  laid out exactly as the editor lays it out, at the layer's pixel size; a box laid out with
+  another machine's font is filled rather than cut off. Windows still uses GDI+ (one switch,
+  `kOwnText`, moves it over). `--texttest` passes.
+- Shows from the other platform: device ids that can only be the other platform's (Windows device
+  paths and WASAPI ids on a Mac, UUIDs and window numbers on Windows) give way to this machine's
+  first device; a window waits to be picked; Game Capture on a Mac creates nothing and says
+  "Not on this OS" (it used to become a canvas-size color source). `--crossplatformtest` passes.
+- OBS import on macOS: finds `~/Library/Application Support/obs-studio/basic/scenes` and maps
+  `screen_capture` / `display_capture` / `window_capture` (numeric ids), `macos-avcapture` /
+  `av_capture_input`, `coreaudio_*`, `sck_audio_capture`, FreeType text color. A real collection
+  (8 scenes, 15 sources) imports with every source.
+- Live captions: whisper.cpp on Metal; `--captiontest` turns the CC-01 clip (made with `say`)
+  into every word in real time.
+
+Left:
+- Global hotkeys with Input Monitoring allowed (hands-on).
+- Keychain stream key: hands-on check of Save and reload.
 
 ### Phase 4 — Ship it
 - Sign everything inside out (frameworks, plugins, CEF helpers, app) with Developer ID and

@@ -152,11 +152,24 @@ bool Engine::start(const QString &runtimeRoot)
 
 // ---------- document mapping ----------
 
+// Text layers: GDI+ on Windows; on macOS LOBS draws them itself (renderText, as shapes) into a
+// lobs_frame, since OBS's FreeType text has fewer options and lays text out differently.
 #ifdef Q_OS_WIN
 static const char *kTextSource = "text_gdiplus_v3";
+static constexpr bool kOwnText = false;
 #else
-static const char *kTextSource = "text_ft2_source_v2"; // GDI+ is Windows-only
+static const char *kTextSource = "lobs_frame";
+static constexpr bool kOwnText = true;
 #endif
+
+// renderText's settings for a text source, with this platform's default font filled in.
+static QVariantMap ownTextSettings(const Source &s)
+{
+	QVariantMap st = s.settings;
+	if (st.value("font").toString().isEmpty())
+		st["font"] = defaultTextFont();
+	return st;
+}
 
 // The OBS source type for a LOBS kind on this platform, or nullptr if it has none here.
 static const char *obsKindOrNull(const QString &kind)
@@ -377,23 +390,28 @@ void Engine::apply(const Doc &doc)
 			continue;
 		// Not created until macOS allows it (it would block, or fail); left unapplied, it's
 		// created on the apply that follows the grant (see Permissions::granted).
-		if (!m_inputs.contains(id) && !Permissions::allows(s.kind))
-			continue;
+		if (!m_inputs.contains(id) && (!Permissions::allows(s.kind) || (s.kind != "shape" && !obsKindOrNull(s.kind))))
+			continue; // and kinds this platform has no capture for (Game Capture on macOS): nothing, not a stand-in
 		m_appliedInput[id] = s;
 		const QJsonObject settings = inputSettings(doc, s);
 		const QString sig = QString(obsKind(s.kind)) + QJsonDocument(settings).toJson(QJsonDocument::Compact);
 		obs_source_t *in = m_inputs.value(id);
+		const bool fresh = !in, changed = fresh || m_inputSig.value(id) != sig;
 		if (!in) {
 			obs_data_t *d = toData(settings);
 			in = obs_source_create(obsKind(s.kind), id.toUtf8().constData(), d, nullptr);
 			obs_data_release(d);
 			m_inputs[id] = in;
-		} else if (m_inputSig.value(id) != sig) {
+		} else if (changed) {
 			obs_data_t *d = toData(settings);
 			obs_source_update(in, d);
 			obs_data_release(d);
 		}
 		m_inputSig[id] = sig;
+		if (kOwnText && s.kind == "text" && changed && in) { // the Sources preview: one 96 px line
+			const QImage img = renderText(ownTextSettings(s), 0, 0, 96);
+			lobs_frame_set(in, img.constBits(), uint32_t(img.width()), uint32_t(img.height()), uint32_t(img.bytesPerLine()));
+		}
 		if (s.hasAudio)
 			ensureMeter(id, in);
 		if (s.hasAudio) {
@@ -459,7 +477,21 @@ void Engine::apply(const Doc &doc)
 			it.applied = now;
 			it.hasApplied = true;
 			QString childName = inst.sourceId;
-			if (src.kind == "text") {
+			if (src.kind == "text" && kOwnText) {
+				// Drawn at the layer's own pixel size, so it stays crisp (as shapes).
+				const Transform tt = doc.transform(inst);
+				const int tw = int(std::lround(std::max(1.0, tt.w))), th = int(std::lround(std::max(1.0, tt.h)));
+				const QVariantMap st = ownTextSettings(src);
+				const QString textSig = QJsonDocument(QJsonObject::fromVariantMap(st)).toJson(QJsonDocument::Compact) + QString("|%1x%2").arg(tw).arg(th);
+				childName = inst.id + ":text" + (it.textGen ? QString("#%1").arg(it.textGen) : QString());
+				if (!it.text)
+					it.text = obs_source_create("lobs_frame", childName.toUtf8().constData(), nullptr, nullptr);
+				if (it.textSig != textSig) {
+					const QImage img = renderText(st, tw, th);
+					lobs_frame_set(it.text, img.constBits(), uint32_t(img.width()), uint32_t(img.height()), uint32_t(img.bytesPerLine()));
+					it.textSig = textSig;
+				}
+			} else if (src.kind == "text") {
 				// Font pixel size from the layer's height (split across lines), so it renders 1:1.
 				const Transform tt = doc.transform(inst);
 				const int lines = int(src.settings.value("text").toString().count('\n')) + 1;
