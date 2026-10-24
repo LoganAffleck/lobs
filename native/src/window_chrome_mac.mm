@@ -1,6 +1,7 @@
 #include "window_chrome.h"
 
 #include <QMouseEvent>
+#include <QPointer>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRegularExpression>
@@ -8,11 +9,34 @@
 #import <AppKit/AppKit.h>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 static NSWindow *nsWindow(QWindow *w)
 {
 	return w ? [(__bridge NSView *)reinterpret_cast<void *>(w->winId()) window] : nil;
+}
+
+// macOS puts the window buttons in its own 28-point title bar, near the top of the window; the
+// top bar is taller, so the title bar strip is stretched to its height and the buttons centered
+// in it, as other apps with tall toolbars do. AppKit lays them out again on resize, so this runs
+// after each one.
+static void centerWindowButtons(NSWindow *w, CGFloat barHeight)
+{
+	NSButton *close = [w standardWindowButton:NSWindowCloseButton];
+	NSView *container = close.superview.superview; // the title bar's container view
+	if (!close || !container || (w.styleMask & NSWindowStyleMaskFullScreen))
+		return;
+	NSRect frame = container.frame;
+	frame.size.height = barHeight;
+	frame.origin.y = NSHeight(w.frame) - barHeight;
+	container.frame = frame;
+	for (NSWindowButton b : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
+		NSButton *button = [w standardWindowButton:b];
+		NSPoint origin = button.frame.origin;
+		origin.y = std::round((NSHeight(button.superview.frame) - NSHeight(button.frame)) / 2);
+		[button setFrameOrigin:origin];
+	}
 }
 
 void WindowChrome::attach(QQuickWindow *window)
@@ -24,6 +48,15 @@ void WindowChrome::attach(QQuickWindow *window)
 	if (NSWindow *w = nsWindow(window)) {
 		w.titleVisibility = NSWindowTitleHidden;
 		w.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+		QPointer<WindowChrome> self(this);
+		__weak NSWindow *weak = w;
+		for (NSNotificationName n : {NSWindowDidResizeNotification, NSWindowDidExitFullScreenNotification, NSWindowDidBecomeKeyNotification})
+			[[NSNotificationCenter defaultCenter] addObserverForName:n object:w queue:nil usingBlock:^(NSNotification *) {
+				if (self && weak)
+					centerWindowButtons(weak, self->m_caption);
+			}];
+		centerWindowButtons(w, m_caption);
+		connect(this, &WindowChrome::captionHeightChanged, this, [this, w] { centerWindowButtons(w, m_caption); });
 	}
 	window->installEventFilter(this);
 	connect(window, &QWindow::windowStateChanged, this, &WindowChrome::leadingInsetChanged);
