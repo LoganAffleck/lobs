@@ -89,8 +89,8 @@ void Permissions::setHotkeysNeeded(bool needed)
 QVariantList Permissions::missing() const
 {
 	static const QHash<QString, QString> uses = {
-		{"microphone", "your mic"}, {"camera", "your camera"}, {"screen", "display, window and desktop audio capture"},
-		{"hotkeys", "global hotkeys while another app is in front"}};
+		{"microphone", "mic sources"}, {"camera", "camera sources"}, {"screen", "screen, window and desktop audio sources"},
+		{"hotkeys", "global hotkeys"}};
 	QVariantList out;
 	for (const QString p : kAll) {
 		if (!m_needed.contains(p))
@@ -99,7 +99,7 @@ QVariantList Permissions::missing() const
 		if (a == platform::Access::Granted) {
 			if (p == "hotkeys" && !m_grantedAtLaunch.contains(p))
 				out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", "relaunch"}, {"relaunch", false}, {"settings", false},
-						   {"detail", "is on. Reopen LOBS to start " + uses[p] + "."}};
+						   {"detail", "is on and takes effect when LOBS reopens."}};
 			continue;
 		}
 		const bool ask = a == platform::Access::NotAsked;
@@ -107,16 +107,15 @@ QVariantList Permissions::missing() const
 		// Monitoring always, as libobs checks it at startup), and this one can't even see the
 		// switch: after a visit to System Settings, reopening is the likely next step.
 		const bool relaunch = p == "screen" || p == "hotkeys";
-		const QString effect = uses[p] + (p == "hotkeys" ? " won't work" : " stays empty");
+		const QString effect = uses[p] + (p == "hotkeys" ? " won't work" : " stay empty");
 		if (relaunch && !ask && m_visitedSettings.contains(p))
 			out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", "relaunch"}, {"relaunch", false}, {"settings", true},
-					   {"detail", "If you turned it on for LOBS, reopen LOBS to start " + uses[p] + "."}};
+					   {"detail", "takes effect when LOBS reopens."}};
 		else
 			out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", ask ? "ask" : "settings"}, {"relaunch", relaunch && !ask},
 					   {"settings", false},
-					   {"detail", ask ? "LOBS needs your permission for " + uses[p] + "."
-							  : "is off for LOBS, so " + effect + ". Turn it on in System Settings" +
-								    (relaunch ? ", then reopen LOBS." : ".")}};
+					   {"detail", ask ? "is needed for " + uses[p] + "."
+							  : "is off, so " + effect + ". Turn it on in System Settings" + (relaunch ? ", then reopen LOBS." : ".")}};
 	}
 	return out;
 }
@@ -127,8 +126,7 @@ QVariantList Permissions::all() const
 	return {};
 #else
 	static const QHash<QString, QString> purposes = {
-		{"microphone", "Mic sources and live captions."}, {"camera", "Camera sources."},
-		{"screen", "Display and window capture, and desktop audio."}};
+		{"microphone", "Mics and live captions"}, {"camera", "Cameras"}, {"screen", "Screens, windows and desktop audio"}};
 	QVariantList out;
 	for (const QString p : {"microphone", "camera", "screen"}) {
 		const platform::Access a = cached(p);

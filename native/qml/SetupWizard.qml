@@ -194,7 +194,7 @@ FDialog {
         ColumnLayout {
             visible: wiz.step === "access"
             width: parent.width; spacing: 10
-            Body { text: "macOS asks before LOBS can use these. Allow the ones you'll use; you can change them any time in System Settings." }
+            Body { text: "Allow what you'll use. You can change this later in System Settings." }
             Item { implicitHeight: 2 }
             Repeater {
                 model: permissions.all
@@ -216,8 +216,8 @@ FDialog {
                             spacing: 2; Layout.fillWidth: true
                             Text { text: acc.modelData.title; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body + 1; font.weight: 550 }
                             Caption {
-                                text: acc.modelData.purpose + (acc.modelData.state === "denied"
-                                    ? " Off for LOBS: turn it on in System Settings" + (acc.modelData.relaunch ? ", then reopen LOBS." : ".") : "")
+                                text: acc.modelData.state === "denied"
+                                    ? "Off. Turn it on in System Settings" + (acc.modelData.relaunch ? ", then reopen LOBS." : ".") : acc.modelData.purpose
                             }
                         }
                         RowLayout {
