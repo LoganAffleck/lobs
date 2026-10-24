@@ -9,7 +9,7 @@ import { DOCS } from './docs'
 export interface Route { path: string; title: string; description: string; element: () => ReactNode }
 
 const SITE = 'LOBS'
-const DEFAULT_DESC = 'A free streaming and recording app for Windows on the OBS engine. Add your webcam once and put it in every scene with its own size, crop and filters.'
+const DEFAULT_DESC = 'OBS with a creative UI for building awesome scenes: layers, linking, crop handles and drawing tools, on the engine you already trust. Free for Windows.'
 
 export const ROUTES: Route[] = [
   { path: '/', title: "LOBS: Logan's OBS", description: DEFAULT_DESC, element: () => <Home /> },
