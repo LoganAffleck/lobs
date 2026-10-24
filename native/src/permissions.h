@@ -20,6 +20,8 @@ class Permissions : public QObject {
 	// Every capture permission, needed or not, for the setup assistant: [{id, title, purpose,
 	// state ("granted" | "denied" | "notAsked"), relaunch}]. Empty where the OS doesn't ask (Windows).
 	Q_PROPERTY(QVariantList all READ all NOTIFY changed)
+	// macOS's Secure Keyboard Entry is on, so global hotkeys get no keys (checked with the rest).
+	Q_PROPERTY(bool hotkeysBlocked MEMBER m_hotkeysBlocked NOTIFY changed)
 public:
 	explicit Permissions(QObject *parent = nullptr);
 
@@ -50,4 +52,5 @@ private:
 	bool m_hotkeys = false;
 	QSet<QString> m_grantedAtLaunch; // libobs checks Input Monitoring only when it starts
 	QSet<QString> m_visitedSettings; // System Settings opened for these from the bar
+	bool m_hotkeysBlocked = false;
 };

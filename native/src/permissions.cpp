@@ -180,6 +180,11 @@ void Permissions::refresh()
 		blog(LOG_INFO, "[lobs] %s access: %s", qPrintable(p),
 		     now == platform::Access::Granted ? "granted" : now == platform::Access::Denied ? "denied" : "not asked yet");
 	}
+	if (const bool blocked = platform::secureKeyboardEntryOn(); blocked != m_hotkeysBlocked) {
+		m_hotkeysBlocked = blocked;
+		blog(LOG_INFO, "[lobs] secure keyboard entry %s", blocked ? "on: global hotkeys get no keys" : "off");
+		any = true;
+	}
 	if (any)
 		emit changed();
 	if (newlyGranted)

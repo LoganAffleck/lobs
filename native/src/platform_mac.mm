@@ -9,6 +9,8 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <AppKit/AppKit.h>
+#import <Carbon/Carbon.h> // IsSecureEventInputEnabled
+#include <util/base.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <Security/Security.h>
 
@@ -153,6 +155,32 @@ QVariantList captureDevices(const QString &kind)
 				out << QVariantMap{{"name", QString::fromNSString(d.localizedName)}, {"value", QString::fromNSString(d.uniqueID)}};
 	}
 	return out;
+}
+
+static CGEventRef debugTapProc(CGEventTapProxy, CGEventType type, CGEventRef event, void *)
+{
+	if (type == kCGEventKeyDown || type == kCGEventKeyUp)
+		blog(LOG_INFO, "[lobs] key-debug: %s keycode %lld flags 0x%llx", type == kCGEventKeyDown ? "down" : "up",
+		     CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode), (unsigned long long)CGEventGetFlags(event));
+	else if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput)
+		blog(LOG_INFO, "[lobs] key-debug: tap disabled (%d)", int(type));
+	return event;
+}
+
+bool secureKeyboardEntryOn() { return IsSecureEventInputEnabled(); }
+
+void debugKeyEvents()
+{
+	blog(LOG_INFO, "[lobs] key-debug: listen access %d, secure keyboard entry %d", int(CGPreflightListenEventAccess()), int(IsSecureEventInputEnabled()));
+	CFMachPortRef tap = CGEventTapCreate(kCGHIDEventTap, kCGHeadInsertEventTap, kCGEventTapOptionListenOnly,
+					     CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp), debugTapProc, nullptr);
+	blog(LOG_INFO, "[lobs] key-debug: tap %s", tap ? "created" : "NOT created");
+	if (!tap)
+		return;
+	CFRunLoopSourceRef src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0);
+	CFRunLoopAddSource(CFRunLoopGetMain(), src, kCFRunLoopCommonModes);
+	CFRelease(src);
+	CGEventTapEnable(tap, true);
 }
 
 void relaunchAfterExit()

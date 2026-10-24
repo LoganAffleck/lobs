@@ -365,6 +365,29 @@ Rectangle {
                         visible: page.section === 4
                         Layout.fillWidth: true
                         spacing: 0
+                        // macOS hands no keys to any app while Secure Keyboard Entry is on.
+                        Rectangle {
+                            visible: permissions.hotkeysBlocked
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            implicitHeight: blockedText.implicitHeight + 24
+                            radius: Pal.radius
+                            color: Pal.s3
+                            border.color: "#4dfbbf24"
+                            RowLayout {
+                                anchors { fill: parent; margins: 12 }
+                                spacing: 10
+                                FIcon { name: "triangle-alert"; size: 15; color: "#fbbf24"; Layout.alignment: Qt.AlignTop }
+                                Text {
+                                    id: blockedText
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body
+                                    text: "<b>Global hotkeys are blocked right now.</b> macOS's Secure Keyboard Entry is on, so no app gets keys typed elsewhere. Close password fields and password managers, or turn off Secure Keyboard Entry in Terminal's menu. Logging out clears it."
+                                    textFormat: Text.StyledText
+                                }
+                            }
+                        }
                         Repeater {
                             // One card per group (Output, Scenes, Audio).
                             model: [...new Set(app.hotkeyActions.map(a => a.group))]

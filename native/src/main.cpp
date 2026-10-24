@@ -648,6 +648,8 @@ int main(int argc, char *argv[])
 	// macOS privacy permissions never hold up startup: what isn't allowed yet isn't created,
 	// the permissions bar says so, and a grant applies the show again (see permissions.h).
 	Permissions permissions;
+	if (qEnvironmentVariableIsSet("LOBS_DEBUG_KEYS"))
+		platform::debugKeyEvents();
 	const auto syncNeeded = [&] {
 		QStringList kinds;
 		for (const QString &id : controller.doc().sourceOrder)

@@ -2,6 +2,7 @@
 
 #include <obs.h>
 #include <obs-hotkey.h>
+#include <util/base.h>
 
 #include <QHash>
 #include <QKeySequence>
@@ -24,6 +25,7 @@ struct Ctx {
 void onHotkey(void *data, obs_hotkey_id, obs_hotkey_t *, bool pressed)
 {
 	auto *c = static_cast<Ctx *>(data);
+	blog(LOG_INFO, "[lobs] hotkey %s %s", qPrintable(c->action), pressed ? "pressed" : "released");
 	c->self->fire(c->action, pressed);
 }
 
@@ -156,6 +158,8 @@ void Hotkeys::apply(const QVariantMap &bindings, const QStringList &validActions
 		const Qt::KeyboardModifiers mods = combo.keyboardModifiers();
 		obs_data_t *b = obs_data_create();
 		obs_data_set_string(b, "key", obs_key_to_name(obs_key_from_virtual_key(vk)));
+		blog(LOG_INFO, "[lobs] hotkey %s bound to %s (virtual key %d, Qt modifiers 0x%x)", qPrintable(action),
+		     obs_key_to_name(obs_key_from_virtual_key(vk)), vk, unsigned(mods));
 		obs_data_set_bool(b, "shift", mods & Qt::ShiftModifier);
 #ifdef Q_OS_MACOS
 		// Qt names Command "Ctrl" on macOS (so "Ctrl+S" is ⌘S) and the Control key "Meta".

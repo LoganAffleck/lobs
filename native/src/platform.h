@@ -31,6 +31,12 @@ void openPrivacySettings(const QString &permission);
 // modules list them only through a running source, so LOBS asks macOS directly. Windows: empty
 // (the engine asks the modules there).
 QVariantList captureDevices(const QString &kind); // "display" | "window" | "camera"
+// macOS's Secure Keyboard Entry is on (a password field, a password manager, Terminal's menu
+// item): while it is, no app gets keys it isn't typed into, so global hotkeys can't work.
+bool secureKeyboardEntryOn();
+// LOBS_DEBUG_KEYS=1: logs every key event a listen-only event tap gets, and whether macOS's
+// Secure Keyboard Entry is on (it hides keys from taps), to tell global hotkey problems apart.
+void debugKeyEvents();
 // Starts LOBS again once this process has exited (some permissions only apply to a new process).
 void relaunchAfterExit();
 // A message box for errors that stop LOBS before its UI exists.
