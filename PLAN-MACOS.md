@@ -176,8 +176,12 @@ Done (2026-10-24):
 - Live captions: whisper.cpp on Metal; `--captiontest` turns the CC-01 clip (made with `say`)
   into every word in real time.
 
+- Global hotkeys work from any app with Input Monitoring allowed (⌘9 → Record, verified). They
+  get no keys while macOS's Secure Keyboard Entry is on (it was, held by loginwindow, until a
+  log out): Settings > Hotkeys now says so. System Settings' "Quit & Reopen" doesn't relaunch a
+  Qt app, so LOBS reopens itself when quit from outside after such a grant.
+
 Left:
-- Global hotkeys with Input Monitoring allowed (hands-on).
 - Keychain stream key: hands-on check of Save and reload.
 
 ### Phase 4 — Ship it
