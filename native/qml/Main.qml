@@ -1895,7 +1895,6 @@ ApplicationWindow {
                     readonly property real va: sv.d.visibleAspect || 0
                     readonly property bool cropped: !!(sv.d.cl || sv.d.ct || sv.d.cr || sv.d.cb)
                     property bool open: app.uiFlag("inspector/cropOpen", false)
-                    readonly property bool expanded: open || app.cropMode
                     function near(r) { return Math.abs(va - r) < 0.01 }
                     readonly property string summary: !cropped ? "None"
                         : near(16 / 9) ? "16:9" : near(4 / 3) ? "4:3" : near(1) ? "1:1" : near(9 / 16) ? "9:16" : "Custom"
@@ -1905,24 +1904,26 @@ ApplicationWindow {
                         visible: cropSec.croppable
                         spacing: 6; Layout.fillWidth: true
                         RowLabel { text: "Crop" }
+                        // Cropping on the canvas is the main way in; presets and exact values sit
+                        // behind the small button that names the current crop.
                         FButton {
                             Layout.fillWidth: true
-                            variant: "ghost"; alignLeft: true
-                            text: cropSec.summary
-                            iconName: cropSec.expanded ? "chevron-down" : "chevron-right"
-                            tip: cropSec.expanded ? "Hide crop settings" : "Show crop settings"
-                            onClicked: { cropSec.open = !cropSec.expanded; app.setUiFlag("inspector/cropOpen", cropSec.open); if (!cropSec.open) app.cropMode = false }
-                        }
-                        FButton {
-                            iconName: "crop"; text: app.cropMode ? "Done" : ""
-                            variant: app.cropMode ? "primary" : "ghost"
+                            iconName: "crop"; text: app.cropMode ? "Done" : "Crop"
+                            variant: app.cropMode ? "primary" : "secondary"
                             tip: app.cropMode ? "Finish cropping (Enter or Esc)" : "Drag the layer's edges on the canvas to crop"
                             onClicked: app.cropMode = !app.cropMode
+                        }
+                        FButton {
+                            variant: "ghost"
+                            text: cropSec.summary
+                            iconName: cropSec.open ? "chevron-up" : "chevron-down"
+                            tip: cropSec.open ? "Hide crop presets and values" : "Crop presets and exact values"
+                            onClicked: { cropSec.open = !cropSec.open; app.setUiFlag("inspector/cropOpen", cropSec.open) }
                         }
                     }
                     // Quick crops, centered on the source; the layer keeps its scale.
                     RowLayout {
-                        visible: cropSec.croppable && cropSec.expanded
+                        visible: cropSec.croppable && cropSec.open
                         Layout.fillWidth: true; spacing: 4
                         RowLabel {}
                         FButton { text: "None"; variant: "ghost"; selected: !cropSec.cropped; tip: "No crop"; onClicked: app.cropToAspect(0) }
@@ -1933,7 +1934,7 @@ ApplicationWindow {
                         Item { Layout.fillWidth: true }
                     }
                     RowLayout {
-                        visible: cropSec.croppable && cropSec.expanded
+                        visible: cropSec.croppable && cropSec.open
                         spacing: 6; Layout.fillWidth: true
                         RowLabel {}
                         FNumField { label: "L"; live: true; from: 0; value: sv.d.cl || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("l", v); onScrubbed: (v, f) => app.scrubCrop("l", Math.round(v), f) }
