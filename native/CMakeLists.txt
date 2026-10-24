@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(LOBS VERSION 0.4.0 LANGUAGES C CXX)
+project(LOBS VERSION 0.4.1 LANGUAGES C CXX)
 if(APPLE)
     enable_language(OBJC OBJCXX)
 endif()
