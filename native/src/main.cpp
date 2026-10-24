@@ -260,6 +260,7 @@ public:
 		m_native->show();
 		connect(m_app, &App::previewVisibilityRequested, this, [this](bool on) { m_hidden = !on; sync(); });
 		const qreal dpr = m_native->devicePixelRatio();
+		m_engine->setPreviewDpr(dpr);
 		m_engine->attachPreview(reinterpret_cast<void *>(m_native->winId()), int(m_native->width() * dpr), int(m_native->height() * dpr));
 	}
 
@@ -282,6 +283,7 @@ private:
 		const qreal dpr = m_native->devicePixelRatio();
 		const int pw = int(r.width() * dpr), ph = int(r.height() * dpr);
 		m_app->setPreviewSize(QSizeF(pw / dpr, ph / dpr), dpr);
+		m_engine->setPreviewDpr(dpr);
 		m_engine->resizePreview(pw, ph);
 	}
 

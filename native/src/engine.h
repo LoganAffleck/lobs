@@ -127,6 +127,9 @@ public:
 	// Preview
 	void attachPreview(void *hwnd, int width, int height);
 	void resizePreview(int width, int height);
+	// Device pixels per point on the preview's screen (2 on Retina, 1.5 at 150% on Windows):
+	// handles, outlines and labels are sized in points, as the canvas hit-testing is.
+	void setPreviewDpr(double dpr) { m_previewDpr = float(dpr > 0 ? dpr : 1); }
 	void setPixelPerfect(bool on) { m_pixelPerfect = on; }
 	// Laser pointer: a fading trail over the program output (and the preview). Not a layer.
 	void laserPoint(QPointF canvasPos, bool newStroke);
@@ -275,6 +278,7 @@ private:
 
 	obs_display *m_display = nullptr;
 	bool m_pixelPerfect = true;
+	std::atomic<float> m_previewDpr{1.0f}; // read on the graphics thread
 	obs_source *m_laser = nullptr;
 	struct LaserPt { QPointF at; qint64 t; bool newStroke; };
 	QVector<LaserPt> m_laserPts;

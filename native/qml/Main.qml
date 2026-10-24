@@ -70,6 +70,23 @@ ApplicationWindow {
                 Platform.MenuItem { text: "New Project…"; shortcut: "Ctrl+N"; onTriggered: newProjectDialog.open() }
                 Platform.MenuItem { text: "Open…"; shortcut: "Ctrl+O"; enabled: !app.live; onTriggered: win.guardUnsaved(() => openDialog.open()) }
                 Platform.Menu {
+                    id: recentMac
+                    title: "Open Recent"
+                    enabled: !app.live
+                    Instantiator {
+                        model: app.recentShows
+                        delegate: Platform.MenuItem {
+                            required property string modelData
+                            text: modelData.split("/").pop().replace(/\.lobs\.json$/, "")
+                            onTriggered: { const f = modelData; win.guardUnsaved(() => app.open("file://" + f)) }
+                        }
+                        onObjectAdded: (i, o) => recentMac.insertItem(i, o)
+                        onObjectRemoved: (i, o) => recentMac.removeItem(o)
+                    }
+                    Platform.MenuSeparator {}
+                    Platform.MenuItem { text: "Clear Menu"; enabled: app.recentShows.length > 0; onTriggered: app.clearRecentShows() }
+                }
+                Platform.Menu {
                     id: importMac
                     title: "Import from OBS"
                     enabled: !app.live
@@ -119,6 +136,14 @@ ApplicationWindow {
             Platform.Menu {
                 id: windowMac
                 title: "Window"
+                Platform.MenuItem { text: "Minimize"; shortcut: "Ctrl+M"; onTriggered: chrome.minimize() }
+                Platform.MenuItem { text: "Zoom"; onTriggered: chrome.toggleMaximize() }
+                Platform.MenuItem {
+                    text: win.visibility === Window.FullScreen ? "Exit Full Screen" : "Enter Full Screen"
+                    shortcut: "Meta+Ctrl+F" // ⌃⌘F (Qt's Ctrl is Command on macOS)
+                    onTriggered: win.visibility = win.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+                }
+                Platform.MenuSeparator {}
                 Instantiator {
                     model: win.panels
                     delegate: Platform.MenuItem {
@@ -128,7 +153,7 @@ ApplicationWindow {
                         checked: modelData.isOpen
                         onTriggered: win.togglePanel(modelData)
                     }
-                    onObjectAdded: (i, o) => windowMac.insertItem(i, o)
+                    onObjectAdded: (i, o) => windowMac.insertItem(i + 4, o) // after Minimize, Zoom, Full Screen and the separator
                     onObjectRemoved: (i, o) => windowMac.removeItem(o)
                 }
                 Platform.MenuSeparator {}

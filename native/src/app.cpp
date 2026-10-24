@@ -1965,13 +1965,39 @@ bool App::createProject(const QString &name, const QString &folder)
 	m_editScene.clear();
 	editScene(scene);
 	m_projectFile = file;
-	QSettings().setValue("project/file", m_projectFile);
+	rememberProject();
 	watchAssets();
 	adoptExternalFiles();
 	emit assetsChanged();
 	emit projectChanged();
 	showToast("Created " + name.trimmed());
 	return true;
+}
+
+void App::rememberProject()
+{
+	QSettings settings;
+	settings.setValue("project/file", m_projectFile);
+	QStringList recent = settings.value("project/recent").toStringList();
+	recent.removeAll(m_projectFile);
+	recent.prepend(m_projectFile);
+	settings.setValue("project/recent", recent.mid(0, 10));
+	emit recentShowsChanged();
+}
+
+QStringList App::recentShows() const
+{
+	QStringList out;
+	for (const QString &f : QSettings().value("project/recent").toStringList())
+		if (QFileInfo::exists(f))
+			out << f;
+	return out;
+}
+
+void App::clearRecentShows()
+{
+	QSettings().remove("project/recent");
+	emit recentShowsChanged();
 }
 
 bool App::saveAs(const QUrl &url)
@@ -1982,7 +2008,7 @@ bool App::saveAs(const QUrl &url)
 	// Only now does the show's folder become the project (its assets folder sits next to it),
 	// so a failed Save As leaves the current project as it was.
 	m_projectFile = path;
-	QSettings().setValue("project/file", m_projectFile);
+	rememberProject();
 	watchAssets();
 	adoptExternalFiles();
 	emit assetsChanged();
@@ -2012,7 +2038,7 @@ bool App::open(const QUrl &url)
 		showToast(QString("Repaired %1 broken reference%2 in this show").arg(n).arg(n == 1 ? "" : "s"));
 	m_store.replace(withDefaultDevices(opened, m_engine), "Open " + QFileInfo(f).fileName());
 	m_projectFile = url.toLocalFile();
-	QSettings().setValue("project/file", m_projectFile);
+	rememberProject();
 	watchAssets();
 	adoptExternalFiles();
 	emit assetsChanged();

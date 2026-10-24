@@ -138,7 +138,7 @@ Done (2026-10-24):
   take), so no probe sources and no "Invalid target display ID" log noise.
 - Fixed in passing: double-encoded text in the setup assistant ("Browseâ€¦"), on both platforms.
 
-### Phase 2 — Feels like a Mac app (mostly done)
+### Phase 2 — Feels like a Mac app ✅
 
 Done (2026-10-24), checked by hand:
 - Native menu bar: LOBS (About, Settings… ⌘,), File (New Project ⌘N, Open ⌘O, Import from OBS ▸,
@@ -152,9 +152,11 @@ Done (2026-10-24), checked by hand:
 - Default text font Helvetica Neue and Menlo for code on macOS (Segoe UI and Consolas on Windows).
 - Eyedropper works with Screen Recording allowed.
 
-Left:
-- Retina canvas: a close look at preview sharpness at 2x.
-- macOS-style File > Open Recent and a Window menu with Minimize / Zoom.
+- Retina: the preview already rendered at device resolution, but its handles, outlines and
+  labels were sized in device pixels (half size at 2x, smaller than their 9-point grab area);
+  they're sized in points now. Also fixes Windows at 150% / 200% scaling.
+- File > Open Recent (last 10 shows still on disk, Clear Menu); Window menu has Minimize ⌘M,
+  Zoom and Enter/Exit Full Screen ⌃⌘F.
 
 ### Phase 3 — Feature parity
 - **Text:** move text layers off GDI+. FreeType2 has fewer options (no per-side outline width,

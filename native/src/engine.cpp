@@ -1313,7 +1313,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 			const uint8_t *bits = it->constBits();
 			m_labelTextures.insert(it.key(), gs_texture_create(uint32_t(it->width()), uint32_t(it->height()), GS_RGBA, 1, &bits, 0));
 		}
-		const float px = 1.0f / std::max(scale, 0.01f); // one screen pixel, in canvas units
+		const float px = m_previewDpr / std::max(scale, 0.01f); // one point on screen, in canvas units
 		for (const BlockedLayer &b : blocked) {
 			gs_matrix_push();
 			gs_matrix_translate3f(float(b.rect.center().x()), float(b.rect.center().y()), 0.0f);
@@ -1327,7 +1327,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 				fillRect(float(-b.rect.width() / 2), float(-b.rect.height() / 2), float(b.rect.width()), float(b.rect.height()));
 			}
 			if (gs_texture_t *tex = m_labelTextures.value(b.label)) {
-				// 14 screen pixels of text, whatever the zoom (the image is drawn at 2x).
+				// 14 points of text, whatever the zoom (the image is drawn at 2x).
 				const float w = float(gs_texture_get_width(tex)) / 2 * px, h = float(gs_texture_get_height(tex)) / 2 * px;
 				gs_effect_t *def = obs_get_base_effect(OBS_EFFECT_DEFAULT);
 				gs_effect_set_texture(gs_effect_get_param_by_name(def, "image"), tex);
@@ -1397,7 +1397,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 	if (!boxes.isEmpty() || !guides.isEmpty()) {
 		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
 		gs_eparam_t *color = gs_effect_get_param_by_name(solid, "color");
-		const float px = 1.0f / scale; // one screen pixel in canvas units
+		const float px = m_previewDpr / scale; // one point on screen, in canvas units (2 device pixels on Retina)
 		while (gs_effect_loop(solid, "Solid")) {
 			vec4 c;
 			vec4_set(&c, 1.0f, 0.31f, 0.85f, 1.0f);

@@ -185,6 +185,10 @@ public:
 	Q_INVOKABLE bool createProject(const QString &name, const QString &folder);
 	Q_INVOKABLE void loadSample();
 	Q_INVOKABLE bool saveAs(const QUrl &url);
+	// Shows opened or saved lately, newest first, those still on disk (File > Open Recent).
+	Q_PROPERTY(QStringList recentShows READ recentShows NOTIFY recentShowsChanged)
+	QStringList recentShows() const;
+	Q_INVOKABLE void clearRecentShows();
 	Q_INVOKABLE bool open(const QUrl &url);
 	// OBS scene collections found in %APPDATA%/obs-studio/basic/scenes: [{name, path, modified}].
 	Q_INVOKABLE QVariantList obsCollections() const;
@@ -414,6 +418,7 @@ public:
 
 signals:
 	void docChanged();
+	void recentShowsChanged();
 	void clipboardChanged();
 	// The big lists, each emitted only when its contents changed (so QML rebuilds only those).
 	void scenesChanged();
@@ -465,6 +470,7 @@ private:
 	QString m_docPath;
 	Hotkeys *m_hotkeys = nullptr;
 	QString m_projectFile; // the saved show this session belongs to ("" = unsaved)
+	void rememberProject(); // saves it as the current show and puts it first in recentShows
 	lobs::Doc m_cleanDoc;
 	QStringList m_clipIds; // copied or cut layers (top-level ones of the selection)
 	lobs::Doc m_clipDoc;   // the show when they were copied, so a cut layer can still be pasted // an untitled show matching this has nothing to lose (see unsavedShow)
