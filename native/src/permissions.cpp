@@ -98,18 +98,25 @@ QVariantList Permissions::missing() const
 		const platform::Access a = cached(p);
 		if (a == platform::Access::Granted) {
 			if (p == "hotkeys" && !m_grantedAtLaunch.contains(p))
-				out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", "relaunch"}, {"relaunch", false},
-						   {"detail", title(p) + " is on. Reopen LOBS to start " + uses[p] + "."}};
+				out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", "relaunch"}, {"relaunch", false}, {"settings", false},
+						   {"detail", "is on. Reopen LOBS to start " + uses[p] + "."}};
 			continue;
 		}
 		const bool ask = a == platform::Access::NotAsked;
 		// macOS applies these two to a new process only (Screen Recording usually, Input
-		// Monitoring always, as libobs checks it at startup).
+		// Monitoring always, as libobs checks it at startup), and this one can't even see the
+		// switch: after a visit to System Settings, reopening is the likely next step.
 		const bool relaunch = p == "screen" || p == "hotkeys";
-		out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", ask ? "ask" : "settings"}, {"relaunch", relaunch && !ask},
-				   {"detail", ask ? "LOBS needs your permission for " + uses[p] + "."
-						  : title(p) + " is off for LOBS, so " + uses[p] + (p == "hotkeys" ? " won't work" : " stays empty") +
-							    ". Turn it on in System Settings" + (relaunch ? ", then reopen LOBS." : ".")}};
+		const QString effect = uses[p] + (p == "hotkeys" ? " won't work" : " stays empty");
+		if (relaunch && !ask && m_visitedSettings.contains(p))
+			out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", "relaunch"}, {"relaunch", false}, {"settings", true},
+					   {"detail", "If you turned it on for LOBS, reopen LOBS to start " + uses[p] + "."}};
+		else
+			out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", ask ? "ask" : "settings"}, {"relaunch", relaunch && !ask},
+					   {"settings", false},
+					   {"detail", ask ? "LOBS needs your permission for " + uses[p] + "."
+							  : "is off for LOBS, so " + effect + ". Turn it on in System Settings" +
+								    (relaunch ? ", then reopen LOBS." : ".")}};
 	}
 	return out;
 }
@@ -130,6 +137,8 @@ void Permissions::request(const QString &permission)
 		platform::requestAccess(permission, [this] { refresh(); });
 	} else {
 		platform::openPrivacySettings(permission);
+		m_visitedSettings.insert(permission);
+		emit changed();
 	}
 }
 

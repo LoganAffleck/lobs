@@ -158,6 +158,7 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	connect(&m_caretTimer, &QTimer::timeout, this, [this]() { m_caretOn = !m_caretOn; layoutEditedText(); });
 	m_engine->setPixelPerfect(m_pixelPerfect);
 	connect(&m_statusTimer, &QTimer::timeout, this, &App::refreshSourceStatus);
+	connect(&m_sizeTimer, &QTimer::timeout, this, &App::sizeNewLayers);
 	m_statusTimer.start(1000);
 	m_saveTimer.setSingleShot(true);
 	connect(&m_saveTimer, &QTimer::timeout, this, &App::autosave);
@@ -932,8 +933,9 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 			url.prepend("https://"); // "streamlabs.com/alert-box/..." just works
 		settings = {{"url", url}};
 	}
-	else if (kind == "camera" || kind == "display" || kind == "mic" || kind == "desktop_audio") {
-		if (const QString dev = firstRealDevice(m_engine, kind); !dev.isEmpty())
+	else if (kind == "camera" || kind == "display" || kind == "window" || kind == "mic" || kind == "desktop_audio") {
+		// The device picked in the Add dialog, else this machine's first (a window has no default).
+		if (const QString dev = !extra.isEmpty() ? extra : kind == "window" ? QString() : firstRealDevice(m_engine, kind); !dev.isEmpty())
 			settings = {{"device", dev}};
 	}
 	QString sid, iid;
@@ -947,12 +949,55 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 		if (place && k.video && d.scenes.contains(m_editScene))
 			iid = d.placeSource(m_editScene, sid).id;
 	});
-	if (!iid.isEmpty())
+	if (!iid.isEmpty()) {
 		m_selection = {iid}, m_poolSelection.clear();
-	else
+		if (k.w <= 0)
+			waitForSize(iid);
+	} else {
 		m_poolSelection = sid, m_selection.clear();
+	}
 	updateOverlay();
 	emit docChanged();
+}
+
+void App::waitForSize(const QString &instanceId)
+{
+	m_sizeWhenKnown.insert(instanceId, QDateTime::currentMSecsSinceEpoch() + 30000);
+	if (!m_sizeTimer.isActive())
+		m_sizeTimer.start(50);
+}
+
+void App::sizeNewLayers()
+{
+	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+	for (auto it = m_sizeWhenKnown.begin(); it != m_sizeWhenKnown.end();) {
+		const auto inst = doc().instances.constFind(it.key());
+		const QSize ns = inst != doc().instances.constEnd() ? m_engine->sourceSize(inst->sourceId) : QSize();
+		if (inst == doc().instances.constEnd() || now > it.value()) { // gone, or no picture after 30 s
+			it = m_sizeWhenKnown.erase(it);
+			continue;
+		}
+		if (ns.isEmpty()) {
+			++it;
+			continue;
+		}
+		const QString id = it.key();
+		it = m_sizeWhenKnown.erase(it);
+		const Source src = doc().sources.value(inst->sourceId);
+		if (doc().transform(*inst) != doc().defaultProps(&src).transform)
+			continue; // moved or resized while waiting: leave it
+		// Its own size and shape, centered; scaled down to fit the canvas, never up.
+		const Crop c = doc().crop(*inst);
+		const double w = std::max(1, ns.width() - c.l - c.r), h = std::max(1, ns.height() - c.t - c.b);
+		const double W = doc().canvasW, H = doc().canvasH, k = std::min({1.0, W / w, H / h});
+		Transform t = doc().transform(*inst);
+		t.w = std::round(w * k), t.h = std::round(h * k);
+		t.x = std::round((W - t.w) / 2), t.y = std::round((H - t.h) / 2);
+		m_store.amend([&](Doc &d) { d.setTransform(id, t); });
+		updateOverlay();
+	}
+	if (m_sizeWhenKnown.isEmpty())
+		m_sizeTimer.stop();
 }
 
 void App::placeSource(const QString &id)
@@ -965,6 +1010,8 @@ void App::placeSource(const QString &id)
 		return showToast("Audio sources aren't placed on the canvas");
 	QString iid;
 	m_store.commit("Place " + doc().sources[id].name, [&](Doc &d) { iid = d.placeSource(m_editScene, id).id; });
+	if (kindInfo(doc().sources[id].kind).w <= 0)
+		waitForSize(iid);
 	m_selection = {iid};
 	m_poolSelection.clear();
 	updateOverlay();

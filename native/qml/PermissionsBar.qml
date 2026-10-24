@@ -26,7 +26,7 @@ Rectangle {
                 FIcon { name: "triangle-alert"; size: 15; color: "#fbbf24" }
                 Text {
                     Layout.fillWidth: true
-                    text: "<b>" + modelData.title + "</b>  " + modelData.detail
+                    text: "<b>" + modelData.title + "</b> " + modelData.detail
                     textFormat: Text.StyledText
                     color: Pal.fg
                     font.family: Pal.font
@@ -43,6 +43,12 @@ Rectangle {
                     text: "Reopen LOBS"
                     variant: "secondary"
                     onClicked: permissions.relaunch()
+                }
+                FButton {
+                    visible: modelData.settings
+                    text: "Open System Settings"
+                    variant: "secondary"
+                    onClicked: permissions.request(modelData.id)
                 }
                 FButton {
                     visible: index === 0

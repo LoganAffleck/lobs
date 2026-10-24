@@ -12,9 +12,10 @@
 
 class Permissions : public QObject {
 	Q_OBJECT
-	// What the open show needs and doesn't have: [{id, title, detail, action, relaunch}], action
-	// being "ask" (the system can still prompt), "settings" (only System Settings can change it)
-	// or "relaunch" (granted, but only a new LOBS process gets it); relaunch: also offer that.
+	// What the open show needs and doesn't have: [{id, title, detail, action, relaunch, settings}],
+	// action being "ask" (the system can still prompt), "settings" (only System Settings can
+	// change it) or "relaunch" (only a new LOBS process gets it); relaunch and settings: also
+	// offer that as a second button. detail follows the title ("Camera is off for LOBS…").
 	Q_PROPERTY(QVariantList missing READ missing NOTIFY changed)
 public:
 	explicit Permissions(QObject *parent = nullptr);
@@ -41,4 +42,5 @@ private:
 	QSet<QString> m_needed; // permissions, not source kinds
 	bool m_hotkeys = false;
 	QSet<QString> m_grantedAtLaunch; // libobs checks Input Monitoring only when it starts
+	QSet<QString> m_visitedSettings; // System Settings opened for these from the bar
 };

@@ -104,7 +104,7 @@ Original scope:
 - **Done when:** `LOBS.app` launches, shows the editor, loads a project, and the canvas renders
   color, image and media layers.
 
-### Phase 1 — Capture, permissions and encoding (in progress)
+### Phase 1 — Capture, permissions and encoding (mostly done)
 
 Done (2026-10-24):
 - Only source kinds and filters whose OBS module registered are offered, so macOS shows no Game
@@ -121,11 +121,18 @@ Done (2026-10-24):
   `~/Library/Preferences` into Application Support.
 - `LOBS_SIGN_IDENTITY` signs dev builds with one certificate so permissions survive rebuilds.
 
+- Hands-on check passed with permissions granted: camera (FaceTime HD), display, window and
+  desktop audio all capture live. Fixes from it: a blank placeholder in OBS's device lists was
+  saved as display "0"; camera devices are listed through a probe source like screens; the Add
+  dialog picks the window (required) or camera/display before adding; new window and display
+  layers fit their real size instead of stretching to the canvas (Windows too).
+- Signed with a "LOBS Dev" certificate, granted permissions survive rebuilds (verified).
+
 Left:
-- Hands-on check with permissions granted: camera, display, window, desktop audio.
 - A permissions step in the setup assistant, and an empty state on the canvas for a layer whose
   source lacks permission.
 - HEVC for recording (streaming services want H.264).
+- The display probe logs a harmless "Invalid target display ID: 0" each time it lists displays.
 
 ### Phase 2 — Feels like a Mac app
 - Window chrome with native traffic lights and full-screen support.

@@ -1179,10 +1179,11 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 	if (!prop || (!in && !Permissions::allows(kind)))
 		return out;
 #ifndef Q_OS_WIN
-	// ScreenCaptureKit's property lists come from a source instance (they crash without one).
+	// Screen and camera capture list their devices only through a source instance (screen
+	// capture crashes without one; camera capture lists nothing).
 	obs_source_t *probe = nullptr;
-	if (!in && QByteArray(obsKind(kind)) == "screen_capture") {
-		obs_data_t *d = toData(QJsonObject{{"type", kind == "display" ? 0 : 1}});
+	if (const QByteArray id = obsKind(kind); !in && (id == "screen_capture" || id == "macos-avcapture")) {
+		obs_data_t *d = toData(id == "screen_capture" ? QJsonObject{{"type", kind == "display" ? 0 : 1}} : QJsonObject{});
 		in = probe = obs_source_create_private(obsKind(kind), "lobs-device-probe", d);
 		obs_data_release(d);
 	}
@@ -1192,8 +1193,13 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 		for (size_t i = 0, n = obs_property_list_item_count(p); i < n; i++) {
 			if (obs_property_list_item_disabled(p, i))
 				continue;
-			const char *v = obs_property_list_format(p) == OBS_COMBO_FORMAT_INT ? nullptr : obs_property_list_item_string(p, i);
+			const bool isInt = obs_property_list_format(p) == OBS_COMBO_FORMAT_INT;
+			const char *v = isInt ? nullptr : obs_property_list_item_string(p, i);
+			if (!isInt && !v)
+				continue; // a placeholder with no value (macOS's display list starts with one), not "0"
 			const QString value = v ? QString::fromUtf8(v) : QString::number(obs_property_list_item_int(p, i));
+			if (value.isEmpty() && QString::fromUtf8(obs_property_list_item_name(p, i)).trimmed().isEmpty())
+				continue; // a blank placeholder (macOS's camera list starts with one)
 			out << QVariantMap{{"name", QString::fromUtf8(obs_property_list_item_name(p, i))}, {"value", value}};
 		}
 	}

@@ -2010,8 +2010,29 @@ ApplicationWindow {
         title: "Add a source"
         width: 560
         property string kind: "camera"
-        onOpened: nameField.forceActiveFocus()
-        function create() { app.addSource(kind, nameField.text, extraField.text, placeBox.checked); nameField.text = ""; extraField.text = ""; close() }
+        // Camera, display and window are picked here, before the source exists (a window has no
+        // sensible default, so Add waits for one).
+        readonly property bool picksDevice: ["camera", "display", "window"].indexOf(kind) >= 0
+        property var devices: []
+        property string device: ""
+        property string deviceName: ""
+        function refreshDevices() {
+            devices = picksDevice ? app.devicesForKind(kind) : []
+            const first = devices.find(d => d.name.toLowerCase().indexOf("virtual") < 0)
+            device = kind !== "window" && first ? first.value : ""
+            deviceName = kind !== "window" && first ? first.name : ""
+        }
+        onKindChanged: refreshDevices()
+        onOpened: { refreshDevices(); nameField.forceActiveFocus() }
+        readonly property bool ready: kind !== "window" || device !== ""
+        function create() {
+            if (!ready)
+                return
+            // A window source is named after its window, unless you named it.
+            const name = nameField.text || (kind === "window" ? deviceName.slice(0, 48) : "")
+            app.addSource(kind, name, picksDevice ? device : extraField.text, placeBox.checked)
+            nameField.text = ""; extraField.text = ""; close()
+        }
         ColumnLayout {
             anchors.fill: parent
             spacing: 12
@@ -2039,6 +2060,70 @@ ApplicationWindow {
                     }
                 }
             }
+            FSelect {
+                visible: addDialog.kind === "camera" || addDialog.kind === "display"
+                Layout.fillWidth: true
+                placeholder: "No " + (addDialog.kind === "camera" ? "camera" : "display") + " found"
+                options: addDialog.devices
+                currentValue: addDialog.device
+                onPicked: (v) => addDialog.device = v
+            }
+            ColumnLayout {
+                visible: addDialog.kind === "window"
+                Layout.fillWidth: true
+                spacing: 6
+                RowLayout {
+                    Layout.fillWidth: true
+                    Caption { text: "Choose the window to capture"; Layout.fillWidth: true }
+                    FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "List the open windows again"; onClicked: addDialog.refreshDevices() }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 220
+                    radius: Pal.radius
+                    color: Pal.s3
+                    border.color: Pal.border
+                    Text {
+                        visible: addDialog.devices.length === 0
+                        anchors.centerIn: parent
+                        width: parent.width - 32
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        text: permissions.missing.some(m => m.id === "screen") ? "Allow Screen Recording to list your windows." : "No windows to capture."
+                        color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                    }
+                    ListView {
+                        id: windowList
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        clip: true
+                        model: addDialog.devices
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property bool chosen: addDialog.device === modelData.value
+                            width: windowList.width
+                            height: 30
+                            radius: Pal.radius - 2
+                            color: chosen ? Pal.selected : winMouse.containsMouse ? Pal.hover : "transparent"
+                            Text {
+                                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 10; rightMargin: 10 }
+                                text: modelData.name
+                                elide: Text.ElideRight
+                                color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: chosen ? 550 : 400
+                            }
+                            MouseArea {
+                                id: winMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                Accessible.role: Accessible.Button
+                                Accessible.name: String(modelData.name)
+                                onClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name }
+                                onDoubleClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name; addDialog.create() }
+                            }
+                        }
+                    }
+                }
+            }
             FInput { id: nameField; Layout.fillWidth: true; placeholderText: "Name (optional)"; onAccepted: addDialog.create() }
             FInput {
                 id: extraField
@@ -2053,7 +2138,7 @@ ApplicationWindow {
                 Layout.topMargin: 4
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: addDialog.close() }
-                FButton { text: "Add source"; variant: "primary"; onClicked: addDialog.create() }
+                FButton { text: "Add source"; variant: "primary"; enabled: addDialog.ready; onClicked: addDialog.create() }
             }
         }
     }

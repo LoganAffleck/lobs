@@ -97,6 +97,7 @@ public:
 	// Devices or windows a source can use. Asking Windows takes 100-500 ms, so the list is kept
 	// for a few seconds; fresh = true (opening the menu) always asks again.
 	Q_INVOKABLE QVariantList devices(const QString &sourceId, bool fresh = false);
+	Q_INVOKABLE QVariantList devicesForKind(const QString &kind) { return m_engine->listDevices({}, kind); } // before the source exists
 	Q_INVOKABLE void setSourceSetting(const QString &id, const QString &key, const QVariant &value);
 	// Audio effects on a pool source (mixer).
 	Q_INVOKABLE QVariantList audioFxTypes() const;
@@ -470,6 +471,13 @@ private:
 	int m_sourceTick = 0;
 	QTimer m_statusTimer;
 	QHash<QString, QVariantList> m_deviceCache; // kind -> devices, refreshed every few seconds
+	// Layers placed before their source knew its size (window and screen capture start a moment
+	// later), with when to give up: fitted to their real size once known, unless moved meanwhile.
+	// Checked every 50 ms while any wait, so the stretched first frames barely show.
+	QHash<QString, qint64> m_sizeWhenKnown;
+	QTimer m_sizeTimer;
+	void waitForSize(const QString &instanceId);
+	void sizeNewLayers();
 	void refreshSourceStatus();
 	void watchAssets();
 	void adoptExternalFiles(); // copy files the show uses into the assets folder
