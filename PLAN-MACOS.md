@@ -158,7 +158,7 @@ Done (2026-10-24), checked by hand:
 - File > Open Recent (last 10 shows still on disk, Clear Menu); Window menu has Minimize ⌘M,
   Zoom and Enter/Exit Full Screen ⌃⌘F.
 
-### Phase 3 — Feature parity (in progress)
+### Phase 3 — Feature parity ✅
 
 Done (2026-10-24):
 - Text: on macOS LOBS draws text layers itself (`renderText`, like shapes) into a lobs_frame,
@@ -181,8 +181,8 @@ Done (2026-10-24):
   log out): Settings > Hotkeys now says so. System Settings' "Quit & Reopen" doesn't relaunch a
   Qt app, so LOBS reopens itself when quit from outside after such a grant.
 
-Left:
-- Keychain stream key: hands-on check of Save and reload.
+- Stream key lives in the login Keychain ("LOBS stream key"); settings.json keeps only a marker.
+  Survives a relaunch (verified).
 
 ### Phase 4 — Ship it
 - Sign everything inside out (frameworks, plugins, CEF helpers, app) with Developer ID and
