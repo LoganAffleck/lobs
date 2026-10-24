@@ -214,7 +214,7 @@ FButton {
                             id: hex
                             Layout.fillWidth: true
                             placeholderText: "#RRGGBB"
-                            font.family: "Consolas"
+                            font.family: Pal.mono
                             onAccepted: {
                                 const t = text.trim(); const val = t.startsWith("#") ? t : "#" + t
                                 if (/^#[0-9a-fA-F]{6}$/.test(val)) { pop.load(val); cf.choose(val); pop.close() }

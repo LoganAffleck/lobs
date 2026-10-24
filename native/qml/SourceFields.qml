@@ -80,7 +80,7 @@ ColumnLayout {
         spacing: 4
         FFontPicker {
             Layout.fillWidth: true
-            currentFont: sf.st.font || "Segoe UI"
+            currentFont: sf.st.font || app.defaultTextFont
             onPicked: (f) => app.setSourceSetting(sf.d.id, "font", f)
         }
         FButton {

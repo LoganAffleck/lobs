@@ -59,6 +59,11 @@ bool WindowChrome::isControlAt(const QPointF &scenePos) const
 	return m_captionItem && hit(m_captionItem);
 }
 
+QString WindowChrome::keys(const QString &text)
+{
+	return text;
+}
+
 bool WindowChrome::nativeEventFilter(const QByteArray &, void *message, qintptr *result)
 {
 	MSG *msg = static_cast<MSG *>(message);

@@ -12,6 +12,26 @@
 
 namespace lobs {
 
+// The font new text layers start with: one every machine on this platform has.
+inline QString defaultTextFont()
+{
+#ifdef Q_OS_MACOS
+	return QStringLiteral("Helvetica Neue");
+#else
+	return QStringLiteral("Segoe UI");
+#endif
+}
+
+// Monospace for hex values and the like.
+inline QString monoFont()
+{
+#ifdef Q_OS_MACOS
+	return QStringLiteral("Menlo");
+#else
+	return QStringLiteral("Consolas");
+#endif
+}
+
 struct Transform {
 	double x = 0, y = 0, w = 0, h = 0, rot = 0;
 	bool flipH = false, flipV = false; // mirrored within the layer's box

@@ -17,9 +17,11 @@ class WindowChrome : public QObject, public QAbstractNativeEventFilter
 	// The top bar item; only its controls are hit-tested (this runs on every mouse move).
 	Q_PROPERTY(QQuickItem *captionItem MEMBER m_captionItem NOTIFY captionHeightChanged)
 	// The system draws the window buttons (macOS), so the top bar hides its own and leaves
-	// leadingInset pixels free at its left edge for them.
+	// leadingInset pixels free at its left edge for them (none in full screen, where they hide).
 	Q_PROPERTY(bool nativeControls READ nativeControls CONSTANT)
-	Q_PROPERTY(int leadingInset READ leadingInset CONSTANT)
+	Q_PROPERTY(int leadingInset READ leadingInset NOTIFY leadingInsetChanged)
+	// macOS: File, Edit and Window live in the system menu bar (Main.qml), not the top bar.
+	Q_PROPERTY(bool nativeMenuBar READ nativeControls CONSTANT)
 
 public:
 	explicit WindowChrome(QObject *parent = nullptr) : QObject(parent) {}
@@ -28,20 +30,27 @@ public:
 #ifdef Q_OS_MACOS
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	bool nativeControls() const { return true; }
-	int leadingInset() const { return 72; }
+	int leadingInset() const;
 #else
 	bool nativeControls() const { return false; }
 	int leadingInset() const { return 0; }
 #endif
 
 	Q_INVOKABLE void minimize();
+	// Shortcut names in UI text as this platform writes them: "Undo  Ctrl Shift Z" stays as is on
+	// Windows and reads "Undo  ⇧⌘Z" on macOS (where Qt's Ctrl is Command).
+	Q_INVOKABLE static QString keys(const QString &text);
 	Q_INVOKABLE void toggleMaximize();
 
 signals:
 	void captionHeightChanged();
+	void leadingInsetChanged();
 
 private:
 	bool isControlAt(const QPointF &scenePos) const;
+#ifdef Q_OS_MACOS
+	bool onCaption(const QPointF &scenePos) const;
+#endif
 
 	QQuickWindow *m_window = nullptr;
 	void *m_hwnd = nullptr;

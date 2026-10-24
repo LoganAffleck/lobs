@@ -138,14 +138,23 @@ Done (2026-10-24):
   take), so no probe sources and no "Invalid target display ID" log noise.
 - Fixed in passing: double-encoded text in the setup assistant ("Browseâ€¦"), on both platforms.
 
-### Phase 2 — Feels like a Mac app
-- Window chrome with native traffic lights and full-screen support.
-- Native menu bar: LOBS (About, Settings ⌘,, Quit ⌘Q), File, Edit, View, Window, Help.
-- Shortcut labels show `⌘ ⌥ ⇧`; check canvas mouse modifiers (Ctrl-click is right-click on Mac).
-- System font, Menlo for code, Retina canvas check, dark title bar.
-- Reveal in Finder, file thumbnails / media facts (`shellmeta`), eyedropper (needs Screen
-  Recording permission).
-- **Done when:** a pass through `qa/MANUAL.md` on macOS finds nothing that looks or acts like Windows.
+### Phase 2 — Feels like a Mac app (mostly done)
+
+Done (2026-10-24), checked by hand:
+- Native menu bar: LOBS (About, Settings… ⌘,), File (New Project ⌘N, Open ⌘O, Import from OBS ▸,
+  Save ⌘S, Save As ⇧⌘S), Edit (undo/redo, clipboard, duplicate, delete, group, layer order),
+  Window (panels, Show All, Reset Layout), Help. New / Open / Import / Save / Window leave the
+  top bar on macOS. Edit actions go to the focused text field first, then the layers.
+- The Delete key (Backspace on a Mac keyboard) deletes the selected layer.
+- Shortcut labels in tooltips and help read ⌘ ⇧ ⌥ (`chrome.keys`).
+- Full screen: the window-button inset goes away; Settings' header sits below the window buttons.
+- Clicks on anything drawn over the top bar reach it instead of moving the window.
+- Default text font Helvetica Neue and Menlo for code on macOS (Segoe UI and Consolas on Windows).
+- Eyedropper works with Screen Recording allowed.
+
+Left:
+- Retina canvas: a close look at preview sharpness at 2x.
+- macOS-style File > Open Recent and a Window menu with Minimize / Zoom.
 
 ### Phase 3 — Feature parity
 - **Text:** move text layers off GDI+. FreeType2 has fewer options (no per-side outline width,

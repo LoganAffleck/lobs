@@ -100,6 +100,7 @@ Rectangle {
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.bottomMargin: 8
+                    Layout.topMargin: chrome.leadingInset > 0 ? 30 : 0 // below macOS's window buttons (hidden in full screen)
                     FButton { iconName: "x"; variant: "ghost"; onClicked: page.open = false; tip: "Close settings  Esc" }
                     Text { text: "Settings"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; Layout.leftMargin: 4 }
                 }
@@ -235,7 +236,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Live lock"
-                                description: "While streaming or recording, layers on air don't change by accident. Hold Alt, or click Unlock in the banner, to edit."
+                                description: chrome.keys("While streaming or recording, layers on air don't change by accident. Hold Alt, or click Unlock in the banner, to edit.")
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.liveLock !== false; onClicked: page.save("liveLock", !(page.s.liveLock !== false)) }
                             }
                         }

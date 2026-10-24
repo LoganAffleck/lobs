@@ -6,6 +6,7 @@ import QtQuick.Effects
 import com.kdab.dockwidgets 2.0 as KDDW
 import LOBS
 import LOBS.Models
+import Qt.labs.platform as Platform
 
 // LOBS editor shell, built from the Fluid Functionalism component set (F*.qml).
 // Surfaces: window s1 → side panels s2 → popovers s4 → dialogs s5. Compact (28px) density.
@@ -28,27 +29,119 @@ ApplicationWindow {
     property int sceneView: 0 // 0 list, 1 grid
     onSceneViewChanged: app.setGridVisible(sceneView === 1)
     readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
-    Shortcut { sequence: "Ctrl+,"; onActivated: settingsPage.show() }
+    Shortcut { sequence: "Ctrl+,"; enabled: !chrome.nativeMenuBar; onActivated: settingsPage.show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
-    Shortcut { sequences: [StandardKey.Undo]; onActivated: app.undo() }
-    Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
-    Shortcut { sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
+    // On macOS the menu bar (below) owns these keys; elsewhere they're in-window shortcuts.
+    Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Undo]; onActivated: app.undo() }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
     // Layers clipboard. Text fields keep their own copy and paste (they take these keys first).
-    Shortcut { sequence: StandardKey.Copy; onActivated: app.copyLayers() }
-    Shortcut { sequence: StandardKey.Cut; onActivated: app.cutLayers() }
-    Shortcut { sequence: StandardKey.Paste; onActivated: app.pasteLayers(false) }
-    Shortcut { sequence: "Ctrl+Shift+V"; onActivated: app.pasteLayers(true) }
-    Shortcut { sequence: "Ctrl+G"; onActivated: app.groupSelected() }
-    Shortcut { sequence: "Ctrl+Shift+G"; onActivated: app.ungroupSelected() }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Copy; onActivated: app.copyLayers() }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Cut; onActivated: app.cutLayers() }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Paste; onActivated: app.pasteLayers(false) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+Shift+V"; onActivated: app.pasteLayers(true) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+G"; onActivated: app.groupSelected() }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+Shift+G"; onActivated: app.ungroupSelected() }
     // Layer order, like design tools: Ctrl ] forward, Ctrl [ backward, with Shift to the front/back.
-    Shortcut { sequences: ["Ctrl+]"]; onActivated: app.moveSelected(-1) }
-    Shortcut { sequences: ["Ctrl+["]; onActivated: app.moveSelected(1) }
-    Shortcut { sequences: ["Ctrl+Shift+]", "Ctrl+}"]; onActivated: app.moveSelected(-1000) }
-    Shortcut { sequences: ["Ctrl+Shift+[", "Ctrl+{"]; onActivated: app.moveSelected(1000) }
-    Shortcut { sequence: "Delete"; onActivated: app.deleteSelected() }
-    Shortcut { sequence: "Ctrl+S"; onActivated: { if (!app.saveProject()) saveDialog.open() } } // saves in place; Save As only for an unsaved show
-    Shortcut { sequence: "Ctrl+O"; enabled: !app.live; onActivated: win.guardUnsaved(() => openDialog.open()) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+]"]; onActivated: app.moveSelected(-1) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+["]; onActivated: app.moveSelected(1) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+Shift+]", "Ctrl+}"]; onActivated: app.moveSelected(-1000) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+Shift+[", "Ctrl+{"]; onActivated: app.moveSelected(1000) }
+    Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+S"; onActivated: win.save() }
+    Shortcut { sequence: "Ctrl+O"; enabled: !app.live && !chrome.nativeMenuBar; onActivated: win.guardUnsaved(() => openDialog.open()) }
+    // A Mac keyboard's Delete key is Backspace (text fields still take it first).
+    Shortcut { sequences: chrome.nativeMenuBar ? ["Delete", "Backspace"] : ["Delete"]; onActivated: app.deleteSelected() }
+    function save() { if (!app.saveProject()) saveDialog.open() } // saves in place; Save As only for an unsaved show
+    // Edit menu actions go to the text field being typed in, if any, else to the layers.
+    function editAction(textFn, layersFn) {
+        const f = win.activeFocusItem
+        if (f && typeof f[textFn] === "function" && typeof f.selectAll === "function") f[textFn]()
+        else layersFn()
+    }
+
+    // macOS menu bar: what the top bar's New / Open / Import / Save and Window menus hold on Windows.
+    Loader {
+        active: chrome.nativeMenuBar
+        sourceComponent: Platform.MenuBar {
+            window: win
+            Platform.Menu {
+                title: "File"
+                Platform.MenuItem { text: "New Project…"; shortcut: "Ctrl+N"; onTriggered: newProjectDialog.open() }
+                Platform.MenuItem { text: "Open…"; shortcut: "Ctrl+O"; enabled: !app.live; onTriggered: win.guardUnsaved(() => openDialog.open()) }
+                Platform.Menu {
+                    id: importMac
+                    title: "Import from OBS"
+                    enabled: !app.live
+                    property var collections: []
+                    onAboutToShow: collections = app.obsCollections()
+                    Instantiator {
+                        model: importMac.collections
+                        delegate: Platform.MenuItem {
+                            required property var modelData
+                            text: modelData.name + "  ·  " + modelData.scenes + " scenes"
+                            onTriggered: { const p = modelData.path; win.guardUnsaved(() => app.importObs(p)) }
+                        }
+                        onObjectAdded: (i, o) => importMac.insertItem(i, o)
+                        onObjectRemoved: (i, o) => importMac.removeItem(o)
+                    }
+                    Platform.MenuItem { text: "No OBS scene collections found"; enabled: false; visible: importMac.collections.length === 0 }
+                    Platform.MenuSeparator {}
+                    Platform.MenuItem { text: "Choose a File…"; onTriggered: win.guardUnsaved(() => importDialog.open()) }
+                }
+                Platform.MenuSeparator {}
+                Platform.MenuItem { text: "Save"; shortcut: "Ctrl+S"; onTriggered: win.save() }
+                Platform.MenuItem { text: "Save As…"; shortcut: "Ctrl+Shift+S"; onTriggered: saveDialog.open() }
+                // Moved to the LOBS menu by macOS.
+                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(6) }
+                Platform.MenuItem { text: "Settings…"; shortcut: "Ctrl+,"; role: Platform.MenuItem.PreferencesRole; onTriggered: settingsPage.show() }
+            }
+            Platform.Menu {
+                title: "Edit"
+                Platform.MenuItem { text: app.canUndo && app.undoLabel ? "Undo " + app.undoLabel : "Undo"; shortcut: StandardKey.Undo; role: Platform.MenuItem.NoRole; onTriggered: win.editAction("undo", app.undo) }
+                Platform.MenuItem { text: "Redo"; shortcut: StandardKey.Redo; role: Platform.MenuItem.NoRole; onTriggered: win.editAction("redo", app.redo) }
+                Platform.MenuSeparator {}
+                Platform.MenuItem { text: "Cut"; shortcut: StandardKey.Cut; role: Platform.MenuItem.NoRole; onTriggered: win.editAction("cut", app.cutLayers) }
+                Platform.MenuItem { text: "Copy"; shortcut: StandardKey.Copy; role: Platform.MenuItem.NoRole; onTriggered: win.editAction("copy", app.copyLayers) }
+                Platform.MenuItem { text: "Paste"; shortcut: StandardKey.Paste; role: Platform.MenuItem.NoRole; onTriggered: win.editAction("paste", () => app.pasteLayers(false)) }
+                Platform.MenuItem { text: "Paste Linked"; shortcut: "Ctrl+Shift+V"; enabled: app.canPaste; onTriggered: app.pasteLayers(true) }
+                Platform.MenuItem { text: "Duplicate"; shortcut: "Ctrl+D"; onTriggered: app.duplicateSelected() }
+                Platform.MenuItem { text: "Delete"; onTriggered: app.deleteSelected() }
+                Platform.MenuSeparator {}
+                Platform.MenuItem { text: "Group"; shortcut: "Ctrl+G"; onTriggered: app.groupSelected() }
+                Platform.MenuItem { text: "Ungroup"; shortcut: "Ctrl+Shift+G"; onTriggered: app.ungroupSelected() }
+                Platform.MenuSeparator {}
+                Platform.MenuItem { text: "Bring to Front"; shortcut: "Ctrl+Shift+]"; onTriggered: app.moveSelected(-1000) }
+                Platform.MenuItem { text: "Bring Forward"; shortcut: "Ctrl+]"; onTriggered: app.moveSelected(-1) }
+                Platform.MenuItem { text: "Send Backward"; shortcut: "Ctrl+["; onTriggered: app.moveSelected(1) }
+                Platform.MenuItem { text: "Send to Back"; shortcut: "Ctrl+Shift+["; onTriggered: app.moveSelected(1000) }
+            }
+            Platform.Menu {
+                id: windowMac
+                title: "Window"
+                Instantiator {
+                    model: win.panels
+                    delegate: Platform.MenuItem {
+                        required property var modelData
+                        text: modelData.title
+                        checkable: true
+                        checked: modelData.isOpen
+                        onTriggered: win.togglePanel(modelData)
+                    }
+                    onObjectAdded: (i, o) => windowMac.insertItem(i, o)
+                    onObjectRemoved: (i, o) => windowMac.removeItem(o)
+                }
+                Platform.MenuSeparator {}
+                Platform.MenuItem { text: "Show All Panels"; onTriggered: win.panels.forEach(d => { if (!d.isOpen) d.show() }) }
+                Platform.MenuItem { text: "Reset Layout"; onTriggered: layoutSaver.restoreFromFile(win.defaultLayoutFile) }
+            }
+            Platform.Menu {
+                title: "Help"
+                Platform.MenuItem { text: "LOBS on GitHub"; onTriggered: Qt.openUrlExternally("https://github.com/LoganAffleck/lobs") }
+                Platform.MenuItem { text: "Report a Problem…"; onTriggered: Qt.openUrlExternally("https://github.com/LoganAffleck/lobs/issues/new") }
+            }
+        }
+    }
 
     FileDialog {
         id: saveDialog; fileMode: FileDialog.SaveFile; nameFilters: ["LOBS show (*.lobs.json)"]; defaultSuffix: "lobs.json"
@@ -71,6 +164,12 @@ ApplicationWindow {
 
     component Caption: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
     function openTransitions() { trDialog.open() }
+    function togglePanel(d) {
+        if (d.isOpen) d.close()
+        else if (d === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
+        else if (d === captionsDock && audioDock.isOpen) dockArea.addDockWidget(captionsDock, KDDW.KDDockWidgets.Location_OnRight, audioDock, Qt.size(380, 0)) // beside the mixer
+        else d.show()
+    }
     TransitionsDialog { id: trDialog }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
     SetupWizard { id: setupWizard; onAddPanels: (chat, info) => win.openTwitchPanels(chat, info) }
@@ -178,7 +277,7 @@ ApplicationWindow {
                 onClicked: settingsPage.show()
                 ToolTip.visible: hovered
                 ToolTip.delay: 600
-                ToolTip.text: "Settings  Ctrl ,"
+                ToolTip.text: chrome.keys("Settings  Ctrl ,")
                 background: Rectangle {
                     radius: Pal.radius
                     color: "#ffffff"
@@ -202,10 +301,12 @@ ApplicationWindow {
                     }
                 }
             }
-            FButton { text: "New"; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "Start a new project in its own folder" }
-            FButton { text: "Open"; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : "Open a show (Ctrl+O)"; onClicked: win.guardUnsaved(() => openDialog.open()) }
+            // New, Open, Import, Save and Window are in the menu bar on macOS.
+            FButton { text: "New"; visible: !chrome.nativeMenuBar; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "Start a new project in its own folder" }
+            FButton { text: "Open"; visible: !chrome.nativeMenuBar; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
                 id: importButton
+                visible: !chrome.nativeMenuBar
                 text: "Import"
                 variant: "ghost"
                 enabled: !app.live
@@ -231,7 +332,7 @@ ApplicationWindow {
                     FMenuItem { text: "Choose a file..."; onTriggered: win.guardUnsaved(() => importDialog.open()) }
                 }
             }
-            FButton { text: "Save"; variant: "ghost"; tip: "Save (Ctrl+S)"; onClicked: { if (!app.saveProject()) saveDialog.open() } }
+            FButton { text: "Save"; visible: !chrome.nativeMenuBar; variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
             FButton {
                 visible: ["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0
                 iconName: "refresh-cw"
@@ -242,8 +343,9 @@ ApplicationWindow {
                 tip: "A new version of LOBS"
                 onClicked: updateDialog.open()
             }
-            Rectangle { width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+            Rectangle { visible: !chrome.nativeMenuBar; width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
             FButton {
+                visible: !chrome.nativeMenuBar
                 text: "Window"
                 variant: "ghost"
                 onClicked: windowMenu.popup(this, 0, height + 4)
@@ -257,12 +359,7 @@ ApplicationWindow {
                             required property var modelData
                             text: modelData.title
                             selected: modelData.isOpen
-                            onTriggered: {
-                                if (modelData.isOpen) modelData.close()
-                                else if (modelData === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
-                                else if (modelData === captionsDock && audioDock.isOpen) dockArea.addDockWidget(captionsDock, KDDW.KDDockWidgets.Location_OnRight, audioDock, Qt.size(380, 0)) // beside the mixer
-                                else modelData.show()
-                            }
+                            onTriggered: win.togglePanel(modelData)
                         }
                         onObjectAdded: (i, o) => windowMenu.insertItem(i, o)
                         onObjectRemoved: (i, o) => windowMenu.removeItem(o)
@@ -273,8 +370,8 @@ ApplicationWindow {
                 }
             }
             Rectangle { width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
-            FButton { iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + "  Ctrl Z" }
-            FButton { iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: "Redo  Ctrl Shift Z" }
+            FButton { iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + chrome.keys("  Ctrl Z") }
+            FButton { iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: chrome.keys("Redo  Ctrl Shift Z") }
             Item { Layout.fillWidth: true }
             OutputControls {}
             // Window buttons, in Windows' order.
@@ -887,7 +984,7 @@ ApplicationWindow {
                         Item { visible: app.assetPath === ""; Layout.fillWidth: true }
                         FButton {
                             iconName: "search"; variant: "ghost"; selected: assetsGuest.searching
-                            tip: "Search all folders  Ctrl F"
+                            tip: chrome.keys("Search all folders  Ctrl F")
                             onClicked: { assetsGuest.searching = !assetsGuest.searching; if (assetsGuest.searching) assetSearch.forceActiveFocus(); else assetSearch.text = "" }
                         }
                         FButton {
@@ -1183,7 +1280,7 @@ ApplicationWindow {
                             horizontalAlignment: Text.AlignHCenter
                             text: assetSearch.query ? "Nothing in assets matches \u201c" + assetSearch.text + "\u201d."
                                 : assetsGuest.raw.length ? "No " + ["", "images", "videos", "audio files"][assetsGuest.typeFilter] + " here."
-                                : app.assetPath ? "This folder is empty. Drag files here, or paste with Ctrl+V."
+                                : app.assetPath ? chrome.keys("This folder is empty. Drag files here, or paste with Ctrl+V.")
                                 : "Drop images, video or audio here."
                         }
                         // Drop from File Explorer: files are copied into the current folder.
@@ -1237,9 +1334,9 @@ ApplicationWindow {
                                 }
                             }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { text: (assetMenu.many ? "Copy " + assetMenu.sel.length + " items" : "Copy") + "  Ctrl C"; onTriggered: app.copyAssets(assetMenu.sel) }
-                            FMenuItem { text: (assetMenu.many ? "Cut " + assetMenu.sel.length + " items" : "Cut") + "  Ctrl X"; onTriggered: app.cutAssets(assetMenu.sel) }
-                            FMenuItem { text: "Paste here  Ctrl V"; enabled: app.clipboardHasFiles(); onTriggered: app.pasteAssets() }
+                            FMenuItem { text: (assetMenu.many ? "Copy " + assetMenu.sel.length + " items" : "Copy") + chrome.keys("  Ctrl C"); onTriggered: app.copyAssets(assetMenu.sel) }
+                            FMenuItem { text: (assetMenu.many ? "Cut " + assetMenu.sel.length + " items" : "Cut") + chrome.keys("  Ctrl X"); onTriggered: app.cutAssets(assetMenu.sel) }
+                            FMenuItem { text: chrome.keys("Paste here  Ctrl V"); enabled: app.clipboardHasFiles(); onTriggered: app.pasteAssets() }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { visible: !assetMenu.many; height: visible ? implicitHeight : 0; text: "Show in File Explorer"; onTriggered: app.revealAsset(String(assetMenu.asset.path || "")) }
                             FMenuItem {
@@ -1250,8 +1347,8 @@ ApplicationWindow {
                         }
                         FMenu {
                             id: bgMenu
-                            FMenuItem { text: "New folder  Ctrl N"; onTriggered: assetsGuest.newFolder() }
-                            FMenuItem { text: "Paste  Ctrl V"; enabled: app.clipboardHasFiles(); onTriggered: app.pasteAssets() }
+                            FMenuItem { text: chrome.keys("New folder  Ctrl N"); onTriggered: assetsGuest.newFolder() }
+                            FMenuItem { text: chrome.keys("Paste  Ctrl V"); enabled: app.clipboardHasFiles(); onTriggered: app.pasteAssets() }
                             FMenuItem { text: "Add files…"; onTriggered: assetPicker.open() }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { text: "Show folder in File Explorer"; onTriggered: app.revealAsset(assetsGuest.currentFolderPath()) }
@@ -1276,7 +1373,7 @@ ApplicationWindow {
                     FPanelHeader {
                         title: ""
                         meta: app.editSceneName
-                        FButton { iconName: "group"; variant: "ghost"; onClicked: app.groupSelected(); tip: "Group  Ctrl G" }
+                        FButton { iconName: "group"; variant: "ghost"; onClicked: app.groupSelected(); tip: chrome.keys("Group  Ctrl G") }
                         FButton { iconName: "copy"; variant: "ghost"; onClicked: copyMenu.popup(); tip: "Copy to another scene" }
                         FButton { iconName: "trash-2"; variant: "ghost"; onClicked: app.deleteSelected(); tip: "Delete  Del" }
                         FMenu {
@@ -1300,20 +1397,20 @@ ApplicationWindow {
                             id: layerMenu
                             property var row: ({}) // the row it was opened on
                             FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", layerMenu.row.id, layerMenu.row.name) }
-                            FMenuItem { text: "Copy    Ctrl C"; onTriggered: app.copyLayers() }
-                            FMenuItem { text: "Cut    Ctrl X"; visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; onTriggered: app.cutLayers() }
-                            FMenuItem { text: "Paste    Ctrl V"; enabled: app.canPaste; onTriggered: app.pasteLayers(false) }
-                            FMenuItem { text: "Paste linked    Ctrl Shift V"; enabled: app.canPaste; onTriggered: app.pasteLayers(true) }
+                            FMenuItem { text: chrome.keys("Copy    Ctrl C"); onTriggered: app.copyLayers() }
+                            FMenuItem { text: chrome.keys("Cut    Ctrl X"); visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; onTriggered: app.cutLayers() }
+                            FMenuItem { text: chrome.keys("Paste    Ctrl V"); enabled: app.canPaste; onTriggered: app.pasteLayers(false) }
+                            FMenuItem { text: chrome.keys("Paste linked    Ctrl Shift V"); enabled: app.canPaste; onTriggered: app.pasteLayers(true) }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
                             FCopyToMenu {}
                             FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
                             FMenuItem { text: "Ungroup"; enabled: layerMenu.row.group; onTriggered: app.ungroupSelected() }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { text: "Bring to front    Ctrl Shift ]"; onTriggered: app.moveSelected(-1000) }
-                            FMenuItem { text: "Bring forward    Ctrl ]"; onTriggered: app.moveSelected(-1) }
-                            FMenuItem { text: "Send backward    Ctrl ["; onTriggered: app.moveSelected(1) }
-                            FMenuItem { text: "Send to back    Ctrl Shift ["; onTriggered: app.moveSelected(1000) }
+                            FMenuItem { text: chrome.keys("Bring to front    Ctrl Shift ]"); onTriggered: app.moveSelected(-1000) }
+                            FMenuItem { text: chrome.keys("Bring forward    Ctrl ]"); onTriggered: app.moveSelected(-1) }
+                            FMenuItem { text: chrome.keys("Send backward    Ctrl ["); onTriggered: app.moveSelected(1) }
+                            FMenuItem { text: chrome.keys("Send to back    Ctrl Shift ["); onTriggered: app.moveSelected(1000) }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; text: "Delete"; onTriggered: app.deleteSelected() }
                         }
@@ -1582,10 +1679,10 @@ ApplicationWindow {
             { help: ["Click: edit a scene without showing it.", "Show or double-click: switch to the scene.", "Grid: shows live thumbnails of every scene.", "Right-click: rename, duplicate with linked or independent layers, or delete."], dock: scenesDock, guest: scenesGuest, icon: "clapperboard" },
             { help: ["Inputs: added once, shared by every scene.", "Place it: drag onto the canvas or double-click.", "Per scene: size, crop and filters.", "Files are in Assets. Add text and color from Layers."], dock: poolDock, guest: poolGuest, icon: "folder" },
             { help: ["Project files: this project's assets folder.", "Add files: drag in from File Explorer or use + Asset.", "Place it: drag onto the canvas or double-click.", "Right-click: show in File Explorer or move to Recycle Bin."], dock: assetsDock, guest: assetsGuest, icon: "image" },
-            { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", "Shortcuts: Ctrl+C / Ctrl+V copy and paste (Ctrl+Shift+V pastes linked), Ctrl+D duplicate, Ctrl+G group, Delete remove.", "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
+            { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", chrome.keys("Shortcuts: Ctrl+C / Ctrl+V copy and paste (Ctrl+Shift+V pastes linked), Ctrl+D duplicate, Ctrl+G group, Delete remove."), "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
             { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.", "Source: select one in Sources to edit its input."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
             { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 goes to the stream; recordings can use tracks 1-6.", "Monitor: hear it in headphones. Monitor only keeps it out of output.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
-            { help: ["Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.", "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },
+            { help: [chrome.keys("Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y."), "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },
             { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: more than 1%, worth a look."], dock: statsDock, guest: statsGuest, icon: "gauge" },
             { help: ["Speech to text from one audio source, on this PC.", "Send to stream: viewers turn on CC to see them.", "Language: pick it, or let LOBS detect it.", "Text shows up a few seconds after speech."], dock: captionsDock, guest: captionsGuest, icon: "captions" }
         ]

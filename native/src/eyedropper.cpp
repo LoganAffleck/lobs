@@ -1,4 +1,5 @@
 #include "eyedropper.h"
+#include "model/doc.h"
 
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -66,7 +67,7 @@ protected:
 		p.drawRoundedRect(label, 6, 6);
 		p.setBrush(col);
 		p.drawRoundedRect(QRectF(label.x() + 6, label.y() + 5, 14, 14), 3, 3);
-		QFont f("Consolas");
+		QFont f(lobs::monoFont());
 		f.setPixelSize(13);
 		p.setFont(f);
 		p.setPen(Qt::white);

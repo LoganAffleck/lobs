@@ -553,7 +553,7 @@ int main(int argc, char *argv[])
 #endif
 	QQuickStyle::setStyle("Basic");
 	// One font family (Inter Variable), bundled next to the app.
-	QString fontFamily = "Segoe UI";
+	QString fontFamily = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family(); // if Inter is missing
 	const int fid = QFontDatabase::addApplicationFont(platform::resourceDir() + "/fonts/InterVariable.ttf");
 	if (fid >= 0 && !QFontDatabase::applicationFontFamilies(fid).isEmpty())
 		fontFamily = QFontDatabase::applicationFontFamilies(fid).first();
@@ -708,7 +708,7 @@ int main(int argc, char *argv[])
 		{"border", "#1fffffff"}, {"borderStrong", "#33ffffff"}, {"hover", "#0fffffff"}, {"selected", "#1affffff"},
 		{"focus", "#6b97ff"}, {"link", "#7aa7ff"}, {"danger", "#fca5a5"}, {"dangerBg", "#450a0a"}, {"live", "#ef4444"},
 		{"fast", 80}, {"moderate", 160}, {"slow", 240},
-		{"ctl", 28}, {"radius", 8}, {"font", fontFamily},
+		{"ctl", 28}, {"radius", 8}, {"font", fontFamily}, {"mono", lobs::monoFont()},
 		{"display", 22}, {"title", 14}, {"subtitle", 13}, {"body", 12}, {"caption", 11}};
 		for (auto it = values.cbegin(); it != values.cend(); ++it)
 			palMap->insert(it.key(), it.value());

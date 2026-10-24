@@ -31,7 +31,7 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     color: "#fecaca"; font.family: Pal.font; font.pixelSize: Pal.body
-                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? " · editing what's on air is locked. Hold Alt, or unlock to edit." : " · live lock is off, edits go on air.")
+                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? chrome.keys(" · editing what's on air is locked. Hold Alt, or unlock to edit.") : " · live lock is off, edits go on air.")
                 }
                 FButton { visible: app.settings.liveLock !== false; text: app.liveLocked ? "Unlock" : "Lock again"; variant: "ghost"; onClicked: app.setLiveUnlock(app.liveLocked) }
             }
@@ -52,10 +52,10 @@ Rectangle {
                         points: [
                             "Move: drag a layer. Snaps to edges and layers.",
                             "Resize: drag a corner. Shift: free resize.",
-                            "Ctrl: drag without snapping.",
+                            chrome.keys("Ctrl: drag without snapping."),
                             "Groups: click selects the group. Each double-click goes one level deeper.",
                             "Nudge: arrow keys move 1 px, Shift+arrows 10 px.",
-                            "Live lock: hold Alt to move layers while live.",
+                            chrome.keys("Live lock: hold Alt to move layers while live."),
                             "Show: switch to this scene."
                         ]
                     }

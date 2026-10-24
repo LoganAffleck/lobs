@@ -147,7 +147,7 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	m_toolStroke = uiValue("tools/stroke", "#ffffff");
 	m_toolStrokeWidth = uiValue("tools/strokeWidth", "6").toInt();
 	m_laserTrailMs = std::clamp(uiValue("tools/laserTrailMs", "500").toInt(), 150, 3000);
-	m_toolFont = uiValue("tools/font", "Segoe UI");
+	m_toolFont = uiValue("tools/font", lobs::defaultTextFont());
 	m_toolBold = uiValue("tools/bold", "1") == "1";
 	m_toolItalic = uiValue("tools/italic", "0") == "1";
 	connect(&m_eyedropper, &Eyedropper::picked, this, &App::screenColorPicked);
@@ -3892,7 +3892,7 @@ void App::layoutEditedText()
 	const QStringList lines = text.split('\n');
 	Transform t = doc().transform(inst);
 	const double linePx = std::max(4.0, t.h / std::max<qsizetype>(1, lines.size()) );
-	const QFont f = textFont(src.settings.value("font", "Segoe UI").toString(), src.settings.value("bold", true).toBool(), src.settings.value("italic").toBool(), linePx);
+	const QFont f = textFont(src.settings.value("font", lobs::defaultTextFont()).toString(), src.settings.value("bold", true).toBool(), src.settings.value("italic").toBool(), linePx);
 	const QFontMetricsF fm(f);
 	const double k = linePx / std::max(1.0, fm.lineSpacing());
 	double wmax = 0;

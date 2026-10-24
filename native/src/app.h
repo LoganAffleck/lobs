@@ -393,9 +393,11 @@ public:
 	bool textKey(QKeyEvent *e); // true if the key went into the text
 	void endTextEdit();
 	Q_PROPERTY(QString toolFont READ toolFont WRITE setToolFont NOTIFY toolChanged)
+	Q_PROPERTY(QString defaultTextFont READ defaultTextFont CONSTANT)
 	Q_PROPERTY(bool toolBold READ toolBold WRITE setToolBold NOTIFY toolChanged)
 	Q_PROPERTY(bool toolItalic READ toolItalic WRITE setToolItalic NOTIFY toolChanged)
 	QString toolFont() const { return m_toolFont; }
+	QString defaultTextFont() const { return lobs::defaultTextFont(); }
 	bool toolBold() const { return m_toolBold; }
 	bool toolItalic() const { return m_toolItalic; }
 	void setToolFont(const QString &f) { m_toolFont = f; setUiValue("tools/font", f); emit toolChanged(); }
@@ -523,7 +525,7 @@ private:
 	bool m_autosaveBusy = false, m_autosaveAgain = false; // a background autosave is writing
 	int m_visibleMenus = 0;
 	QList<QPointer<QWindow>> m_projectors;
-	QString m_toolFont = "Segoe UI";
+	QString m_toolFont = lobs::defaultTextFont();
 	bool m_toolBold = true, m_toolItalic = false;
 	QString m_textEditId; // layer being typed into
 	QTimer m_caretTimer;

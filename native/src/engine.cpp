@@ -231,7 +231,7 @@ static QJsonObject textSettings(const Source &s, int pixelHeight)
 	const long long color = hexToAbgr(st.value("textColor", "#ffffff").toString()) & 0xFFFFFF;
 	QJsonObject o{{"text", st.value("text").toString()},
 		      {"color", color},
-		      {"font", QJsonObject{{"face", st.value("font", "Segoe UI").toString()}, {"size", std::clamp(pixelHeight, 4, 2048)},
+		      {"font", QJsonObject{{"face", st.value("font", defaultTextFont()).toString()}, {"size", std::clamp(pixelHeight, 4, 2048)},
 					   {"style", textStyle(st)}, {"flags", (st.value("bold", true).toBool() ? 1 : 0) | (st.value("italic").toBool() ? 2 : 0)}}}};
 #ifndef Q_OS_WIN
 	// FreeType2 colors text with a top-to-bottom gradient, in opaque ABGR.
@@ -930,7 +930,7 @@ static QImage previewCard(const QString &letter, QColor bg, int w, int h)
 	QPainter p(&img);
 	p.setRenderHint(QPainter::Antialiasing);
 	p.setRenderHint(QPainter::TextAntialiasing);
-	QFont f("Segoe UI");
+	QFont f(defaultTextFont());
 	f.setPixelSize(h * 2 / 3);
 	f.setBold(true);
 	p.setFont(f);
