@@ -24,6 +24,8 @@ kbd { background: #222; border: 1px solid var(--line2); border-bottom-width: 2px
 .nav .links a { text-decoration: none; color: var(--muted); }
 .nav .links a:hover, .nav .links a.on { color: var(--fg); }
 .nav .links a.sbtn.primary { color: #111; }
+.nav .links a.discord { display: inline-flex; align-items: center; gap: 7px; }
+.nav .links a.discord svg { width: 18px; height: 18px; }
 
 .sbtn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600; font-size: 15px; text-decoration: none; white-space: nowrap; transition: background-color 0.12s, border-color 0.12s; }
 .sbtn.primary { background: var(--fg); color: #111; }
