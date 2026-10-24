@@ -44,10 +44,15 @@ FDialog {
     readonly property bool hasKey: keyText.trim() !== "" || !!app.settings.hasKey
     // Steps shown for this path. On macOS, capture permissions come right after the welcome.
     readonly property bool asksAccess: permissions.all.length > 0
-    readonly property var steps: (streaming
-        ? (twitch ? ["start", "account", "server", "test", "video", "record", "panels", "done"]
-                  : ["start", "account", "test", "video", "record", "done"])
-        : ["start", "video", "record", "done"]).flatMap(s => s === "start" && asksAccess ? ["start", "access"] : [s])
+    readonly property var steps: {
+        const list = streaming
+            ? (twitch ? ["start", "account", "server", "test", "video", "record", "panels", "done"]
+                      : ["start", "account", "test", "video", "record", "done"])
+            : ["start", "video", "record", "done"]
+        if (asksAccess)
+            list.splice(1, 0, "access") // QML's JavaScript has no flatMap
+        return list
+    }
     property int index: 0
     readonly property string step: steps[Math.min(index, steps.length - 1)]
     readonly property var stepTitles: ({ start: "Welcome to LOBS", access: "Camera, mic and screen", account: "Your channel", server: "Closest server", test: "Test your connection",
