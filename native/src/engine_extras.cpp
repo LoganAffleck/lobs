@@ -11,10 +11,12 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
+#ifdef Q_OS_WIN
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
+#endif
 
 static obs_data_t *toData(const QJsonObject &o)
 {
@@ -175,6 +177,7 @@ void Engine::replaySavedNow()
 // already registered it, LOBS uses that; otherwise LOBS registers its own copy (one-time,
 // needs admin) from a stable folder, so engine updates don't move it.
 
+#ifdef Q_OS_WIN
 static const wchar_t *kVcamClsid = L"CLSID\\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}\\InprocServer32";
 
 static QString registeredVcamPath()
@@ -192,8 +195,14 @@ bool Engine::vcamAvailable() const
 	return !p.isEmpty() && QFile::exists(p);
 }
 
+#else
+// macOS needs a signed CoreMediaIO system extension for this (PLAN-MACOS.md, Phase 5).
+bool Engine::vcamAvailable() const { return false; }
+#endif
+
 bool Engine::vcamActive() const { return m_vcamOutput && obs_output_active(m_vcamOutput); }
 
+#ifdef Q_OS_WIN
 bool Engine::installVirtualCam()
 {
 	if (vcamAvailable())
@@ -235,6 +244,14 @@ bool Engine::installVirtualCam()
 	}
 	return true;
 }
+
+#else
+bool Engine::installVirtualCam()
+{
+	m_lastError = "The virtual camera isn't available on macOS yet";
+	return false;
+}
+#endif
 
 bool Engine::startVirtualCam()
 {

@@ -1,4 +1,5 @@
-// File thumbnails and media facts from the Windows shell (what File Explorer shows): a
+// File thumbnails and media facts from the Windows shell (what File Explorer shows) or, on macOS,
+// QuickLook and AVFoundation (what Finder shows): a
 // thumbnail for images and videos, and duration / frame size for video and audio.
 // Results are cached per path + modified time.
 #pragma once

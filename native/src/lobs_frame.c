@@ -4,14 +4,28 @@
  * QPainter and pushes the pixels here, so vector graphics stay crisp at the layer's size.
  */
 #include <obs-module.h>
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+typedef SRWLOCK frame_lock_t;
+#define frame_lock_init(l) InitializeSRWLock(l)
+#define frame_lock(l) AcquireSRWLockExclusive(l)
+#define frame_unlock(l) ReleaseSRWLockExclusive(l)
+#define frame_lock_free(l)
+#else
+#include <pthread.h>
+typedef pthread_mutex_t frame_lock_t;
+#define frame_lock_init(l) pthread_mutex_init(l, NULL)
+#define frame_lock(l) pthread_mutex_lock(l)
+#define frame_unlock(l) pthread_mutex_unlock(l)
+#define frame_lock_free(l) pthread_mutex_destroy(l)
+#endif
 #include <util/bmem.h>
 #include <string.h>
 
 struct lobs_frame {
 	obs_source_t *source;
-	SRWLOCK lock;
+	frame_lock_t lock;
 	uint8_t *pending;   // new pixels waiting for upload (owned)
 	uint32_t pw, ph;
 	gs_texture_t *tex;
@@ -29,7 +43,7 @@ static void *lf_create(obs_data_t *settings, obs_source_t *source)
 	UNUSED_PARAMETER(settings);
 	struct lobs_frame *f = bzalloc(sizeof(*f));
 	f->source = source;
-	InitializeSRWLock(&f->lock);
+	frame_lock_init(&f->lock);
 	return f;
 }
 
@@ -40,6 +54,7 @@ static void lf_destroy(void *data)
 	gs_texture_destroy(f->tex);
 	obs_leave_graphics();
 	bfree(f->pending);
+	frame_lock_free(&f->lock);
 	bfree(f);
 }
 
@@ -50,7 +65,7 @@ static void lf_render(void *data, gs_effect_t *effect)
 {
 	UNUSED_PARAMETER(effect);
 	struct lobs_frame *f = data;
-	AcquireSRWLockExclusive(&f->lock);
+	frame_lock(&f->lock);
 	if (f->pending) {
 		if (!f->tex || f->pw != gs_texture_get_width(f->tex) || f->ph != gs_texture_get_height(f->tex)) {
 			gs_texture_destroy(f->tex);
@@ -64,7 +79,7 @@ static void lf_render(void *data, gs_effect_t *effect)
 		bfree(f->pending);
 		f->pending = NULL;
 	}
-	ReleaseSRWLockExclusive(&f->lock);
+	frame_unlock(&f->lock);
 	if (f->tex && f->w && f->h)
 		obs_source_draw(f->tex, 0, 0, 0, 0, false);
 }
@@ -100,7 +115,7 @@ void lobs_frame_set(obs_source_t *source, const uint8_t *bgra, uint32_t width, u
 		for (uint32_t y = 0; y < height; y++)
 			memcpy(copy + (size_t)y * width * 4, bgra + (size_t)y * stride, (size_t)width * 4);
 	}
-	AcquireSRWLockExclusive(&f->lock);
+	frame_lock(&f->lock);
 	bfree(f->pending);
 	f->pending = copy;
 	f->pw = width;
@@ -109,5 +124,5 @@ void lobs_frame_set(obs_source_t *source, const uint8_t *bgra, uint32_t width, u
 	// upload (which happens while drawing) would never show anything.
 	f->w = copy ? width : 0;
 	f->h = copy ? height : 0;
-	ReleaseSRWLockExclusive(&f->lock);
+	frame_unlock(&f->lock);
 }

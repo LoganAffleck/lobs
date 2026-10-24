@@ -1,4 +1,6 @@
-# Building LOBS (Windows)
+# Building LOBS
+
+## Windows
 
 Requirements: Visual Studio 2026 (C++), CMake, Python with `ninja` (`pip install ninja`),
 Qt 6.11.1 for MSVC 2022 x64 at `C:\Qt\6.11.1\msvc2022_64`, and Inno Setup 6 for the installer.
@@ -18,7 +20,27 @@ Qt 6.11.1 for MSVC 2022 x64 at `C:\Qt\6.11.1\msvc2022_64`, and Inno Setup 6 for 
 5. `native\build.bat` builds and deploys to `native\dist\LOBS`.
 6. `native\installer\build-installer.bat` makes `native\dist\installer\LOBS-Setup-<version>.exe`.
 
-## Code signing
+## macOS
+
+Apple Silicon, macOS 13 or later. Requirements: the Xcode Command Line Tools
+(`xcode-select --install`), CMake and Ninja (`brew install cmake ninja`), and Qt 6.11.1 for macOS
+at `~/Qt/6.11.1/macos` (the Qt online installer, or `aqt install-qt mac desktop 6.11.1 clang_64 -O ~/Qt`;
+set `QTDIR` to use another location).
+
+1. libobs headers, KDDockWidgets and whisper.cpp: clone them as in steps 1–3 above, plus SIMDe
+   (libobs's SSE code goes through it on ARM):
+   `git clone --depth 1 --branch v0.8.2 https://github.com/simd-everywhere/simde native/deps/simde`
+2. `native/deps/build-kddw.sh` and `native/deps/build-whisper.sh`.
+3. The OBS engine: download `OBS-Studio-32.2.2-macOS-Apple.dmg` from the official release into
+   `native/deps/downloads/obs/`. `build.sh` stages it with `native/deps/stage-engine-mac.sh`
+   (only the modules in `native/engine-modules-mac.txt`; OBS's Qt stays out, LOBS ships its own).
+4. `native/build.sh` builds `native/dist/mac/LOBS.app`, with the engine inside it, and signs it
+   ad hoc so it runs on this Mac.
+
+The app writes `lobs.log` to `~/Library/Application Support/LOBS/LOBS`. Signed and notarized
+builds, the updater and the virtual camera come later (see `PLAN-MACOS.md`).
+
+## Code signing (Windows)
 
 Unsigned installers get a SmartScreen warning. `build-installer.bat` signs LOBS's own files and the
 installer when one of these is set (otherwise it builds unsigned and says so):

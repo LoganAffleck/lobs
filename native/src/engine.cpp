@@ -1,9 +1,15 @@
 #include "engine.h"
 #include "model/audio_fx.h"
 #include "model/video_fx.h"
+#include "permissions.h"
+#include <QtGlobal>
+#ifdef Q_OS_WIN
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #include <QPainter>
 #include <QFont>
 #include <QJsonArray>
@@ -57,12 +63,17 @@ bool Engine::start(const QString &runtimeRoot)
 		setStatus("libobs failed to start");
 		return false;
 	}
+	obs_video_info ovi = {};
+#ifdef Q_OS_WIN
 	// With the cwd at <root>/bin/64bit, libobs's default search finds the bundled
 	// <root>/obs-plugins/64bit and <root>/data, never an OBS install.
 	obs_add_data_path((root + "/data/libobs/").toUtf8().constData());
-
-	obs_video_info ovi = {};
 	ovi.graphics_module = "libobs-d3d11.dll";
+#else
+	// libobs.framework carries its own data, and its default search finds the modules in
+	// LOBS.app/Contents/PlugIns, never an OBS install.
+	ovi.graphics_module = "libobs-opengl.dylib";
+#endif
 	ovi.fps_num = 60;
 	ovi.fps_den = 1;
 	ovi.base_width = ovi.output_width = uint32_t(m_canvasW);
@@ -90,9 +101,14 @@ bool Engine::start(const QString &runtimeRoot)
 	struct ModuleFailureInfo { char **failed_modules; size_t count; };
 	using LoadPlugins = void (*)(RuntimeModuleInfo *, ModuleFailureInfo *);
 	using FreeFailures = void (*)(ModuleFailureInfo *);
+#ifdef Q_OS_WIN
 	const HMODULE obsDll = GetModuleHandleW(L"obs.dll");
 	auto loadPlugins = reinterpret_cast<LoadPlugins>(GetProcAddress(obsDll, "obs_load_plugins"));
 	auto freeFailures = reinterpret_cast<FreeFailures>(GetProcAddress(obsDll, "obs_module_failure_info_free"));
+#else
+	auto loadPlugins = reinterpret_cast<LoadPlugins>(dlsym(RTLD_DEFAULT, "obs_load_plugins"));
+	auto freeFailures = reinterpret_cast<FreeFailures>(dlsym(RTLD_DEFAULT, "obs_module_failure_info_free"));
+#endif
 	if (loadPlugins && QDir(root + "/core").exists()) {
 		const QByteArray bin = (root + "/core/%module%").toUtf8(), data = (root + "/core/%module%/data").toUtf8();
 		RuntimeModuleInfo info{{bin.constData(), data.constData()}, 1 /* OBS_MODULE_TYPE_CORE */, "lobs-core"};
@@ -126,13 +142,27 @@ bool Engine::start(const QString &runtimeRoot)
 
 // ---------- document mapping ----------
 
+#ifdef Q_OS_WIN
+static const char *kTextSource = "text_gdiplus_v3";
+#else
+static const char *kTextSource = "text_ft2_source_v2"; // GDI+ is Windows-only
+#endif
+
 static const char *obsKind(const QString &kind)
 {
 	static const QHash<QString, const char *> map = {
+#ifdef Q_OS_WIN
 		{"camera", "dshow_input"},          {"display", "monitor_capture"},     {"window", "window_capture"},
-		{"game", "game_capture"},           {"image", "image_source"},          {"media", "ffmpeg_source"},
-		{"browser", "browser_source"},      {"color", "color_source_v3"},       {"text", "text_gdiplus_v3"},
+		{"game", "game_capture"},
 		{"mic", "wasapi_input_capture"},    {"desktop_audio", "wasapi_output_capture"},
+#else
+		// ScreenCaptureKit covers displays and windows (its "type" setting picks which, see
+		// inputSettings); macOS has no game capture.
+		{"camera", "macos-avcapture"},      {"display", "screen_capture"},      {"window", "screen_capture"},
+		{"mic", "coreaudio_input_capture"}, {"desktop_audio", "sck_audio_capture"},
+#endif
+		{"image", "image_source"},          {"media", "ffmpeg_source"},
+		{"browser", "browser_source"},      {"color", "color_source_v3"},       {"text", kTextSource},
 		{"shape", "lobs_frame"}, // drawn per layer (see apply); the input itself stays empty
 	};
 	return map.value(kind, "color_source_v3");
@@ -140,10 +170,17 @@ static const char *obsKind(const QString &kind)
 
 static const char *deviceProp(const QString &kind)
 {
+#ifdef Q_OS_WIN
 	if (kind == "camera") return "video_device_id";
 	if (kind == "display") return "monitor_id";
 	if (kind == "window" || kind == "game") return "window";
 	if (kind == "mic" || kind == "desktop_audio") return "device_id";
+#else
+	if (kind == "camera") return "device";
+	if (kind == "display") return "display_uuid";
+	if (kind == "window") return "window";
+	if (kind == "mic") return "device_id";
+#endif
 	return nullptr;
 }
 
@@ -168,10 +205,17 @@ static QString textStyle(const QVariantMap &st)
 static QJsonObject textSettings(const Source &s, int pixelHeight)
 {
 	const QVariantMap &st = s.settings;
-	return {{"text", st.value("text").toString()},
-		{"color", hexToAbgr(st.value("textColor", "#ffffff").toString()) & 0xFFFFFF},
-		{"font", QJsonObject{{"face", st.value("font", "Segoe UI").toString()}, {"size", std::clamp(pixelHeight, 4, 2048)},
-				     {"style", textStyle(st)}, {"flags", (st.value("bold", true).toBool() ? 1 : 0) | (st.value("italic").toBool() ? 2 : 0)}}}};
+	const long long color = hexToAbgr(st.value("textColor", "#ffffff").toString()) & 0xFFFFFF;
+	QJsonObject o{{"text", st.value("text").toString()},
+		      {"color", color},
+		      {"font", QJsonObject{{"face", st.value("font", "Segoe UI").toString()}, {"size", std::clamp(pixelHeight, 4, 2048)},
+					   {"style", textStyle(st)}, {"flags", (st.value("bold", true).toBool() ? 1 : 0) | (st.value("italic").toBool() ? 2 : 0)}}}};
+#ifndef Q_OS_WIN
+	// FreeType2 colors text with a top-to-bottom gradient, in opaque ABGR.
+	o["color1"] = color | 0xFF000000LL;
+	o["color2"] = color | 0xFF000000LL;
+#endif
+	return o;
 }
 
 static QJsonObject inputSettings(const Doc &doc, const Source &s)
@@ -197,6 +241,14 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 		return {{"local_file", st.value("file").toString()}, {"looping", st.value("loop").toBool()}};
 	if (s.kind == "game")
 		return {{"capture_mode", st.value("mode", "any_fullscreen").toString()}, {"window", st.value("device").toString()}};
+#ifndef Q_OS_WIN
+	if (s.kind == "display" || s.kind == "window") { // one ScreenCaptureKit source: 0 display, 1 window
+		QJsonObject o{{"type", s.kind == "display" ? 0 : 1}, {"show_cursor", true}};
+		if (const QString d = st.value("device").toString(); !d.isEmpty())
+			o[deviceProp(s.kind)] = d;
+		return o;
+	}
+#endif
 	if (const char *p = deviceProp(s.kind); p && !st.value("device").toString().isEmpty())
 		return {{p, st.value("device").toString()}};
 	return {};
@@ -296,6 +348,10 @@ void Engine::apply(const Doc &doc)
 		const Source &s = doc.sources[id];
 		if (canvasSame && m_inputs.contains(id) && m_appliedInput.value(id) == s)
 			continue;
+		// Not created until macOS allows it (it would block, or fail); left unapplied, it's
+		// created on the apply that follows the grant (see Permissions::granted).
+		if (!m_inputs.contains(id) && !Permissions::allows(s.kind))
+			continue;
 		m_appliedInput[id] = s;
 		const QJsonObject settings = inputSettings(doc, s);
 		const QString sig = QString(obsKind(s.kind)) + QJsonDocument(settings).toJson(QJsonDocument::Compact);
@@ -386,7 +442,7 @@ void Engine::apply(const Doc &doc)
 				childName = inst.id + ":text" + (it.textGen ? QString("#%1").arg(it.textGen) : QString());
 				obs_data_t *td = toData(ts);
 				if (!it.text)
-					it.text = obs_source_create("text_gdiplus_v3", childName.toUtf8().constData(), td, nullptr);
+					it.text = obs_source_create(kTextSource, childName.toUtf8().constData(), td, nullptr);
 				else if (it.textSig != textSig)
 					obs_source_update(it.text, td);
 				obs_data_release(td);
@@ -1096,8 +1152,17 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 	QVariantList out;
 	const char *prop = deviceProp(kind);
 	obs_source_t *in = m_inputs.value(sourceId);
-	if (!prop)
+	if (!prop || (!in && !Permissions::allows(kind)))
 		return out;
+#ifndef Q_OS_WIN
+	// ScreenCaptureKit's property lists come from a source instance (they crash without one).
+	obs_source_t *probe = nullptr;
+	if (!in && QByteArray(obsKind(kind)) == "screen_capture") {
+		obs_data_t *d = toData(QJsonObject{{"type", kind == "display" ? 0 : 1}});
+		in = probe = obs_source_create_private(obsKind(kind), "lobs-device-probe", d);
+		obs_data_release(d);
+	}
+#endif
 	obs_properties_t *props = in ? obs_source_properties(in) : obs_get_source_properties(obsKind(kind));
 	if (obs_property_t *p = props ? obs_properties_get(props, prop) : nullptr) {
 		for (size_t i = 0, n = obs_property_list_item_count(p); i < n; i++) {
@@ -1109,6 +1174,9 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 		}
 	}
 	obs_properties_destroy(props);
+#ifndef Q_OS_WIN
+	obs_source_release(probe);
+#endif
 	return out;
 }
 
@@ -1393,7 +1461,11 @@ void Engine::attachPreview(void *hwnd, int width, int height)
 	if (!m_started || m_display)
 		return;
 	gs_init_data init = {};
+#ifdef Q_OS_WIN
 	init.window.hwnd = hwnd;
+#else
+	init.window.view = (__bridge id)hwnd; // the NSView of the preview window
+#endif
 	init.cx = uint32_t(width);
 	init.cy = uint32_t(height);
 	init.format = GS_BGRA;

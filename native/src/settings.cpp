@@ -7,39 +7,11 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 
-#include <windows.h>
-#include <dpapi.h>
+#include "platform.h"
 
 static QString settingsPath()
 {
 	return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/settings.json";
-}
-
-static QString protect(const QString &plain)
-{
-	if (plain.isEmpty())
-		return {};
-	const QByteArray in = plain.toUtf8();
-	DATA_BLOB src{DWORD(in.size()), reinterpret_cast<BYTE *>(const_cast<char *>(in.data()))}, out{};
-	if (!CryptProtectData(&src, L"LOBS stream key", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out))
-		return {};
-	const QByteArray enc(reinterpret_cast<const char *>(out.pbData), int(out.cbData));
-	LocalFree(out.pbData);
-	return QString::fromLatin1(enc.toBase64());
-}
-
-static QString unprotect(const QString &b64)
-{
-	if (b64.isEmpty())
-		return {};
-	const QByteArray in = QByteArray::fromBase64(b64.toLatin1());
-	DATA_BLOB src{DWORD(in.size()), reinterpret_cast<BYTE *>(const_cast<char *>(in.data()))}, out{};
-	if (!CryptUnprotectData(&src, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out))
-		return {};
-	const QString plain = QString::fromUtf8(reinterpret_cast<const char *>(out.pbData), int(out.cbData));
-	SecureZeroMemory(out.pbData, out.cbData);
-	LocalFree(out.pbData);
-	return plain;
 }
 
 AppSettings AppSettings::load()
@@ -53,7 +25,7 @@ AppSettings AppSettings::load()
 	s.stream.service = st["service"].toString(s.stream.service);
 	s.stream.server = st["server"].toString(s.stream.server);
 	s.stream.customUrl = st["customUrl"].toString();
-	s.stream.key = unprotect(st["keyProtected"].toString());
+	s.stream.key = platform::unprotectSecret(st["keyProtected"].toString());
 	s.stream.bitrate = st["bitrate"].toInt(s.stream.bitrate);
 	s.stream.audioBitrate = st["audioBitrate"].toInt(s.stream.audioBitrate);
 	s.video.outWidth = v["outWidth"].toInt(s.video.outWidth);
@@ -78,7 +50,7 @@ void AppSettings::save() const
 	QDir().mkpath(QFileInfo(settingsPath()).absolutePath());
 	const QJsonObject o{
 		{"stream", QJsonObject{{"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl},
-				       {"keyProtected", protect(stream.key)}, {"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}}},
+				       {"keyProtected", platform::protectSecret(stream.key)}, {"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}}},
 		{"video", QJsonObject{{"outWidth", video.outWidth}, {"outHeight", video.outHeight}, {"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}}},
 		{"record", QJsonObject{{"folder", record.folder}, {"format", record.format}, {"quality", record.quality}, {"replaySeconds", record.replaySeconds}}},
 		{"hotkeys", QJsonObject::fromVariantMap(hotkeys)},

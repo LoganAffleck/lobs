@@ -3,10 +3,11 @@
 #include <QObject>
 #include <QString>
 
-// Crash reports: if LOBS crashes, a minidump and a copy of lobs.log land in
-// <local data>/crashes. On the next launch the UI offers to report it.
+// Crash reports: if LOBS crashes, a dump (a minidump on Windows, a backtrace on macOS) and a
+// copy of lobs.log land in <local data>/crashes. On the next launch the UI offers to report it.
 namespace crash_report {
-void install(const QString &crashDir, const QString &logPath);
+void install(const QString &crashDir, const QString &logPath); // crash_report_win.cpp / _mac.cpp
+extern const char *const kDumpExt; // ".dmp" or ".crash"
 }
 
 class CrashReport : public QObject {

@@ -1,4 +1,4 @@
-// LOBS.exe — native shell. QML draws the UI; a native child window over the "preview"
+// LOBS.exe / LOBS.app — native shell. QML draws the UI; a native child window over the "preview"
 // item is where libobs renders the edited scene, and where canvas mouse input lands.
 #include "window_chrome.h"
 #include "captions.h"
@@ -16,6 +16,8 @@
 #include "engine.h"
 #include "engine_manager.h"
 #include "hotkeys.h"
+#include "permissions.h"
+#include "platform.h"
 #include "shellmeta.h"
 #include "shapes.h"
 #include "browser_view.h"
@@ -59,12 +61,16 @@
 
 #include <memory>
 
+#ifdef Q_OS_WIN
 #include <windows.h>
+#endif
 #ifdef LOBS_TESTS
 #include "test_runner.h"
 #endif
 
+#ifdef Q_OS_WIN
 QString installEngineZip(const QString &zip, const QString &version, QString *note);
+#endif
 
 static QFile *g_log = nullptr;
 static QMutex g_logLock; // libobs logs from its own threads; QFile isn't thread-safe (LOBS-040)
@@ -470,6 +476,7 @@ int main(int argc, char *argv[])
 		p.end();
 		return img.save(app.arguments()[at + 2]) ? 0 : 1;
 	}
+#ifdef Q_OS_WIN
 	// --install-engine <obs release zip> <version>: unpack an official OBS release as an
 	// engine folder (used by the build and the installer), then exit. Runs before libobs
 	// is loaded, so it works with no engine installed yet.
@@ -499,7 +506,7 @@ int main(int argc, char *argv[])
 	if (!QFile::exists(sel.root + "/bin/64bit/obs.dll"))
 		sel.version.clear();
 	if (sel.version.isEmpty()) {
-		MessageBoxW(nullptr, L"LOBS couldn't find its OBS engine. Reinstall LOBS to restore it.", L"LOBS", MB_ICONERROR);
+		platform::fatalError("LOBS couldn't find its OBS engine. Reinstall LOBS to restore it.");
 		return 3;
 	}
 	// Start the RTWQ work-queue platform for the whole run, as OBS's own main() does. win-wasapi
@@ -525,10 +532,19 @@ int main(int argc, char *argv[])
 			QFile::copy(fi.filePath(), dest); // copy keeps the timestamp, so this runs once per engine
 		}
 	}
+#else
+	// macOS: the engine is part of LOBS.app (Contents/Frameworks and Contents/PlugIns), where
+	// libobs finds its modules and data on its own.
+	const engine_store::Selected sel = engine_store::select();
+	if (sel.version.isEmpty()) {
+		platform::fatalError("LOBS couldn't find its OBS engine. Reinstall LOBS to restore it.");
+		return 3;
+	}
+#endif
 	QQuickStyle::setStyle("Basic");
 	// One font family (Inter Variable), bundled next to the app.
 	QString fontFamily = "Segoe UI";
-	const int fid = QFontDatabase::addApplicationFont(QCoreApplication::applicationDirPath() + "/fonts/InterVariable.ttf");
+	const int fid = QFontDatabase::addApplicationFont(platform::resourceDir() + "/fonts/InterVariable.ttf");
 	if (fid >= 0 && !QFontDatabase::applicationFontFamilies(fid).isEmpty())
 		fontFamily = QFontDatabase::applicationFontFamilies(fid).first();
 	QFont uiFont(fontFamily);
@@ -553,11 +569,14 @@ int main(int argc, char *argv[])
 	pal.setColor(QPalette::ToolTipText, QColor("#f5f5f5"));
 	QGuiApplication::setPalette(pal);
 
-	// App files (fonts, icons, logs, test output) sit next to LOBS.exe. libobs finds its
-	// plugins relative to the working directory (../../obs-plugins/64bit), so that's the engine's bin.
-	const QString exeDir = QCoreApplication::applicationDirPath();
-	const QString root = exeDir;
+	// App files (fonts, icons) and what LOBS writes (logs, test output) sit next to LOBS.exe; on
+	// macOS in LOBS.app/Contents/Resources and Application Support (see platform.h).
+	const QString root = platform::resourceDir(), appOut = platform::outputDir();
+#ifdef Q_OS_WIN
+	// libobs finds its plugins relative to the working directory (../../obs-plugins/64bit), so
+	// that's the engine's bin.
 	QDir::setCurrent(engineBin);
+#endif
 
 	// Window and taskbar icon (the exe's own icon comes from resources/lobs.rc).
 	{
@@ -570,12 +589,12 @@ int main(int argc, char *argv[])
 	std::unique_ptr<Splash> splash;
 	if (!isSelfTestRun(app.arguments()) && !app.arguments().contains("--engine-smoketest"))
 		splash = std::make_unique<Splash>(root + "/icons");
-	QFile log(root + "/lobs.log");
+	QFile log(appOut + "/lobs.log");
 	log.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
 	g_log = &log;
 	base_set_log_handler(logHandler, nullptr);
 	const QString crashDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/crashes";
-	crash_report::install(crashDir, root + "/lobs.log");
+	crash_report::install(crashDir, appOut + "/lobs.log");
 
 	blog(LOG_INFO, "[lobs] startup: app setup done");
 	if (splash)
@@ -594,7 +613,7 @@ int main(int argc, char *argv[])
 	blog(LOG_INFO, "[lobs] startup: engine up");
 	if (splash)
 		splash->step("Loading your show");
-	crash_report::install(crashDir, root + "/lobs.log"); // again: the engine's modules may have set their own
+	crash_report::install(crashDir, appOut + "/lobs.log"); // again: the engine's modules may have set their own
 	EngineUpdater engineUpdater(sel);
 
 	// Self-tests work on a throwaway document, so they never touch the user's show.
@@ -614,6 +633,18 @@ int main(int argc, char *argv[])
 		return runEngineSmokeTest(app, engine, docPath, app.arguments()[st + 1]);
 	App controller(&engine, docPath);
 	blog(LOG_INFO, "[lobs] startup: show loaded");
+	// macOS privacy permissions never hold up startup: what isn't allowed yet isn't created,
+	// the permissions bar says so, and a grant applies the show again (see permissions.h).
+	Permissions permissions;
+	const auto syncNeeded = [&] {
+		QStringList kinds;
+		for (const QString &id : controller.doc().sourceOrder)
+			kinds << controller.doc().sources[id].kind;
+		permissions.setNeeded(kinds);
+	};
+	syncNeeded();
+	QObject::connect(&controller, &App::docChanged, &permissions, syncNeeded);
+	QObject::connect(&permissions, &Permissions::granted, &controller, [&] { engine.apply(controller.doc()); });
 	if (splash)
 		splash->step("Opening the workspace");
 
@@ -665,6 +696,7 @@ int main(int argc, char *argv[])
 	qml.rootContext()->setContextProperty("captions", &captions);
 	qml.rootContext()->setContextProperty("chrome", &chrome);
 	qml.rootContext()->setContextProperty("crashReport", &crashReport);
+	qml.rootContext()->setContextProperty("permissions", &permissions);
 	qml.rootContext()->setContextProperty("appUpdater", &appUpdater);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
@@ -694,8 +726,10 @@ int main(int argc, char *argv[])
 	QTimer::singleShot(5000, [&]() {
 		if (engine.started())
 			engine_store::markGood(sel.version);
-		if (!selfTest)
+		if (!selfTest) {
 			appUpdater.checkIfDue();
+			permissions.askForNeeded(); // with the window up, so the prompt has context
+		}
 	});
 	QObject::connect(&appUpdater, &AppUpdater::quitForInstall, &app, [&] {
 		if (auto *w = qobject_cast<QQuickWindow *>(qml.rootObjects().value(0)))
@@ -735,7 +769,7 @@ int main(int argc, char *argv[])
 			const lobs::Doc &d = controller.doc();
 			QJsonObject r{{"ok", ok}, {"path", path}, {"bytes", bytes}, {"stats", engine.stats()}, {"scenes", d.scenes.size()},
 				      {"sources", d.sources.size()}, {"instances", d.instances.size()}, {"canUndo", controller.canUndo()}};
-			QFile f(root + "/autotest.json");
+			QFile f(appOut + "/autotest.json");
 			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
 			f.write(QJsonDocument(r).toJson());
 			f.close();
@@ -1334,7 +1368,7 @@ int main(int argc, char *argv[])
 			r["encoder"] = engine.resolveEncoder();
 			r["error"] = engine.lastError();
 			r["recording"] = engine.lastRecording();
-			QFile f(root + "/streamtest.json");
+			QFile f(appOut + "/streamtest.json");
 			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
 			f.write(QJsonDocument(r).toJson());
 			f.close();
@@ -1346,11 +1380,13 @@ int main(int argc, char *argv[])
 	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
 	captions.stop(); // its audio tap is on an engine input
 	engine.shutdown();
+#ifdef Q_OS_WIN
 	if (rtwq) {
 		if (auto shutdown = reinterpret_cast<HRESULT(STDAPICALLTYPE *)()>(GetProcAddress(rtwq, "RtwqShutdown")))
 			shutdown();
 		FreeLibrary(rtwq);
 	}
+#endif
 	{
 		QMutexLocker lock(&g_logLock); // an engine thread may still be logging
 		g_log = nullptr;

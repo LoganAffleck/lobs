@@ -1,0 +1,18 @@
+# OBS engine modules LOBS.app ships, by plugin name (macOS; engine-modules.txt is Windows').
+# deps/stage-engine-mac.sh copies only these out of OBS's official DMG; OBS's own UI plugins
+# (frontend-tools, obs-websocket, obs-vst, decklink/aja output UIs) need OBS's window and
+# are left out, as is mac-virtualcam (its system extension must carry LOBS's own signature).
+coreaudio-encoder
+image-source
+mac-avcapture
+mac-capture
+mac-videotoolbox
+obs-browser
+obs-ffmpeg
+obs-filters
+obs-outputs
+obs-transitions
+obs-webrtc
+obs-x264
+rtmp-services
+text-freetype2

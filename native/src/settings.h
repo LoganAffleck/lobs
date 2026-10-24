@@ -1,6 +1,7 @@
 // App settings (not part of a show): streaming, encoder, video and recording.
-// Saved to %APPDATA%/LOBS/LOBS/settings.json. The stream key is encrypted with Windows
-// DPAPI (CryptProtectData), so only this Windows user on this PC can read it back.
+// Saved to %APPDATA%/LOBS/LOBS/settings.json (~/Library/Application Support/LOBS/LOBS on macOS).
+// The stream key is encrypted with Windows DPAPI (CryptProtectData), so only this Windows user
+// on this PC can read it back; on macOS it lives in the login Keychain instead.
 #pragma once
 
 #include <QString>

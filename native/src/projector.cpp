@@ -54,7 +54,11 @@ void Projector::ensureDisplay()
 		return;
 	const qreal dpr = devicePixelRatio();
 	gs_init_data init = {};
+#ifdef Q_OS_WIN
 	init.window.hwnd = reinterpret_cast<void *>(winId());
+#else
+	init.window.view = (__bridge id)reinterpret_cast<void *>(winId()); // an NSView
+#endif
 	init.cx = uint32_t(width() * dpr);
 	init.cy = uint32_t(height() * dpr);
 	init.format = GS_BGRA;

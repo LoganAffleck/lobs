@@ -9,11 +9,8 @@
 #include <obs.h>
 #include <QElapsedTimer>
 
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <shellapi.h>
-#include <shlobj.h>
+#include "permissions.h"
+#include "platform.h"
 
 #include <QDir>
 #include <QDateTime>
@@ -464,7 +461,8 @@ QVariantMap App::inspector() const
 		m["linkVisibility"] = linkInfo(Group::Visibility);
 		// Per section: who it's linked with, what it could link with (the same source placed in
 		// other scenes), and whether it differs from its defaults (so a reset is worth offering).
-		const PropMap def = d.defaultProps(i.kind == "group" ? nullptr : &d.sources[i.sourceId]);
+		const Source src = d.sources.value(i.sourceId);
+		const PropMap def = d.defaultProps(i.kind == "group" ? nullptr : &src);
 		QVariantMap sections;
 		for (Group g : kGroups) {
 			QVariantList peers, candidates;
@@ -729,7 +727,12 @@ QStringList App::lumaWipes() const
 {
 	// The engine's obs-transitions data folder.
 	QStringList out;
-	QDirIterator it(QCoreApplication::applicationDirPath() + "/engine", {"wipes.json"}, QDir::Files, QDirIterator::Subdirectories);
+#ifdef Q_OS_WIN
+	const QString engineDir = QCoreApplication::applicationDirPath() + "/engine";
+#else
+	const QString engineDir = QCoreApplication::applicationDirPath() + "/../PlugIns/obs-transitions.plugin";
+#endif
+	QDirIterator it(engineDir, {"wipes.json"}, QDir::Files, QDirIterator::Subdirectories);
 	while (it.hasNext()) {
 		const QDir dir = QFileInfo(it.next()).dir();
 		for (const QString &f : dir.entryList({"*.png"}, QDir::Files, QDir::Name))
@@ -1610,7 +1613,8 @@ void App::resetGroup(const QString &group)
 	if (id.isEmpty() || !groupFromName(group, g))
 		return;
 	const Instance &i = doc().instances[id];
-	const PropMap def = doc().defaultProps(i.kind == "group" ? nullptr : &doc().sources[i.sourceId]);
+	const Source src = doc().sources.value(i.sourceId);
+	const PropMap def = doc().defaultProps(i.kind == "group" ? nullptr : &src);
 	// LOBS-012: Reset is local. A linked section unlinks first (keeping its values everywhere
 	// else), then only this layer resets; later edits apply to it alone.
 	const bool wasLinked = i.links.contains(g);
@@ -2137,7 +2141,8 @@ void App::nudge(int dx, int dy)
 
 static Transform dropTransform(const Doc &d, const QString &sourceId, QPointF c)
 {
-	const PropMap p = d.defaultProps(&d.sources[sourceId]);
+	const Source src = d.sources.value(sourceId);
+	const PropMap p = d.defaultProps(&src);
 	Transform t = p.transform;
 	if (t.w >= d.canvasW && t.h >= d.canvasH) // full-canvas sources (displays, games) drop full-canvas
 		return t;
@@ -2243,7 +2248,11 @@ void App::refreshSourceStatus()
 			continue;
 		const QString dev = s.settings.value("device").toString();
 		QString detail, status, statusText;
-		if (QStringList{"camera", "display", "window", "mic", "desktop_audio"}.contains(s.kind) || (s.kind == "game" && !dev.isEmpty())) {
+		if (!Permissions::allows(s.kind)) {
+			const QString p = Permissions::forKind(s.kind);
+			status = "permission", statusText = "Needs access";
+			detail = "Allow " + Permissions::title(p) + " for LOBS";
+		} else if (QStringList{"camera", "display", "window", "mic", "desktop_audio"}.contains(s.kind) || (s.kind == "game" && !dev.isEmpty())) {
 			if (!m_deviceCache.contains(s.kind))
 				m_deviceCache[s.kind] = m_engine->listDevices({}, s.kind);
 			const QVariantList &devs = m_deviceCache[s.kind];
@@ -2667,8 +2676,7 @@ void App::setFolderColor(const QString &folder, const QString &color)
 	if (!QFileInfo(folder).isDir() || !insideAssets(folder))
 		return;
 	const QString file = folder + "/.lobsfolder";
-	const std::wstring w = QDir::toNativeSeparators(file).toStdWString();
-	SetFileAttributesW(w.c_str(), FILE_ATTRIBUTE_NORMAL); // hidden files can't be rewritten in place
+	platform::setHidden(file, false); // hidden files can't be rewritten in place
 	if (color.isEmpty()) {
 		QFile::remove(file);
 	} else {
@@ -2676,7 +2684,7 @@ void App::setFolderColor(const QString &folder, const QString &color)
 		if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
 			f.write(QJsonDocument(QJsonObject{{"color", color}}).toJson(QJsonDocument::Compact));
 		f.close();
-		SetFileAttributesW(w.c_str(), FILE_ATTRIBUTE_HIDDEN); // out of the way in File Explorer
+		platform::setHidden(file, true); // out of the way in File Explorer
 	}
 	emit assetsChanged();
 }
@@ -2811,45 +2819,18 @@ void App::adoptExternalFiles()
 	emit assetsChanged();
 }
 
-// Opens File Explorer through the shell API (as Explorer's own "Show in folder" does),
-// rather than starting explorer.exe with arguments, which breaks on quoting and some setups.
-static void shellReveal(const QString &path, bool select)
-{
-	const std::wstring w = QDir::toNativeSeparators(QDir::cleanPath(path)).toStdWString();
-	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-	// Explorer may reuse a window it already has open on this folder; let it come to the front
-	// (Windows otherwise keeps another process from taking focus).
-	AllowSetForegroundWindow(ASFW_ANY);
-	HRESULT hr = E_FAIL;
-	if (select) {
-		if (PIDLIST_ABSOLUTE pidl = ILCreateFromPathW(w.c_str())) {
-			hr = SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
-			ILFree(pidl);
-		}
-		if (FAILED(hr)) { // fall back to Explorer's own /select switch, through the shell
-			const std::wstring args = L"/select,\"" + w + L"\"";
-			const auto r = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL));
-			blog(LOG_INFO, "[lobs] reveal fallback for %s: %lld", path.toUtf8().constData(), (long long)r);
-		}
-	} else {
-		const auto r = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"explore", w.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-		hr = r > 32 ? S_OK : E_FAIL;
-	}
-	blog(LOG_INFO, "[lobs] reveal %s (select=%d): hr=0x%08lx", path.toUtf8().constData(), int(select), (unsigned long)hr);
-}
-
 void App::revealAsset(const QString &path)
 {
 	blog(LOG_INFO, "[lobs] Show in File Explorer: %s (exists=%d)", path.toUtf8().constData(), int(QFile::exists(path)));
 	if (!QFile::exists(path))
 		return showToast(QFileInfo(path).fileName() + " is no longer in the assets folder");
-	shellReveal(path, true);
+	platform::reveal(path, true);
 }
 
 void App::openAssetsFolder()
 {
 	QDir().mkpath(assetsFolder());
-	shellReveal(assetsFolder(), false);
+	platform::reveal(assetsFolder(), false);
 }
 
 void App::trashAsset(const QString &path)

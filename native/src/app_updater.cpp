@@ -16,16 +16,22 @@
 
 #include <util/base.h>
 
+#ifdef Q_OS_WIN
 #include <windows.h>
 #include <softpub.h>
 #include <wincrypt.h>
 #include <wintrust.h>
+#endif
 
 namespace {
+#ifdef Q_OS_WIN
 // The publisher every LOBS installer is signed by (Azure Artifact Signing, see BUILDING.md).
 const wchar_t *kPublisher = L"Logan Affleck";
+#endif
 const char *kFeed = "https://api.github.com/repos/LoganAffleck/lobs/releases/latest";
 }
+
+#ifdef Q_OS_WIN
 
 QString verifyPublisher(const QString &path)
 {
@@ -58,6 +64,10 @@ QString verifyPublisher(const QString &path)
 	WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &wd);
 	return err;
 }
+#else
+// Releases only carry the Windows installer so far; macOS updates come with Sparkle (PLAN-MACOS.md, Phase 4).
+QString verifyPublisher(const QString &) { return "updates aren't available on macOS yet"; }
+#endif
 
 AppUpdater::AppUpdater(bool justUpdated, QObject *parent)
 	: QObject(parent), m_net(new QNetworkAccessManager(this)), m_justUpdated(justUpdated)
@@ -104,6 +114,9 @@ void AppUpdater::check()
 {
 	if (m_state == "checking" || m_state == "downloading" || m_state == "ready")
 		return;
+#ifndef Q_OS_WIN
+	return; // see verifyPublisher
+#endif
 	set("checking");
 	// Only GitHub's public "latest release" is requested; nothing about this PC is sent.
 	const QString feed = qEnvironmentVariable("LOBS_UPDATE_FEED", kFeed);

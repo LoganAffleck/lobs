@@ -17,8 +17,10 @@ ApplicationWindow {
     title: "LOBS"
     color: Pal.s1
     // The top bar is the title bar (see window_chrome.cpp): Windows still snaps, resizes and
-    // maximizes the window, but draws no title bar of its own.
-    flags: Qt.Window | Qt.FramelessWindowHint
+    // maximizes the window, but draws no title bar of its own. macOS keeps a transparent one
+    // over the top bar, with its own window buttons (window_chrome_mac.mm).
+    flags: chrome.nativeControls ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
+                                 : Qt.Window | Qt.FramelessWindowHint
     readonly property bool maximized: visibility === Window.Maximized
     font.family: Pal.font
     font.pixelSize: Pal.body
@@ -159,7 +161,7 @@ ApplicationWindow {
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Pal.border }
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 14
+            anchors.leftMargin: 14 + chrome.leadingInset
             anchors.rightMargin: 10
             spacing: 2
             // The app's mark, name and Settings in one button.
@@ -277,6 +279,7 @@ ApplicationWindow {
             OutputControls {}
             // Window buttons, in Windows' order.
             Row {
+                visible: !chrome.nativeControls
                 Layout.leftMargin: 8
                 Layout.rightMargin: -10
                 Layout.fillHeight: true
@@ -309,9 +312,14 @@ ApplicationWindow {
     // Dockable panels (KDDockWidgets). The video is a panel too, so rows of panels can sit
     // under or over it. Drag a tab to move or float a panel, drop it on another panel to tab them
     // together; the Window menu reopens closed ones.
+    PermissionsBar {
+        id: permissionsBar
+        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 6; bottomMargin: 0 }
+    }
+
     KDDW.DockingArea {
         id: dockArea
-        anchors.fill: parent
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; top: permissionsBar.visible ? permissionsBar.bottom : parent.top }
         anchors.margins: 6 // same as the gaps between panels, so the edges match
         uniqueName: "LOBSMain"
 
