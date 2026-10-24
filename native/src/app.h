@@ -100,6 +100,10 @@ public:
 	Q_INVOKABLE void setSourceSetting(const QString &id, const QString &key, const QVariant &value);
 	// Audio effects on a pool source (mixer).
 	Q_INVOKABLE QVariantList audioFxTypes() const;
+	Q_INVOKABLE bool kindAvailable(const QString &kind) const { return m_engine->kindAvailable(kind); }
+	// Sources still without a device get this machine's first one, e.g. a display added before
+	// macOS allowed Screen Recording (nothing to list then). Not an undo step.
+	void fillMissingDevices();
 	Q_INVOKABLE void addAudioFilter(const QString &sourceId, const QString &type);
 	Q_INVOKABLE void removeAudioFilter(const QString &sourceId, int index);
 	Q_INVOKABLE void moveAudioFilter(const QString &sourceId, int index, int delta);

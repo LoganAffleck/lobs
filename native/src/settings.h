@@ -19,7 +19,7 @@ struct StreamSettings {
 struct VideoSettings {
 	int outWidth = 1920, outHeight = 1080;
 	int fps = 60;
-	QString encoder = "auto"; // auto | obs_nvenc_h264_tex | obs_qsv11_v2 | h264_texture_amf | obs_x264
+	QString encoder = "auto"; // auto | obs_nvenc_h264_tex | obs_qsv11_v2 | h264_texture_amf | com.apple.videotoolbox.… | obs_x264
 	QString preset = "quality"; // speed | balanced | quality (mapped per encoder)
 };
 

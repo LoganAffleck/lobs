@@ -11,6 +11,7 @@ namespace {
 // The last answer per permission. Read on every apply and status refresh, so it's cached and
 // only re-checked on refresh() (startup, after a prompt, and whenever LOBS comes to the front).
 QHash<QString, platform::Access> g_access;
+const QStringList kAll = {"microphone", "camera", "screen", "hotkeys"};
 
 platform::Access cached(const QString &permission)
 {
@@ -29,7 +30,10 @@ Permissions::Permissions(QObject *parent) : QObject(parent)
 			refresh();
 	});
 	refresh();
-	for (const QString p : {"microphone", "camera", "screen"})
+	for (const QString &p : kAll)
+		if (cached(p) == platform::Access::Granted)
+			m_grantedAtLaunch.insert(p);
+	for (const QString p : kAll)
 		blog(LOG_INFO, "[lobs] %s access at startup: %s", qPrintable(p),
 		     cached(p) == platform::Access::Granted ? "granted" : cached(p) == platform::Access::Denied ? "denied" : "not asked yet");
 }
@@ -53,7 +57,7 @@ bool Permissions::allows(const QString &sourceKind)
 
 QString Permissions::title(const QString &permission)
 {
-	return permission == "screen" ? "Screen Recording" : permission == "camera" ? "Camera" : "Microphone";
+	return permission == "screen" ? "Screen Recording" : permission == "hotkeys" ? "Input Monitoring" : permission == "camera" ? "Camera" : "Microphone";
 }
 
 void Permissions::setNeeded(const QStringList &sourceKinds)
@@ -62,27 +66,50 @@ void Permissions::setNeeded(const QStringList &sourceKinds)
 	for (const QString &k : sourceKinds)
 		if (const QString p = forKind(k); !p.isEmpty())
 			needed.insert(p);
+	if (m_hotkeys)
+		needed.insert("hotkeys");
 	if (needed == m_needed)
 		return;
 	m_needed = needed;
 	emit changed();
 }
 
+void Permissions::setHotkeysNeeded(bool needed)
+{
+	if (needed == m_hotkeys)
+		return;
+	m_hotkeys = needed;
+	if (needed)
+		m_needed.insert("hotkeys");
+	else
+		m_needed.remove("hotkeys");
+	emit changed();
+}
+
 QVariantList Permissions::missing() const
 {
 	static const QHash<QString, QString> uses = {
-		{"microphone", "your mic"}, {"camera", "your camera"}, {"screen", "display, window and desktop audio capture"}};
+		{"microphone", "your mic"}, {"camera", "your camera"}, {"screen", "display, window and desktop audio capture"},
+		{"hotkeys", "global hotkeys while another app is in front"}};
 	QVariantList out;
-	for (const QString p : {"microphone", "camera", "screen"}) {
+	for (const QString p : kAll) {
 		if (!m_needed.contains(p))
 			continue;
 		const platform::Access a = cached(p);
-		if (a == platform::Access::Granted)
+		if (a == platform::Access::Granted) {
+			if (p == "hotkeys" && !m_grantedAtLaunch.contains(p))
+				out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", "relaunch"}, {"relaunch", false},
+						   {"detail", title(p) + " is on. Reopen LOBS to start " + uses[p] + "."}};
 			continue;
+		}
 		const bool ask = a == platform::Access::NotAsked;
-		out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", ask ? "ask" : "settings"},
+		// macOS applies these two to a new process only (Screen Recording usually, Input
+		// Monitoring always, as libobs checks it at startup).
+		const bool relaunch = p == "screen" || p == "hotkeys";
+		out << QVariantMap{{"id", p}, {"title", title(p)}, {"action", ask ? "ask" : "settings"}, {"relaunch", relaunch && !ask},
 				   {"detail", ask ? "LOBS needs your permission for " + uses[p] + "."
-						  : title(p) + " is off for LOBS, so " + uses[p] + " stays empty. Turn it on in System Settings."}};
+						  : title(p) + " is off for LOBS, so " + uses[p] + (p == "hotkeys" ? " won't work" : " stays empty") +
+							    ". Turn it on in System Settings" + (relaunch ? ", then reopen LOBS." : ".")}};
 	}
 	return out;
 }
@@ -109,7 +136,7 @@ void Permissions::request(const QString &permission)
 void Permissions::refresh()
 {
 	bool newlyGranted = false, any = false;
-	for (const QString p : {"microphone", "camera", "screen"}) {
+	for (const QString p : kAll) {
 		const platform::Access now = platform::access(p);
 		const auto it = g_access.constFind(p);
 		if (it != g_access.constEnd() && *it == now)

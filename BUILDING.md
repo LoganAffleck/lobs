@@ -35,7 +35,14 @@ set `QTDIR` to use another location).
    `native/deps/downloads/obs/`. `build.sh` stages it with `native/deps/stage-engine-mac.sh`
    (only the modules in `native/engine-modules-mac.txt`; OBS's Qt stays out, LOBS ships its own).
 4. `native/build.sh` builds `native/dist/mac/LOBS.app`, with the engine inside it, and signs it
-   ad hoc so it runs on this Mac.
+   so it runs on this Mac.
+
+**Keep permissions across rebuilds.** macOS ties camera, microphone and Screen Recording
+permissions to the app's signature. An ad-hoc signature changes with every build, so LOBS asks
+again each time. To sign with one certificate instead: Keychain Access > Certificate Assistant >
+Create a Certificate…, name it `LOBS Dev`, Identity Type *Self Signed Root*, Certificate Type
+*Code Signing*. Then build with `LOBS_SIGN_IDENTITY="LOBS Dev" native/build.sh` (or export it in
+your shell profile). Grant the permissions once more after the first signed build.
 
 The app writes `lobs.log` to `~/Library/Application Support/LOBS/LOBS`. Signed and notarized
 builds, the updater and the virtual camera come later (see `PLAN-MACOS.md`).

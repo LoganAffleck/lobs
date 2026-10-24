@@ -137,7 +137,8 @@ public:
 	// Outputs (engine_output.cpp)
 	void setSettings(const AppSettings &s) { m_settings = s; }
 	const AppSettings &settings() const { return m_settings; }
-	QVariantList encoders() const;               // [{id, name}] usable on this PC, best first
+	QVariantList encoders() const;               // [{value, name}] usable on this PC, best first
+	bool kindAvailable(const QString &kind) const; // this platform and engine can capture it (no game capture on macOS)
 	QString resolveEncoder() const;               // settings.encoder, or the best available for "auto"
 	QStringList services() const;                 // rtmp-services names
 	QVariantList servers(const QString &service) const; // [{name, value}]

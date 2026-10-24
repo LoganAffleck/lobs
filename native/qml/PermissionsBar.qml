@@ -34,9 +34,15 @@ Rectangle {
                     elide: Text.ElideRight
                 }
                 FButton {
-                    text: modelData.action === "ask" ? "Allow…" : "Open System Settings"
-                    variant: modelData.action === "ask" ? "primary" : "secondary"
-                    onClicked: permissions.request(modelData.id)
+                    text: modelData.action === "ask" ? "Allow…" : modelData.action === "relaunch" ? "Reopen LOBS" : "Open System Settings"
+                    variant: modelData.action === "settings" ? "secondary" : "primary"
+                    onClicked: modelData.action === "relaunch" ? permissions.relaunch() : permissions.request(modelData.id)
+                }
+                FButton {
+                    visible: modelData.relaunch
+                    text: "Reopen LOBS"
+                    variant: "secondary"
+                    onClicked: permissions.relaunch()
                 }
                 FButton {
                     visible: index === 0

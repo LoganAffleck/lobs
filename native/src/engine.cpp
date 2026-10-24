@@ -23,6 +23,8 @@
 #include <QJsonObject>
 #include <QSize>
 #include <QStandardPaths>
+#include <QCoreApplication>
+#include <QElapsedTimer>
 #include <cmath>
 
 extern "C" void lobs_register_instance_source(void);
@@ -57,7 +59,12 @@ bool Engine::start(const QString &runtimeRoot)
 {
 	const QString root = QDir(runtimeRoot).absolutePath();
 	m_root = root;
+#ifdef Q_OS_WIN
 	const QString cfg = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/plugin_config";
+#else
+	// ~/Library/Preferences is for settings files only; modules keep caches here (the browser's).
+	const QString cfg = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/plugin_config";
+#endif
 	QDir().mkpath(cfg);
 	if (!obs_startup("en-US", cfg.toUtf8().constData(), nullptr)) {
 		setStatus("libobs failed to start");
@@ -148,7 +155,8 @@ static const char *kTextSource = "text_gdiplus_v3";
 static const char *kTextSource = "text_ft2_source_v2"; // GDI+ is Windows-only
 #endif
 
-static const char *obsKind(const QString &kind)
+// The OBS source type for a LOBS kind on this platform, or nullptr if it has none here.
+static const char *obsKindOrNull(const QString &kind)
 {
 	static const QHash<QString, const char *> map = {
 #ifdef Q_OS_WIN
@@ -165,7 +173,19 @@ static const char *obsKind(const QString &kind)
 		{"browser", "browser_source"},      {"color", "color_source_v3"},       {"text", kTextSource},
 		{"shape", "lobs_frame"}, // drawn per layer (see apply); the input itself stays empty
 	};
-	return map.value(kind, "color_source_v3");
+	return map.value(kind, nullptr);
+}
+
+static const char *obsKind(const QString &kind)
+{
+	const char *id = obsKindOrNull(kind);
+	return id ? id : "color_source_v3";
+}
+
+bool Engine::kindAvailable(const QString &kind) const
+{
+	const char *id = obsKindOrNull(kind);
+	return id && obs_source_get_display_name(id); // registered by a module this engine loaded
 }
 
 static const char *deviceProp(const QString &kind)
@@ -244,8 +264,12 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 #ifndef Q_OS_WIN
 	if (s.kind == "display" || s.kind == "window") { // one ScreenCaptureKit source: 0 display, 1 window
 		QJsonObject o{{"type", s.kind == "display" ? 0 : 1}, {"show_cursor", true}};
-		if (const QString d = st.value("device").toString(); !d.isEmpty())
-			o[deviceProp(s.kind)] = d;
+		if (const QString d = st.value("device").toString(); !d.isEmpty()) {
+			if (s.kind == "window")
+				o["window"] = d.toLongLong(); // a CGWindowID; device ids are kept as text
+			else
+				o["display_uuid"] = d;
+		}
 		return o;
 	}
 #endif
@@ -1544,9 +1568,24 @@ void Engine::shutdown()
 	for (obs_scene_t *s : m_scenes)
 		obs_scene_release(s);
 	m_scenes.clear();
-	for (obs_source_t *in : m_inputs)
+	bool browsers = false;
+	for (obs_source_t *in : m_inputs) {
+		browsers |= in && QByteArray(obs_source_get_id(in)) == "browser_source";
 		obs_source_release(in);
+	}
 	m_inputs.clear();
+#ifndef Q_OS_WIN
+	// obs-browser runs CEF on Qt's event loop on macOS, and that loop has stopped by now.
+	// Closing a page takes a few turns of it, and CEF won't shut down with one still open.
+	if (browsers) {
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 750)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+	}
+#else
+	Q_UNUSED(browsers);
+#endif
 	obs_shutdown();
 	m_started = false;
 }

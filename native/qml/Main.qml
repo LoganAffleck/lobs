@@ -2021,6 +2021,7 @@ ApplicationWindow {
                 Repeater {
                     model: [["camera", "video", "Camera"], ["display", "monitor", "Display"], ["window", "app-window", "Window"], ["game", "gamepad-2", "Game"],
                             ["browser", "globe", "Browser"], ["mic", "mic", "Mic"], ["desktop_audio", "volume-2", "Desktop"]]
+                           .filter(k => app.kindAvailable(k[0])) // no game capture on macOS
                     delegate: Rectangle {
                         required property var modelData
                         readonly property bool on: addDialog.kind === modelData[0]

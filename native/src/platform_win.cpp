@@ -77,6 +77,7 @@ QString unprotectSecret(const QString &b64)
 Access access(const QString &) { return Access::Granted; }
 void requestAccess(const QString &, std::function<void()> answered) { answered(); }
 void openPrivacySettings(const QString &) {}
+void relaunchAfterExit() {}
 
 void fatalError(const QString &message)
 {

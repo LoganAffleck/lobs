@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QStandardPaths>
 
+#include <QProcess>
 #include <QSettings>
 
 #import <AVFoundation/AVFoundation.h>
@@ -67,11 +68,11 @@ static AVMediaType mediaType(const QString &permission)
 
 Access access(const QString &permission)
 {
-	if (permission == "screen") {
+	if (permission == "screen" || permission == "hotkeys") {
 		// macOS only says whether it's allowed; LOBS remembers whether it already asked.
-		if (CGPreflightScreenCaptureAccess())
+		if (permission == "screen" ? CGPreflightScreenCaptureAccess() : CGPreflightListenEventAccess())
 			return Access::Granted;
-		return QSettings().value("permissions/screenAsked").toBool() ? Access::Denied : Access::NotAsked;
+		return QSettings().value("permissions/" + permission + "Asked").toBool() ? Access::Denied : Access::NotAsked;
 	}
 	switch ([AVCaptureDevice authorizationStatusForMediaType:mediaType(permission)]) {
 	case AVAuthorizationStatusAuthorized: return Access::Granted;
@@ -82,9 +83,10 @@ Access access(const QString &permission)
 
 void requestAccess(const QString &permission, std::function<void()> answered)
 {
-	if (permission == "screen") {
-		QSettings().setValue("permissions/screenAsked", true);
-		CGRequestScreenCaptureAccess(); // the system's alert, which leads to System Settings
+	if (permission == "screen" || permission == "hotkeys") {
+		QSettings().setValue("permissions/" + permission + "Asked", true);
+		// The system's alert, which leads to System Settings.
+		permission == "screen" ? CGRequestScreenCaptureAccess() : CGRequestListenEventAccess();
 		answered();
 		return;
 	}
@@ -96,9 +98,19 @@ void requestAccess(const QString &permission, std::function<void()> answered)
 
 void openPrivacySettings(const QString &permission)
 {
-	const char *pane = permission == "screen" ? "Privacy_ScreenCapture" : permission == "camera" ? "Privacy_Camera" : "Privacy_Microphone";
+	const char *pane = permission == "screen"    ? "Privacy_ScreenCapture"
+			   : permission == "hotkeys" ? "Privacy_ListenEvent"
+			   : permission == "camera"  ? "Privacy_Camera"
+						     : "Privacy_Microphone";
 	NSString *url = [NSString stringWithFormat:@"x-apple.systempreferences:com.apple.preference.security?%s", pane];
 	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+}
+
+void relaunchAfterExit()
+{
+	const QString bundle = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../..");
+	const QString script = QString("while kill -0 %1 2>/dev/null; do sleep 0.2; done; open -n \"$0\"").arg(QCoreApplication::applicationPid());
+	QProcess::startDetached("/bin/sh", {"-c", script, bundle});
 }
 
 void fatalError(const QString &message)

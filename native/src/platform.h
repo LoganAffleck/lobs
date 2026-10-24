@@ -15,15 +15,18 @@ void setHidden(const QString &path, bool hidden);
 // protectSecret returns is what settings.json stores; unprotectSecret reads it back.
 QString protectSecret(const QString &plain);
 QString unprotectSecret(const QString &stored);
-// Privacy permissions: "microphone", "camera" and "screen" (Screen Recording, which covers
-// display, window and desktop audio capture). macOS asks the user for each once; Windows
-// always answers Granted. None of these block (see permissions.h).
+// Privacy permissions: "microphone", "camera", "screen" (Screen Recording, which covers
+// display, window and desktop audio capture) and "hotkeys" (Input Monitoring, for global
+// hotkeys). macOS asks the user for each once; Windows always answers Granted. None of these
+// block (see permissions.h).
 enum class Access { Granted, Denied, NotAsked };
 Access access(const QString &permission);
 // Shows the system's prompt (only possible while NotAsked); answered runs on the GUI thread.
 void requestAccess(const QString &permission, std::function<void()> answered);
 // System Settings > Privacy & Security, at that permission's list.
 void openPrivacySettings(const QString &permission);
+// Starts LOBS again once this process has exited (some permissions only apply to a new process).
+void relaunchAfterExit();
 // A message box for errors that stop LOBS before its UI exists.
 void fatalError(const QString &message);
 // Read-only app files (fonts, icons): next to LOBS.exe, or LOBS.app/Contents/Resources.

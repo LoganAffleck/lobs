@@ -94,6 +94,13 @@ static Doc withDefaultDevices(Doc d, Engine *engine)
 	return d;
 }
 
+void App::fillMissingDevices()
+{
+	const Doc filled = withDefaultDevices(doc(), m_engine);
+	if (filled.sources != doc().sources)
+		m_store.amend([&](Doc &d) { d.sources = filled.sources; });
+}
+
 App::App(Engine *engine, const QString &docPath, QObject *parent)
 	: QObject(parent), m_engine(engine), m_store(withDefaultDevices(loadDoc(docPath), engine)), m_docPath(docPath)
 {
@@ -1824,7 +1831,7 @@ QVariantMap App::recommendSettings(int measured, const QString &service) const
 		w = 1280, h = 720;
 	QString encName = enc;
 	for (const QVariant &e : m_engine->encoders())
-		if (e.toMap()["id"].toString() == enc)
+		if (e.toMap()["value"].toString() == enc)
 			encName = e.toMap()["name"].toString();
 	return {{"bitrate", bitrate}, {"outWidth", w}, {"outHeight", h}, {"fps", fps}, {"encoder", "auto"}, {"encoderName", encName}, {"hardware", hardware}, {"measured", measured}, {"slow", slow}};
 }
@@ -2261,7 +2268,11 @@ void App::refreshSourceStatus()
 				if (v.toMap()["value"].toString() == dev)
 					devName = v.toMap()["name"].toString();
 			if (dev.isEmpty() || dev == "default")
+#ifdef Q_OS_WIN
 				detail = s.kind == "mic" || s.kind == "desktop_audio" ? "Windows default device" : "No device chosen";
+#else
+				detail = s.kind == "mic" || s.kind == "desktop_audio" ? "System default device" : "No device chosen";
+#endif
 			else if (devName.isEmpty() && !devs.isEmpty() && s.kind != "window" && s.kind != "game")
 				status = "missing", statusText = "Not connected";
 			else
@@ -3198,7 +3209,8 @@ QVariantList App::audioFxTypes() const
 {
 	QVariantList out;
 	for (const FxType &t : lobs::audioFxTypes())
-		out << QVariantMap{{"type", t.type}, {"label", t.label}};
+		if (obs_source_get_display_name(t.obsId.toUtf8().constData())) // e.g. no NVIDIA effects on macOS
+			out << QVariantMap{{"type", t.type}, {"label", t.label}};
 	return out;
 }
 

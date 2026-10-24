@@ -104,15 +104,28 @@ Original scope:
 - **Done when:** `LOBS.app` launches, shows the editor, loads a project, and the canvas renders
   color, image and media layers.
 
-### Phase 1 — Capture, permissions and encoding
-- Source-kind table per platform; hide Game Capture and NVIDIA filters on macOS.
-- Permissions: the non-blocking model and the bar are in (Phase 0). Still to do: Input
-  Monitoring for global hotkeys, a step in the setup assistant, and an empty state on the canvas
-  for a layer whose source lacks permission.
-- Encoder ladder: VideoToolbox HEVC/H.264 first, x264 fallback. Setup assistant bitrate
-  suggestions for VideoToolbox.
-- **Done when:** camera + display + window + mic + desktop audio all work; streaming to a local
-  RTMP server and recording MP4 match the Windows check in `PLAN.md` (1080p60, no drops).
+### Phase 1 — Capture, permissions and encoding (in progress)
+
+Done (2026-10-24):
+- Only source kinds and filters whose OBS module registered are offered, so macOS shows no Game
+  Capture and no NVIDIA Audio Effects (Windows unchanged).
+- VideoToolbox H.264 (Apple silicon `ave.avc`, Intel `h264.gva`) ahead of x264. Verified with
+  `--streamtest` against a local RTMP server: 1080p60, ~6.2 Mbps, 0 dropped frames, while
+  recording a valid 1080p60 MP4 (needed `obs-ffmpeg-mux` in `Contents/MacOS`).
+- Browser source works: CEF finds its helpers by the app's name, so they ship as `LOBS Helper*.app`;
+  `obs_set_cmdline_args` is passed through; CEF gets time to close pages before shutdown.
+  `--engine-smoketest` passes all checks (its transition check now uses the show's transition).
+- Permissions: Input Monitoring for global hotkeys, "Reopen LOBS" for permissions macOS applies
+  only to a new process, devices filled in once Screen Recording is granted.
+- ScreenCaptureKit window ids sent as integers; plugin data (the browser cache) moved out of
+  `~/Library/Preferences` into Application Support.
+- `LOBS_SIGN_IDENTITY` signs dev builds with one certificate so permissions survive rebuilds.
+
+Left:
+- Hands-on check with permissions granted: camera, display, window, desktop audio.
+- A permissions step in the setup assistant, and an empty state on the canvas for a layer whose
+  source lacks permission.
+- HEVC for recording (streaming services want H.264).
 
 ### Phase 2 — Feels like a Mac app
 - Window chrome with native traffic lights and full-screen support.

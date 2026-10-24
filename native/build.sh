@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 QTDIR=${QTDIR:-$HOME/Qt/6.11.1/macos}
 APP=dist/mac/LOBS.app
-[ -d deps/engine-mac ] || deps/stage-engine-mac.sh
+[ -d "deps/engine-mac/Frameworks/LOBS Helper.app" ] || deps/stage-engine-mac.sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QTDIR" -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
 rm -f "$APP/Contents/MacOS/LOBS" # macdeployqt rewrites it below, so it must be linked fresh each time
 cmake --build build
@@ -25,6 +25,7 @@ rsync -a --exclude Headers "$QTDIR/lib/QtWidgets.framework" "$APP/Contents/Frame
 # Bundled engine: OBS's own release build, only the modules in engine-modules-mac.txt.
 rsync -a deps/engine-mac/PlugIns/ "$APP/Contents/PlugIns/"
 rsync -a deps/engine-mac/Frameworks/ "$APP/Contents/Frameworks/"
+rsync -a deps/engine-mac/MacOS/ "$APP/Contents/MacOS/"
 cp engine-modules-mac.txt "$APP/Contents/Resources/engine-modules.txt"
 # License and notices ship with the app
 cp ../LICENSE "$APP/Contents/Resources/LICENSE.txt"
@@ -43,7 +44,11 @@ if [ ! -f build/AppIcon.icns ] || [ resources/lobs-icon.svg -nt build/AppIcon.ic
 	iconutil -c icns -o build/AppIcon.icns "$ICONSET"
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/"
-# Ad-hoc signature for running on this Mac. Release builds are signed with a Developer ID and
-# notarized instead (PLAN-MACOS.md, Phase 4).
-codesign --force --deep --sign - "$APP" 2>&1 | grep -v "replacing existing signature" || true
+# Signed for running on this Mac. An ad-hoc signature changes with every build, so macOS
+# forgets the camera, microphone and Screen Recording permissions each time; set
+# LOBS_SIGN_IDENTITY to a code-signing certificate's name (BUILDING.md) to keep them. Release
+# builds are signed with a Developer ID and notarized instead (PLAN-MACOS.md, Phase 4).
+IDENTITY=${LOBS_SIGN_IDENTITY:--}
+[ "$IDENTITY" = "-" ] && echo "Signing ad hoc: macOS will ask for permissions again (see BUILDING.md)"
+codesign --force --deep --sign "$IDENTITY" "$APP" 2>&1 | grep -v "replacing existing signature" || true
 echo BUILD OK

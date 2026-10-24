@@ -351,7 +351,11 @@ static int runEngineSmokeTest(QGuiApplication &app, Engine &engine, const QStrin
 		for (const QJsonValue v : f)
 			for (const QJsonValue id : v.toArray())
 				audioFx |= id.toString().startsWith("gain_filter");
-		check("audio effect attached", audioFx);
+		// macOS captures desktop audio only with Screen Recording allowed (permissions.h).
+		if (Permissions::allows("desktop_audio"))
+			check("audio effect attached", audioFx);
+		else
+			check("audio effect attached", true, "skipped: Screen Recording isn't allowed");
 		int modules = 0;
 		obs_enum_modules([](void *p, obs_module_t *) { ++*static_cast<int *>(p); }, &modules);
 		check("engine modules load", modules >= 10, QString("%1 modules").arg(modules));
@@ -367,30 +371,32 @@ static int runEngineSmokeTest(QGuiApplication &app, Engine &engine, const QStrin
 				controller->selectLayer(i.id, false);
 		controller->setTransform("flipH", 1);
 	});
-	QTimer::singleShot(7000, &app, [=, &engine]() {
+	QTimer::singleShot(7000, &app, [=, &engine, &app]() {
 		const QImage img = engine.renderThumbnail(engine.programScene(), 320);
 		const QColor left = img.isNull() ? QColor() : img.pixelColor(10, 10), right = img.isNull() ? QColor() : img.pixelColor(309, 10);
 		check("mirroring", right.blue() > 150 && left.blue() < 90, left.name() + " / " + right.name());
 		// Transitions: a 1 s fade to a new scene is mid-way after 0.3 s and done after 1.5 s.
-		AppSettings ts = engine.settings(); // in memory only: the smoke test never saves settings
-		ts.transition = {"fade", 1000};
-		engine.setSettings(ts);
+		// The show's own transition (transitions live in the show, not the app settings).
+		const QString fade = controller->addTransition("fade");
+		controller->updateTransition(fade, "durationMs", 1000);
+		controller->setCurrentTransition(fade);
 		controller->addScene();
 		controller->take();
-	});
-	QTimer::singleShot(7300, &app, [=]() {
-		obs_source_t *out = obs_get_output_source(0);
-		const float t = out ? obs_transition_get_time(out) : -1;
-		check("transition plays", out && obs_source_get_type(out) == OBS_SOURCE_TYPE_TRANSITION && t > 0.05f && t < 0.95f, QString("t=%1").arg(t));
-		obs_source_release(out);
-	});
-	QTimer::singleShot(8600, &app, [=, &engine]() {
-		obs_source_t *out = obs_get_output_source(0);
-		obs_source_t *active = out ? obs_transition_get_active_source(out) : nullptr;
-		check("transition lands on the new scene", active && QString(obs_source_get_name(active)) == engine.programScene());
-		obs_source_release(active);
-		obs_source_release(out);
-		engine.recordClip(2);
+		// Timed from the take, not from the start: the steps before it run at the GPU's pace.
+		QTimer::singleShot(300, &app, [=, &app]() {
+			obs_source_t *out = obs_get_output_source(0);
+			const float t = out ? obs_transition_get_time(out) : -1;
+			check("transition plays", out && obs_source_get_type(out) == OBS_SOURCE_TYPE_TRANSITION && t > 0.05f && t < 0.95f, QString("t=%1").arg(t));
+			obs_source_release(out);
+		});
+		QTimer::singleShot(1600, &app, [=, &engine]() {
+			obs_source_t *out = obs_get_output_source(0);
+			obs_source_t *active = out ? obs_transition_get_active_source(out) : nullptr;
+			check("transition lands on the new scene", active && QString(obs_source_get_name(active)) == engine.programScene());
+			obs_source_release(active);
+			obs_source_release(out);
+			engine.recordClip(2);
+		});
 	});
 	QObject::connect(&engine, &Engine::recordingFinished, &app, [=](bool ok, const QString &path, qint64 bytes) {
 		check("records a clip", ok && bytes > 10000, QString("%1 bytes").arg(bytes));
@@ -454,6 +460,10 @@ private:
 int main(int argc, char *argv[])
 {
 	g_uptime.start();
+#ifndef Q_OS_WIN // on Windows obs.dll can't load yet: the engine folder is picked below
+	// The browser source passes these to CEF on macOS, as OBS does (helper processes read them).
+	obs_set_cmdline_args(argc, argv);
+#endif
 	QGuiApplication app(argc, argv);
 	app.setOrganizationName("LOBS");
 	app.setApplicationName("LOBS");
@@ -644,7 +654,18 @@ int main(int argc, char *argv[])
 	};
 	syncNeeded();
 	QObject::connect(&controller, &App::docChanged, &permissions, syncNeeded);
-	QObject::connect(&permissions, &Permissions::granted, &controller, [&] { engine.apply(controller.doc()); });
+	const auto syncHotkeys = [&] {
+		bool bound = false;
+		for (const QVariant &v : engine.settings().hotkeys)
+			bound |= !v.toString().isEmpty();
+		permissions.setHotkeysNeeded(bound);
+	};
+	syncHotkeys();
+	QObject::connect(&controller, &App::settingsChanged, &permissions, syncHotkeys);
+	QObject::connect(&permissions, &Permissions::granted, &controller, [&] {
+		controller.fillMissingDevices();
+		engine.apply(controller.doc());
+	});
 	if (splash)
 		splash->step("Opening the workspace");
 
@@ -730,6 +751,13 @@ int main(int argc, char *argv[])
 			appUpdater.checkIfDue();
 			permissions.askForNeeded(); // with the window up, so the prompt has context
 		}
+	});
+	QObject::connect(&permissions, &Permissions::relaunchRequested, &app, [&] {
+		platform::relaunchAfterExit();
+		if (auto *w = qobject_cast<QQuickWindow *>(qml.rootObjects().value(0)))
+			w->close(); // as on quit: the show and layout are saved
+		else
+			QCoreApplication::quit();
 	});
 	QObject::connect(&appUpdater, &AppUpdater::quitForInstall, &app, [&] {
 		if (auto *w = qobject_cast<QQuickWindow *>(qml.rootObjects().value(0)))

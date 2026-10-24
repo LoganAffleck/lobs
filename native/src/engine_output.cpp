@@ -36,6 +36,8 @@ static const char *kVideoEncoders[][2] = {
 	{"obs_nvenc_h264_tex", "NVIDIA NVENC H.264"},
 	{"h264_texture_amf", "AMD AMF H.264"},
 	{"obs_qsv11_v2", "Intel Quick Sync H.264"},
+	{"com.apple.videotoolbox.videoencoder.ave.avc", "Apple VideoToolbox H.264"}, // Apple silicon
+	{"com.apple.videotoolbox.videoencoder.h264.gva", "Apple VideoToolbox H.264"}, // Intel Macs
 	{"obs_x264", "x264 (software)"},
 };
 
@@ -88,6 +90,11 @@ obs_encoder *Engine::makeVideoEncoder(const QString &id, bool forRecording, cons
 		s["preset"] = preset == "speed" ? "speed" : preset == "balanced" ? "balanced" : "quality";
 		if (cbr) s["rate_control"] = "CBR", s["bitrate"] = m_settings.stream.bitrate;
 		else s["rate_control"] = "CQP", s["cqp"] = q == "indistinguishable" ? 16 : 20;
+	} else if (id.startsWith("com.apple.videotoolbox")) {
+		// No speed presets: the hardware sets the pace. Quality 0-100, OBS's default is 60.
+		s["profile"] = "high";
+		if (cbr) s["rate_control"] = "CBR", s["bitrate"] = m_settings.stream.bitrate;
+		else s["rate_control"] = "CRF", s["quality"] = q == "indistinguishable" ? 80 : 65;
 	} else { // Quick Sync
 		s["target_usage"] = preset == "speed" ? "TU7" : preset == "balanced" ? "TU4" : "TU2";
 		s["rate_control"] = "CBR";
