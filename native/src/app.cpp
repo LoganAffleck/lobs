@@ -1457,8 +1457,10 @@ static void cropKeepingScale(Doc &d, const QString &id, Crop nc, QSize ns)
 	nc.t = std::clamp(nc.t, 0, ns.height() - 2), nc.b = std::clamp(nc.b, 0, ns.height() - 2 - nc.t);
 	Transform t = d.transform(inst);
 	const double sx = t.w / std::max(1, ns.width() - oc.l - oc.r), sy = t.h / std::max(1, ns.height() - oc.t - oc.b);
-	t.x += (nc.l - oc.l) * sx;
-	t.y += (nc.t - oc.t) * sy;
+	// The box's left (top) edge follows the source edge drawn there: its right (bottom) one when
+	// the layer is mirrored.
+	t.x += (t.flipH ? nc.r - oc.r : nc.l - oc.l) * sx;
+	t.y += (t.flipV ? nc.b - oc.b : nc.t - oc.t) * sy;
 	t.w = std::max(1.0, (ns.width() - nc.l - nc.r) * sx);
 	t.h = std::max(1.0, (ns.height() - nc.t - nc.b) * sy);
 	d.setCrop(id, nc);
@@ -3693,10 +3695,15 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 		const int dl = int(std::lround((c.x() - m_dragStart.x()) / sx)), dt = int(std::lround((c.y() - m_dragStart.y()) / sy));
 		Crop nc = bc;
 		const int h = m_handle;
-		if (h == 10 || h == 14 || h == 16) nc.l = bc.l + dl;
-		if (h == 12 || h == 15 || h == 17) nc.r = bc.r - dl;
-		if (h == 11 || h == 14 || h == 15) nc.t = bc.t + dt;
-		if (h == 13 || h == 16 || h == 17) nc.b = bc.b - dt;
+		// The handles are the box's edges on screen; crop is in the source's own coordinates, so a
+		// mirrored layer's left edge is its source's right one (and top is bottom when flipped).
+		int &left = bt.flipH ? nc.r : nc.l, &right = bt.flipH ? nc.l : nc.r;
+		int &top = bt.flipV ? nc.b : nc.t, &bottom = bt.flipV ? nc.t : nc.b;
+		const int left0 = left, right0 = right, top0 = top, bottom0 = bottom;
+		if (h == 10 || h == 14 || h == 16) left = left0 + dl;
+		if (h == 12 || h == 15 || h == 17) right = right0 - dl;
+		if (h == 11 || h == 14 || h == 15) top = top0 + dt;
+		if (h == 13 || h == 16 || h == 17) bottom = bottom0 - dt;
 		m_store.gesture([&](Doc &d) { cropKeepingScale(d, id, nc, ns); });
 		updateOverlay();
 		return;
