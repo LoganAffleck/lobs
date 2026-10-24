@@ -78,6 +78,7 @@ Access access(const QString &) { return Access::Granted; }
 void requestAccess(const QString &, std::function<void()> answered) { answered(); }
 void openPrivacySettings(const QString &) {}
 void relaunchAfterExit() {}
+QVariantList captureDevices(const QString &) { return {}; }
 
 void fatalError(const QString &message)
 {

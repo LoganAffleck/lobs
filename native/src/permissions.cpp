@@ -121,6 +121,24 @@ QVariantList Permissions::missing() const
 	return out;
 }
 
+QVariantList Permissions::all() const
+{
+#ifdef Q_OS_WIN
+	return {};
+#else
+	static const QHash<QString, QString> purposes = {
+		{"microphone", "Mic sources and live captions."}, {"camera", "Camera sources."},
+		{"screen", "Display and window capture, and desktop audio."}};
+	QVariantList out;
+	for (const QString p : {"microphone", "camera", "screen"}) {
+		const platform::Access a = cached(p);
+		out << QVariantMap{{"id", p}, {"title", title(p)}, {"purpose", purposes[p]}, {"relaunch", p == "screen"},
+				   {"state", a == platform::Access::Granted ? "granted" : a == platform::Access::Denied ? "denied" : "notAsked"}};
+	}
+	return out;
+#endif
+}
+
 void Permissions::askForNeeded()
 {
 	// Microphone and camera only: their prompt is a simple Allow / Don't Allow. Screen

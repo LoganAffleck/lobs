@@ -2,6 +2,7 @@
 #include "model/audio_fx.h"
 #include "model/video_fx.h"
 #include "permissions.h"
+#include "platform.h"
 #include <QtGlobal>
 #ifdef Q_OS_WIN
 #define NOMINMAX
@@ -12,6 +13,8 @@
 #endif
 #include <QPainter>
 #include <QFont>
+#include <QFontMetrics>
+#include <QGuiApplication>
 #include <QJsonArray>
 
 #include <obs.h>
@@ -1179,14 +1182,10 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 	if (!prop || (!in && !Permissions::allows(kind)))
 		return out;
 #ifndef Q_OS_WIN
-	// Screen and camera capture list their devices only through a source instance (screen
-	// capture crashes without one; camera capture lists nothing).
-	obs_source_t *probe = nullptr;
-	if (const QByteArray id = obsKind(kind); !in && (id == "screen_capture" || id == "macos-avcapture")) {
-		obs_data_t *d = toData(id == "screen_capture" ? QJsonObject{{"type", kind == "display" ? 0 : 1}} : QJsonObject{});
-		in = probe = obs_source_create_private(obsKind(kind), "lobs-device-probe", d);
-		obs_data_release(d);
-	}
+	// Screen and camera capture list their devices only through a running source (screen capture
+	// crashes without one, camera capture lists nothing), so macOS is asked directly.
+	if (kind == "display" || kind == "window" || kind == "camera")
+		return platform::captureDevices(kind);
 #endif
 	obs_properties_t *props = in ? obs_source_properties(in) : obs_get_source_properties(obsKind(kind));
 	if (obs_property_t *p = props ? obs_properties_get(props, prop) : nullptr) {
@@ -1204,9 +1203,6 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 		}
 	}
 	obs_properties_destroy(props);
-#ifndef Q_OS_WIN
-	obs_source_release(probe);
-#endif
 	return out;
 }
 
@@ -1300,6 +1296,50 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 		obs_source_video_render(m_editSource);
 	} else {
 		obs_render_main_texture();
+	}
+
+	// Layers waiting on a permission: dimmed, with what they need (preview only).
+	{
+		QVector<BlockedLayer> blocked;
+		QHash<QString, QImage> images;
+		{
+			QMutexLocker lock(&m_overlayLock);
+			blocked = m_blocked;
+			for (const BlockedLayer &b : blocked)
+				if (!m_labelTextures.contains(b.label))
+					images.insert(b.label, m_labelImages.value(b.label));
+		}
+		for (auto it = images.cbegin(); it != images.cend(); ++it) {
+			const uint8_t *bits = it->constBits();
+			m_labelTextures.insert(it.key(), gs_texture_create(uint32_t(it->width()), uint32_t(it->height()), GS_RGBA, 1, &bits, 0));
+		}
+		const float px = 1.0f / std::max(scale, 0.01f); // one screen pixel, in canvas units
+		for (const BlockedLayer &b : blocked) {
+			gs_matrix_push();
+			gs_matrix_translate3f(float(b.rect.center().x()), float(b.rect.center().y()), 0.0f);
+			gs_matrix_rotaa4f(0.0f, 0.0f, 1.0f, RAD(float(b.rot)));
+			gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+			gs_eparam_t *color = gs_effect_get_param_by_name(solid, "color");
+			while (gs_effect_loop(solid, "Solid")) {
+				vec4 c;
+				vec4_set(&c, 0.08f, 0.08f, 0.08f, 0.85f);
+				gs_effect_set_vec4(color, &c);
+				fillRect(float(-b.rect.width() / 2), float(-b.rect.height() / 2), float(b.rect.width()), float(b.rect.height()));
+			}
+			if (gs_texture_t *tex = m_labelTextures.value(b.label)) {
+				// 14 screen pixels of text, whatever the zoom (the image is drawn at 2x).
+				const float w = float(gs_texture_get_width(tex)) / 2 * px, h = float(gs_texture_get_height(tex)) / 2 * px;
+				gs_effect_t *def = obs_get_base_effect(OBS_EFFECT_DEFAULT);
+				gs_effect_set_texture(gs_effect_get_param_by_name(def, "image"), tex);
+				gs_blend_state_push();
+				gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA); // premultiplied
+				gs_matrix_translate3f(-w / 2, -h / 2, 0.0f);
+				while (gs_effect_loop(def, "Draw"))
+					gs_draw_sprite(tex, 0, uint32_t(std::lround(w)), uint32_t(std::lround(h)));
+				gs_blend_state_pop();
+			}
+			gs_matrix_pop();
+		}
 	}
 
 	if (m_laser)
@@ -1512,6 +1552,33 @@ void Engine::resizePreview(int width, int height)
 		obs_display_resize(m_display, uint32_t(width), uint32_t(height));
 }
 
+void Engine::setBlockedLayers(const QVector<BlockedLayer> &layers)
+{
+	QMutexLocker lock(&m_overlayLock);
+	m_blocked = layers;
+	for (const BlockedLayer &b : layers) {
+		if (m_labelImages.contains(b.label))
+			continue;
+		// Drawn at 2x and shown at a fixed size on screen, so it stays sharp at any zoom.
+		QFont f = QGuiApplication::font();
+		f.setPixelSize(28);
+		f.setWeight(QFont::DemiBold);
+		const QFontMetrics fm(f);
+		QImage img(fm.horizontalAdvance(b.label) + 40, fm.height() + 20, QImage::Format_RGBA8888_Premultiplied);
+		img.fill(Qt::transparent);
+		QPainter p(&img);
+		p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing);
+		p.setPen(Qt::NoPen);
+		p.setBrush(QColor(0x25, 0x25, 0x25, 235));
+		p.drawRoundedRect(QRectF(img.rect()), img.height() / 2.0, img.height() / 2.0);
+		p.setPen(QColor("#fbbf24"));
+		p.setFont(f);
+		p.drawText(img.rect(), Qt::AlignCenter, b.label);
+		p.end();
+		m_labelImages.insert(b.label, img);
+	}
+}
+
 void Engine::setOverlay(const QVector<OverlayBox> &boxes, const QVector<OverlayGuide> &guides)
 {
 	QMutexLocker lock(&m_overlayLock);
@@ -1548,6 +1615,13 @@ void Engine::shutdown()
 		gs_texrender_destroy(m_previewTex);
 		obs_leave_graphics();
 		m_previewTex = nullptr;
+	}
+	if (!m_labelTextures.isEmpty()) {
+		obs_enter_graphics();
+		for (gs_texture_t *t : m_labelTextures)
+			gs_texture_destroy(t);
+		obs_leave_graphics();
+		m_labelTextures.clear();
 	}
 	setEditScene({});
 	setAllScenesShowing(false);

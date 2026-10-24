@@ -477,6 +477,7 @@ private:
 	QHash<QString, qint64> m_sizeWhenKnown;
 	QTimer m_sizeTimer;
 	void waitForSize(const QString &instanceId);
+	void updateBlockedLayers(); // the preview's "Needs Screen Recording" placeholders
 	void sizeNewLayers();
 	void refreshSourceStatus();
 	void watchAssets();

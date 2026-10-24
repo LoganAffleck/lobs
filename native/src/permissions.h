@@ -17,6 +17,9 @@ class Permissions : public QObject {
 	// change it) or "relaunch" (only a new LOBS process gets it); relaunch and settings: also
 	// offer that as a second button. detail follows the title ("Camera is off for LOBS…").
 	Q_PROPERTY(QVariantList missing READ missing NOTIFY changed)
+	// Every capture permission, needed or not, for the setup assistant: [{id, title, purpose,
+	// state ("granted" | "denied" | "notAsked"), relaunch}]. Empty where the OS doesn't ask (Windows).
+	Q_PROPERTY(QVariantList all READ all NOTIFY changed)
 public:
 	explicit Permissions(QObject *parent = nullptr);
 
@@ -27,6 +30,7 @@ public:
 	void setNeeded(const QStringList &sourceKinds);
 	void setHotkeysNeeded(bool needed); // global hotkeys are bound (Input Monitoring)
 	QVariantList missing() const;
+	QVariantList all() const;
 	void askForNeeded(); // the system prompts for needed permissions it never asked about
 
 	Q_INVOKABLE void request(const QString &permission); // ask, or open System Settings

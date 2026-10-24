@@ -42,14 +42,15 @@ FDialog {
 
     readonly property bool twitch: streaming && service === "Twitch"
     readonly property bool hasKey: keyText.trim() !== "" || !!app.settings.hasKey
-    // Steps shown for this path.
-    readonly property var steps: streaming
+    // Steps shown for this path. On macOS, capture permissions come right after the welcome.
+    readonly property bool asksAccess: permissions.all.length > 0
+    readonly property var steps: (streaming
         ? (twitch ? ["start", "account", "server", "test", "video", "record", "panels", "done"]
                   : ["start", "account", "test", "video", "record", "done"])
-        : ["start", "video", "record", "done"]
+        : ["start", "video", "record", "done"]).flatMap(s => s === "start" && asksAccess ? ["start", "access"] : [s])
     property int index: 0
     readonly property string step: steps[Math.min(index, steps.length - 1)]
-    readonly property var stepTitles: ({ start: "Welcome to LOBS", account: "Your channel", server: "Closest server", test: "Test your connection",
+    readonly property var stepTitles: ({ start: "Welcome to LOBS", access: "Camera, mic and screen", account: "Your channel", server: "Closest server", test: "Test your connection",
                                          video: "Video and bitrate", record: "Recording", panels: "Twitch panels", done: "You're set" })
     readonly property int measured: testResult && testResult.ok ? testResult.kbps : manualMbps * 1000
 
@@ -184,6 +185,58 @@ FDialog {
                 }
             }
         }
+        // ---- access (macOS) ----
+        ColumnLayout {
+            visible: wiz.step === "access"
+            width: parent.width; spacing: 10
+            Body { text: "macOS asks before LOBS can use these. Allow the ones you'll use; you can change them any time in System Settings." }
+            Item { implicitHeight: 2 }
+            Repeater {
+                model: permissions.all
+                delegate: Rectangle {
+                    id: acc
+                    required property var modelData
+                    readonly property bool granted: modelData.state === "granted"
+                    Layout.fillWidth: true
+                    implicitHeight: accRow.implicitHeight + 24
+                    radius: Pal.radius + 2
+                    color: Pal.s3
+                    border.width: 1; border.color: Pal.border
+                    RowLayout {
+                        id: accRow
+                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 14 }
+                        spacing: 12
+                        FIcon { name: acc.modelData.id === "microphone" ? "mic" : acc.modelData.id === "camera" ? "video" : "monitor"; size: 20; color: Pal.fg }
+                        ColumnLayout {
+                            spacing: 2; Layout.fillWidth: true
+                            Text { text: acc.modelData.title; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body + 1; font.weight: 550 }
+                            Caption {
+                                text: acc.modelData.purpose + (acc.modelData.state === "denied"
+                                    ? " Off for LOBS: turn it on in System Settings" + (acc.modelData.relaunch ? ", then reopen LOBS." : ".") : "")
+                            }
+                        }
+                        RowLayout {
+                            visible: acc.granted
+                            spacing: 4
+                            FIcon { name: "check"; size: 14; color: Pal.muted }
+                            Text { text: "Allowed"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body }
+                        }
+                        FButton {
+                            visible: !acc.granted
+                            text: acc.modelData.state === "notAsked" ? "Allow…" : "Open System Settings"
+                            variant: acc.modelData.state === "notAsked" ? "primary" : "secondary"
+                            onClicked: permissions.request(acc.modelData.id)
+                        }
+                        FButton {
+                            visible: acc.modelData.state === "denied" && acc.modelData.relaunch
+                            text: "Reopen LOBS"
+                            variant: "secondary"
+                            onClicked: permissions.relaunch()
+                        }
+                    }
+                }
+            }
+        }
         // ---- account ----
         ColumnLayout {
             visible: wiz.step === "account"
@@ -208,7 +261,7 @@ FDialog {
                 visible: wiz.service === "Custom"
                 Layout.fillWidth: true; spacing: 6
                 Text { text: "Server URL"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
-                FInput { Layout.fillWidth: true; placeholderText: "rtmp://â€¦"; text: wiz.customUrl; onTextChanged: wiz.customUrl = text }
+                FInput { Layout.fillWidth: true; placeholderText: "rtmp://…"; text: wiz.customUrl; onTextChanged: wiz.customUrl = text }
             }
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 6
@@ -233,7 +286,7 @@ FDialog {
             RowLayout {
                 Layout.fillWidth: true
                 Body { text: "Sorted by response time." }
-                FButton { iconName: "refresh-cw"; text: wiz.pinging ? "Checkingâ€¦" : "Check again"; variant: "secondary"; enabled: !wiz.pinging; onClicked: wiz.runPings() }
+                FButton { iconName: "refresh-cw"; text: wiz.pinging ? "Checking…" : "Check again"; variant: "secondary"; enabled: !wiz.pinging; onClicked: wiz.runPings() }
             }
             ListView {
                 Layout.fillWidth: true; Layout.preferredHeight: 340
@@ -252,7 +305,7 @@ FDialog {
                     }
                     MouseArea { id: sm; anchors.fill: parent; hoverEnabled: true; onClicked: { wiz.server = modelData.value; wiz.serverPicked = true } }
                 }
-                Text { visible: wiz.pinging; anchors.centerIn: parent; text: "Checking serversâ€¦"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body }
+                Text { visible: wiz.pinging; anchors.centerIn: parent; text: "Checking servers…"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body }
             }
         }
         // ---- test ----
@@ -276,13 +329,13 @@ FDialog {
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             text: wiz.testResult ? (wiz.testResult.ok ? (wiz.testResult.kbps / 1000).toFixed(1) + " Mbps" : "Test failed")
-                                 : wiz.testing ? ((wiz.test.kbps || 0) / 1000).toFixed(1) + " Mbps" : "â€”"
+                                 : wiz.testing ? ((wiz.test.kbps || 0) / 1000).toFixed(1) + " Mbps" : "—"
                             color: wiz.testResult && !wiz.testResult.ok ? Pal.danger : Pal.fg; font.family: Pal.font; font.pixelSize: 30; font.weight: 600
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: wiz.testResult ? (wiz.testResult.ok ? "upload measured Â· " + wiz.testResult.dropped.toFixed(1) + "% frames dropped" : wiz.testResult.error)
-                                 : wiz.testing ? (wiz.test.connected ? "measuringâ€¦ " + Math.round(wiz.test.elapsed || 0) + " / 10 s" : "connectingâ€¦") : "Not tested yet"
+                            text: wiz.testResult ? (wiz.testResult.ok ? "upload measured · " + wiz.testResult.dropped.toFixed(1) + "% frames dropped" : wiz.testResult.error)
+                                 : wiz.testing ? (wiz.test.connected ? "measuring… " + Math.round(wiz.test.elapsed || 0) + " / 10 s" : "connecting…") : "Not tested yet"
                             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
                         }
                     }
@@ -339,7 +392,7 @@ FDialog {
                 Label { text: "Resolution" }
                 FSelect {
                     Layout.fillWidth: true
-                    options: [{ name: "1920 Ã— 1080", value: "1920x1080" }, { name: "1600 Ã— 900", value: "1600x900" }, { name: "1280 Ã— 720", value: "1280x720" }, { name: "852 Ã— 480", value: "852x480" }]
+                    options: [{ name: "1920 × 1080", value: "1920x1080" }, { name: "1600 × 900", value: "1600x900" }, { name: "1280 × 720", value: "1280x720" }, { name: "852 × 480", value: "852x480" }]
                     currentValue: wiz.outW + "x" + wiz.outH
                     onPicked: (v) => { const p = v.split("x"); wiz.outW = +p[0]; wiz.outH = +p[1] }
                 }
@@ -377,7 +430,7 @@ FDialog {
                 Layout.fillWidth: true; spacing: 8
                 Label { text: "Save to" }
                 FInput { Layout.fillWidth: true; text: wiz.recFolder; onTextChanged: wiz.recFolder = text }
-                FButton { text: "Browseâ€¦"; variant: "secondary"; onClicked: folderPick.open() }
+                FButton { text: "Browse…"; variant: "secondary"; onClicked: folderPick.open() }
             }
             RowLayout {
                 Layout.fillWidth: true; spacing: 8
@@ -418,11 +471,11 @@ FDialog {
             GridLayout {
                 columns: 2; columnSpacing: 16; rowSpacing: 6; Layout.topMargin: 6
                 Label { text: "Platform"; visible: wiz.streaming }
-                Body { visible: wiz.streaming; text: wiz.service.replace(" - RTMPS", "") + (wiz.hasKey ? " Â· key saved" : " Â· no stream key yet") }
+                Body { visible: wiz.streaming; text: wiz.service.replace(" - RTMPS", "") + (wiz.hasKey ? " · key saved" : " · no stream key yet") }
                 Label { text: "Server"; visible: wiz.twitch }
                 Body { visible: wiz.twitch; text: (wiz.pings.find(p => p.value === wiz.server) || { name: "Automatic" }).name }
                 Label { text: "Video" }
-                Body { text: wiz.outW + " Ã— " + wiz.outH + " at " + wiz.fps + " fps" }
+                Body { text: wiz.outW + " × " + wiz.outH + " at " + wiz.fps + " fps" }
                 Label { text: "Bitrate"; visible: wiz.streaming }
                 Body { visible: wiz.streaming; text: (wiz.bitrate / 1000).toFixed(1) + " Mbps" }
                 Label { text: "Recording" }

@@ -106,6 +106,55 @@ void openPrivacySettings(const QString &permission)
 	[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
 }
 
+QVariantList captureDevices(const QString &kind)
+{
+	QVariantList out;
+	if (kind == "display") {
+		for (NSScreen *screen in NSScreen.screens) { // as mac-capture names them: "Name: WxH @ x,y"
+			const CGDirectDisplayID id = [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
+			CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(id);
+			if (!uuid)
+				continue;
+			CFStringRef text = CFUUIDCreateString(kCFAllocatorDefault, uuid);
+			const NSRect f = screen.frame;
+			out << QVariantMap{{"name", QString("%1: %2x%3 @ %4,%5").arg(QString::fromNSString(screen.localizedName)).arg(int(f.size.width))
+							   .arg(int(f.size.height)).arg(int(f.origin.x)).arg(int(f.origin.y))},
+					   {"value", QString::fromCFString(text)}};
+			CFRelease(text);
+			CFRelease(uuid);
+		}
+	} else if (kind == "window") {
+		// On-screen app windows with a title, "[App] Title", sorted like mac-capture's list.
+		QList<QVariantMap> windows;
+		if (CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID)) {
+			for (NSDictionary *w in (__bridge NSArray *)list) {
+				NSString *app = w[(__bridge NSString *)kCGWindowOwnerName], *title = w[(__bridge NSString *)kCGWindowName];
+				if ([w[(__bridge NSString *)kCGWindowLayer] intValue] != 0 || !app.length || !title.length)
+					continue;
+				windows << QVariantMap{{"name", QString("[%1] %2").arg(QString::fromNSString(app), QString::fromNSString(title))},
+						       {"value", QString::number([w[(__bridge NSString *)kCGWindowNumber] unsignedIntValue])}};
+			}
+			CFRelease(list);
+		}
+		std::sort(windows.begin(), windows.end(), [](const QVariantMap &a, const QVariantMap &b) {
+			return a["name"].toString().compare(b["name"].toString(), Qt::CaseInsensitive) < 0;
+		});
+		for (const QVariantMap &w : windows)
+			out << w;
+	} else if (kind == "camera") {
+		NSArray *types;
+		if (@available(macOS 14, *))
+			types = @[AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeExternal, AVCaptureDeviceTypeDeskViewCamera];
+		else
+			types = @[AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeExternalUnknown, AVCaptureDeviceTypeDeskViewCamera];
+		for (AVMediaType media : @[AVMediaTypeVideo, AVMediaTypeMuxed]) // muxed: capture cards and the like
+			for (AVCaptureDevice *d in [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:types mediaType:media
+											    position:AVCaptureDevicePositionUnspecified].devices)
+				out << QVariantMap{{"name", QString::fromNSString(d.localizedName)}, {"value", QString::fromNSString(d.uniqueID)}};
+	}
+	return out;
+}
+
 void relaunchAfterExit()
 {
 	const QString bundle = QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../..");

@@ -70,6 +70,15 @@ QString Engine::resolveEncoder() const
 	return "obs_x264";
 }
 
+QString Engine::resolveRecordEncoder() const
+{
+	// About half the file size of H.264 at the same quality, and MP4, MKV and MOV all hold it.
+	// Recordings only: streams stay H.264 (what services take), and so do replays, which get shared.
+	static const char *hevc = "com.apple.videotoolbox.videoencoder.ave.hevc";
+	const QString enc = resolveEncoder();
+	return enc.startsWith("com.apple.videotoolbox") && encoderRegistered(hevc) ? QString(hevc) : enc;
+}
+
 obs_encoder *Engine::makeVideoEncoder(const QString &id, bool forRecording, const char *name)
 {
 	const QString preset = m_settings.video.preset;
@@ -92,7 +101,7 @@ obs_encoder *Engine::makeVideoEncoder(const QString &id, bool forRecording, cons
 		else s["rate_control"] = "CQP", s["cqp"] = q == "indistinguishable" ? 16 : 20;
 	} else if (id.startsWith("com.apple.videotoolbox")) {
 		// No speed presets: the hardware sets the pace. Quality 0-100, OBS's default is 60.
-		s["profile"] = "high";
+		s["profile"] = id.endsWith(".hevc") ? "main" : "high";
 		if (cbr) s["rate_control"] = "CBR", s["bitrate"] = m_settings.stream.bitrate;
 		else s["rate_control"] = "CRF", s["quality"] = q == "indistinguishable" ? 80 : 65;
 	} else { // Quick Sync
@@ -351,7 +360,8 @@ void Engine::startRecording()
 	} else {
 		obs_encoder_release(m_recVenc);
 		obs_encoder_release(m_recAenc);
-		m_recVenc = makeVideoEncoder(resolveEncoder(), rs.quality != "stream", "LOBS record video");
+		m_recVenc = rs.quality != "stream" ? makeVideoEncoder(resolveRecordEncoder(), true, "LOBS record video")
+						   : makeVideoEncoder(resolveEncoder(), false, "LOBS record video");
 		obs_data_t *as = toData({{"bitrate", 192}});
 		m_recAenc = obs_audio_encoder_create("ffmpeg_aac", "LOBS record audio", as, 0, nullptr);
 		obs_data_release(as);

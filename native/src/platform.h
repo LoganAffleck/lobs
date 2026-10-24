@@ -2,6 +2,7 @@
 #pragma once
 
 #include <QString>
+#include <QVariantList>
 
 #include <functional>
 
@@ -25,6 +26,11 @@ Access access(const QString &permission);
 void requestAccess(const QString &permission, std::function<void()> answered);
 // System Settings > Privacy & Security, at that permission's list.
 void openPrivacySettings(const QString &permission);
+// The displays, windows or cameras macOS can capture, as [{name, value}] with the values OBS's
+// capture modules take (display UUID, window id, camera unique id) and names like theirs. Those
+// modules list them only through a running source, so LOBS asks macOS directly. Windows: empty
+// (the engine asks the modules there).
+QVariantList captureDevices(const QString &kind); // "display" | "window" | "camera"
 // Starts LOBS again once this process has exited (some permissions only apply to a new process).
 void relaunchAfterExit();
 // A message box for errors that stop LOBS before its UI exists.

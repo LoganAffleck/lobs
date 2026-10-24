@@ -66,6 +66,13 @@ struct OverlayBox {
 	bool crop = false; // crop mode: edge and corner crop handles instead of resize handles
 	bool marquee = false; // the selection rectangle being dragged out
 };
+// A layer whose source waits on a macOS permission: the preview (never the output) dims it and
+// says what's needed.
+struct BlockedLayer {
+	QRectF rect; // canvas px
+	double rot = 0;
+	QString label; // "Needs Screen Recording"
+};
 struct OverlayGuide {
 	bool vertical;
 	double at;
@@ -130,6 +137,7 @@ public:
 	// Live ink while drawing a pencil stroke or arrow (preview only).
 	void setInk(const QVector<QPointF> &canvasPts, const QString &color, double width);
 	void setOverlay(const QVector<OverlayBox> &boxes, const QVector<OverlayGuide> &guides);
+	void setBlockedLayers(const QVector<BlockedLayer> &layers);
 	int canvasW() const { return m_canvasW; }
 	obs_source *sceneSource(const QString &sceneId) const; // borrowed; null if unknown
 	int canvasH() const { return m_canvasH; }
@@ -140,6 +148,7 @@ public:
 	QVariantList encoders() const;               // [{value, name}] usable on this PC, best first
 	bool kindAvailable(const QString &kind) const; // this platform and engine can capture it (no game capture on macOS)
 	QString resolveEncoder() const;               // settings.encoder, or the best available for "auto"
+	QString resolveRecordEncoder() const;         // HEVC for quality recordings where VideoToolbox has it, else resolveEncoder()
 	QStringList services() const;                 // rtmp-services names
 	QVariantList servers(const QString &service) const; // [{name, value}]
 	bool resetVideo();                            // apply output size/FPS (only while nothing is live)
@@ -278,6 +287,9 @@ private:
 	struct gs_texture_render *m_previewTex = nullptr; // full-size canvas for high-quality preview scaling
 	QMutex m_overlayLock;
 	QVector<OverlayBox> m_boxes;
+	QVector<BlockedLayer> m_blocked;
+	QHash<QString, QImage> m_labelImages;          // label -> image, made on the UI thread
+	QHash<QString, struct gs_texture *> m_labelTextures; // label -> texture, graphics thread only
 	QVector<OverlayGuide> m_guides;
 
 	AppSettings m_settings;

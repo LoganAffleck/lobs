@@ -2292,6 +2292,7 @@ QString App::dataFolder() const
 // inputs that are running (in a shown scene), so a camera that's simply not used isn't "broken".
 void App::refreshSourceStatus()
 {
+	updateBlockedLayers(); // a permission may have changed (they're re-checked when LOBS comes to the front)
 	if (m_sourceTick % 30 == 0) // listing cameras can take a moment: refresh devices every 30 s
 		m_deviceCache.clear();
 	++m_sourceTick;
@@ -4011,4 +4012,20 @@ void App::updateOverlay()
 		boxes << mb;
 	}
 	m_engine->setOverlay(boxes, m_guides);
+	updateBlockedLayers();
+}
+
+void App::updateBlockedLayers()
+{
+	QVector<BlockedLayer> blocked;
+	for (const Instance &i : doc().instances) {
+		if (i.sceneId != m_editScene || i.kind == "group" || !doc().visibility(i).visible)
+			continue;
+		const QString kind = doc().sources.value(i.sourceId).kind;
+		if (Permissions::allows(kind))
+			continue;
+		const Transform b = doc().bounds(i.id);
+		blocked << BlockedLayer{QRectF(b.x, b.y, b.w, b.h), b.rot, "Needs " + Permissions::title(Permissions::forKind(kind))};
+	}
+	m_engine->setBlockedLayers(blocked);
 }
