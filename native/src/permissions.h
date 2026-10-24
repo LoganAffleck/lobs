@@ -36,6 +36,9 @@ public:
 	Q_INVOKABLE void request(const QString &permission); // ask, or open System Settings
 	Q_INVOKABLE void refresh();
 	Q_INVOKABLE void relaunch() { emit relaunchRequested(); }
+	// Screen Recording or Input Monitoring turned on since LOBS started (asks macOS afresh): only a
+	// new LOBS gets them.
+	bool grantedNeedingRelaunch() const;
 
 signals:
 	void changed();

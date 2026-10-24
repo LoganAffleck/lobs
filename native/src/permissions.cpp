@@ -137,6 +137,14 @@ QVariantList Permissions::all() const
 #endif
 }
 
+bool Permissions::grantedNeedingRelaunch() const
+{
+	for (const QString p : {"screen", "hotkeys"})
+		if (!m_grantedAtLaunch.contains(p) && platform::access(p) == platform::Access::Granted)
+			return true;
+	return false;
+}
+
 void Permissions::askForNeeded()
 {
 	// Microphone and camera only: their prompt is a simple Allow / Don't Allow. Screen

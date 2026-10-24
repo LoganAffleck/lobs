@@ -754,6 +754,15 @@ int main(int argc, char *argv[])
 			permissions.askForNeeded(); // with the window up, so the prompt has context
 		}
 	});
+	// System Settings' "Quit & Reopen" quits LOBS but doesn't start it again (Qt finishes quitting on
+	// its own time, which macOS takes for a refusal). A quit that comes while LOBS is in the
+	// background, right after such a permission was turned on, starts it again; ⌘Q in LOBS doesn't.
+	QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, [&] {
+		if (!selfTest && QGuiApplication::applicationState() != Qt::ApplicationActive && permissions.grantedNeedingRelaunch()) {
+			blog(LOG_INFO, "[lobs] quit from outside after a permission change: reopening");
+			platform::relaunchAfterExit();
+		}
+	});
 	QObject::connect(&permissions, &Permissions::relaunchRequested, &app, [&] {
 		platform::relaunchAfterExit();
 		if (auto *w = qobject_cast<QQuickWindow *>(qml.rootObjects().value(0)))
