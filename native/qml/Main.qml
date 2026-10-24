@@ -187,6 +187,8 @@ ApplicationWindow {
     FileDialog { id: importDialog; fileMode: FileDialog.OpenFile; nameFilters: ["OBS scene collection (*.json)"]; onAccepted: app.importObs(selectedFile.toString().replace(/^file:\/{3}/, "")) }
     FileDialog { id: openDialog; fileMode: FileDialog.OpenFile; nameFilters: ["LOBS show (*.lobs.json *.json)"]; onAccepted: app.open(selectedFile) }
 
+    // The Inspector's row labels (Position, Size, Rotate, Crop, Corners), one width so fields line up.
+    component RowLabel: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 52 }
     component Caption: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
     function openTransitions() { trDialog.open() }
     function togglePanel(d) {
@@ -1837,93 +1839,122 @@ ApplicationWindow {
                 FSection {
                     visible: sv.d.mode === "layer" || sv.d.mode === "group"
                     title: "Transform"; group: "transform"; linkedWith: sv.d.linkTransform || ""; sections: sv.d.sections || ({})
-                    // Position, then size with an aspect lock between W and H, then rotation with
-                    // the flips. Drag any field sideways to scrub it.
-                    GridLayout {
+                    // One labeled row per property, each action beside the value it changes: Center
+                    // with position; the aspect lock and Fit / Fill / Original with size; the flips
+                    // with rotation. Drag any field sideways to scrub it.
+                    ColumnLayout {
                         id: tf
                         readonly property bool isLayer: sv.d.mode === "layer"
                         property bool lockAspect: app.uiFlag("inspector/lockAspect", true)
-                        columns: 3; columnSpacing: 6; rowSpacing: 6; Layout.fillWidth: true
-                        FNumField { label: "X"; suffix: "px"; live: true; value: sv.d.x || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("x", v); onScrubbed: (v, f) => app.scrubTransform("x", v, f) }
-                        Item { implicitWidth: Pal.ctl; implicitHeight: 1 }
-                        FNumField { label: "Y"; suffix: "px"; live: true; value: sv.d.y || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("y", v); onScrubbed: (v, f) => app.scrubTransform("y", v, f) }
-                        FNumField { label: "W"; suffix: "px"; live: true; from: 1; value: sv.d.w || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setSize("w", v, tf.lockAspect); onScrubbed: (v, f) => app.scrubTransform("w", v, f, tf.lockAspect) }
-                        FButton {
-                            enabled: tf.isLayer
-                            iconName: tf.lockAspect ? "link-2" : "unlink-2"
-                            variant: "ghost"; selected: tf.lockAspect
-                            tip: tf.lockAspect ? "W and H keep their proportions. Click to change them separately." : "W and H change separately. Click to keep proportions."
-                            onClicked: { tf.lockAspect = !tf.lockAspect; app.setUiFlag("inspector/lockAspect", tf.lockAspect) }
+                        spacing: 6; Layout.fillWidth: true
+                        RowLayout {
+                            spacing: 6; Layout.fillWidth: true
+                            RowLabel { text: "Position" }
+                            FNumField { label: "X"; live: true; value: sv.d.x || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("x", v); onScrubbed: (v, f) => app.scrubTransform("x", v, f) }
+                            FNumField { label: "Y"; live: true; value: sv.d.y || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("y", v); onScrubbed: (v, f) => app.scrubTransform("y", v, f) }
+                            FButton { visible: tf.isLayer; iconName: "crosshair"; variant: "ghost"; tip: "Center on the canvas"; onClicked: app.fit("center") }
                         }
-                        FNumField { label: "H"; suffix: "px"; live: true; from: 1; value: sv.d.h || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setSize("h", v, tf.lockAspect); onScrubbed: (v, f) => app.scrubTransform("h", v, f, tf.lockAspect) }
-                        FNumField { label: "Rotate"; suffix: "°"; live: true; from: -360; to: 360; value: sv.d.rot || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setTransform("rot", v); onScrubbed: (v, f) => app.scrubTransform("rot", v, f) }
-                        Item { implicitWidth: Pal.ctl; implicitHeight: 1 }
+                        RowLayout {
+                            spacing: 6; Layout.fillWidth: true
+                            RowLabel { text: "Size" }
+                            FNumField { label: "W"; live: true; from: 1; value: sv.d.w || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setSize("w", v, tf.lockAspect); onScrubbed: (v, f) => app.scrubTransform("w", v, f, tf.lockAspect) }
+                            FNumField { label: "H"; live: true; from: 1; value: sv.d.h || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setSize("h", v, tf.lockAspect); onScrubbed: (v, f) => app.scrubTransform("h", v, f, tf.lockAspect) }
+                            FButton {
+                                visible: tf.isLayer
+                                iconName: tf.lockAspect ? "link-2" : "unlink-2"
+                                variant: "ghost"; selected: tf.lockAspect
+                                tip: tf.lockAspect ? "W and H keep their proportions. Click to change them separately." : "W and H change separately. Click to keep proportions."
+                                onClicked: { tf.lockAspect = !tf.lockAspect; app.setUiFlag("inspector/lockAspect", tf.lockAspect) }
+                            }
+                        }
                         RowLayout {
                             visible: tf.isLayer
-                            spacing: 2; Layout.fillWidth: true
-                            FButton { iconName: "flip-horizontal-2"; variant: "ghost"; selected: !!sv.d.flipH; tip: "Mirror left to right"; onClicked: app.setTransform("flipH", sv.d.flipH ? 0 : 1) }
-                            FButton { iconName: "flip-vertical-2"; variant: "ghost"; selected: !!sv.d.flipV; tip: "Mirror top to bottom"; onClicked: app.setTransform("flipV", sv.d.flipV ? 0 : 1) }
+                            spacing: 4; Layout.fillWidth: true
+                            RowLabel {}
+                            FButton { text: "Fit"; variant: "ghost"; onClicked: app.fit("fit"); tip: "Fit inside the canvas, keeping proportions" }
+                            FButton { text: "Fill"; variant: "ghost"; onClicked: app.fit("fill"); tip: "Cover the whole canvas, keeping proportions" }
+                            FButton { text: "Original"; variant: "ghost"; onClicked: app.fit("aspect"); tip: "Restore the source's own proportions" }
                             Item { Layout.fillWidth: true }
                         }
-                    }
-                    // Quick placement on the canvas, as one even row.
-                    RowLayout {
-                        visible: sv.d.mode === "layer"
-                        spacing: 4; Layout.fillWidth: true
-                        FButton { Layout.fillWidth: true; iconName: "scan"; text: "Fit"; onClicked: app.fit("fit"); tip: "Fit inside the canvas, keeping proportions" }
-                        FButton { Layout.fillWidth: true; iconName: "expand"; text: "Fill"; onClicked: app.fit("fill"); tip: "Cover the whole canvas, keeping proportions" }
-                        FButton { Layout.fillWidth: true; iconName: "crosshair"; text: "Center"; onClicked: app.fit("center"); tip: "Center on the canvas" }
-                        FButton { Layout.fillWidth: true; iconName: "ratio"; text: "Reset"; onClicked: app.fit("aspect"); tip: "Restore the source's own proportions" }
+                        RowLayout {
+                            visible: tf.isLayer
+                            spacing: 6; Layout.fillWidth: true
+                            RowLabel { text: "Rotate" }
+                            FNumField { suffix: "°"; live: true; from: -360; to: 360; value: sv.d.rot || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("rot", v); onScrubbed: (v, f) => app.scrubTransform("rot", v, f) }
+                            FButton { iconName: "flip-horizontal-2"; variant: "ghost"; selected: !!sv.d.flipH; tip: "Mirror left to right"; onClicked: app.setTransform("flipH", sv.d.flipH ? 0 : 1) }
+                            FButton { iconName: "flip-vertical-2"; variant: "ghost"; selected: !!sv.d.flipV; tip: "Mirror top to bottom"; onClicked: app.setTransform("flipV", sv.d.flipV ? 0 : 1) }
+                        }
                     }
                 }
 
                 FSection {
-                    // Crop (pictures: captures, images, video, browser) and rounded corners (any layer).
+                    // Crop (pictures: captures, images, video, browser) folded into one summary row,
+                    // and rounded corners (any layer).
                     id: cropSec
                     readonly property bool croppable: !!sv.d.croppable
                     readonly property real va: sv.d.visibleAspect || 0
+                    readonly property bool cropped: !!(sv.d.cl || sv.d.ct || sv.d.cr || sv.d.cb)
+                    property bool open: app.uiFlag("inspector/cropOpen", false)
+                    readonly property bool expanded: open || app.cropMode
                     function near(r) { return Math.abs(va - r) < 0.01 }
+                    readonly property string summary: !cropped ? "None"
+                        : near(16 / 9) ? "16:9" : near(4 / 3) ? "4:3" : near(1) ? "1:1" : near(9 / 16) ? "9:16" : "Custom"
                     visible: sv.d.mode === "layer"
                     title: croppable ? "Crop & corners" : "Corners"; group: "crop"; linkedWith: sv.d.linkCrop || ""; sections: sv.d.sections || ({})
-                    // Quick crops, centered on the source; the layer keeps its scale.
                     RowLayout {
                         visible: cropSec.croppable
-                        Layout.fillWidth: true; spacing: 4
-                        FButton { text: "Full"; variant: "ghost"; selected: !sv.d.cl && !sv.d.ct && !sv.d.cr && !sv.d.cb; tip: "No crop"; onClicked: app.cropToAspect(0) }
-                        FButton { text: "16:9"; variant: "ghost"; selected: cropSec.near(16 / 9) && (sv.d.cl || sv.d.ct || sv.d.cr || sv.d.cb); onClicked: app.cropToAspect(16 / 9) }
-                        FButton { text: "4:3"; variant: "ghost"; selected: cropSec.near(4 / 3); onClicked: app.cropToAspect(4 / 3) }
-                        FButton { text: "1:1"; variant: "ghost"; selected: cropSec.near(1); tip: "Square"; onClicked: app.cropToAspect(1) }
-                        FButton { text: "9:16"; variant: "ghost"; selected: cropSec.near(9 / 16); tip: "Vertical"; onClicked: app.cropToAspect(9 / 16) }
-                        Item { Layout.fillWidth: true }
+                        spacing: 6; Layout.fillWidth: true
+                        RowLabel { text: "Crop" }
                         FButton {
-                            iconName: "crop"; text: app.cropMode ? "Done" : "Crop"
-                            variant: app.cropMode ? "primary" : "secondary"
+                            Layout.fillWidth: true
+                            variant: "ghost"; alignLeft: true
+                            text: cropSec.summary
+                            iconName: cropSec.expanded ? "chevron-down" : "chevron-right"
+                            tip: cropSec.expanded ? "Hide crop settings" : "Show crop settings"
+                            onClicked: { cropSec.open = !cropSec.expanded; app.setUiFlag("inspector/cropOpen", cropSec.open); if (!cropSec.open) app.cropMode = false }
+                        }
+                        FButton {
+                            iconName: "crop"; text: app.cropMode ? "Done" : ""
+                            variant: app.cropMode ? "primary" : "ghost"
                             tip: app.cropMode ? "Finish cropping (Enter or Esc)" : "Drag the layer's edges on the canvas to crop"
                             onClicked: app.cropMode = !app.cropMode
                         }
                     }
-                    GridLayout {
-                        visible: cropSec.croppable
-                        columns: 4; columnSpacing: 6; rowSpacing: 6; Layout.fillWidth: true
-                        FNumField { label: "L"; suffix: "px"; live: true; from: 0; value: sv.d.cl || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("l", v); onScrubbed: (v, f) => app.scrubCrop("l", Math.round(v), f) }
-                        FNumField { label: "T"; suffix: "px"; live: true; from: 0; value: sv.d.ct || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("t", v); onScrubbed: (v, f) => app.scrubCrop("t", Math.round(v), f) }
-                        FNumField { label: "R"; suffix: "px"; live: true; from: 0; value: sv.d.cr || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("r", v); onScrubbed: (v, f) => app.scrubCrop("r", Math.round(v), f) }
-                        FNumField { label: "B"; suffix: "px"; live: true; from: 0; value: sv.d.cb || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("b", v); onScrubbed: (v, f) => app.scrubCrop("b", Math.round(v), f) }
+                    // Quick crops, centered on the source; the layer keeps its scale.
+                    RowLayout {
+                        visible: cropSec.croppable && cropSec.expanded
+                        Layout.fillWidth: true; spacing: 4
+                        RowLabel {}
+                        FButton { text: "None"; variant: "ghost"; selected: !cropSec.cropped; tip: "No crop"; onClicked: app.cropToAspect(0) }
+                        FButton { text: "16:9"; variant: "ghost"; selected: cropSec.near(16 / 9) && cropSec.cropped; onClicked: app.cropToAspect(16 / 9) }
+                        FButton { text: "4:3"; variant: "ghost"; selected: cropSec.near(4 / 3); onClicked: app.cropToAspect(4 / 3) }
+                        FButton { text: "1:1"; variant: "ghost"; selected: cropSec.near(1); tip: "Square"; onClicked: app.cropToAspect(1) }
+                        FButton { text: "9:16"; variant: "ghost"; selected: cropSec.near(9 / 16); tip: "Vertical"; onClicked: app.cropToAspect(9 / 16) }
+                        Item { Layout.fillWidth: true }
                     }
-                    // Rounded corners: 50% of the short side makes a square a circle.
+                    RowLayout {
+                        visible: cropSec.croppable && cropSec.expanded
+                        spacing: 6; Layout.fillWidth: true
+                        RowLabel {}
+                        FNumField { label: "L"; live: true; from: 0; value: sv.d.cl || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("l", v); onScrubbed: (v, f) => app.scrubCrop("l", Math.round(v), f) }
+                        FNumField { label: "T"; live: true; from: 0; value: sv.d.ct || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("t", v); onScrubbed: (v, f) => app.scrubCrop("t", Math.round(v), f) }
+                        FNumField { label: "R"; live: true; from: 0; value: sv.d.cr || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("r", v); onScrubbed: (v, f) => app.scrubCrop("r", Math.round(v), f) }
+                        FNumField { label: "B"; live: true; from: 0; value: sv.d.cb || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("b", v); onScrubbed: (v, f) => app.scrubCrop("b", Math.round(v), f) }
+                    }
+                    // Rounded corners: 50% of the short side makes a square a circle; the slider's
+                    // ends are square and round.
                     RowLayout {
                         Layout.fillWidth: true; spacing: 6
+                        RowLabel { text: "Corners" }
                         FFillSlider {
                             Layout.fillWidth: true
-                            label: "Corner radius"
+                            label: ""
                             from: 0; to: 50; decimals: 0
                             value: sv.d.radius || 0
-                            format: (v) => v >= 49.5 ? "Round" : Math.round(v) + "%"
+                            format: (v) => v <= 0.5 ? "Square" : v >= 49.5 ? "Round" : Math.round(v) + "%"
                             onMoved: (v) => app.setCornerRadius(v, false)
                             onReleased: (v) => app.setCornerRadius(v, true)
                         }
-                        FButton { iconName: "square"; variant: "ghost"; selected: !sv.d.radius; tip: "Square corners"; onClicked: app.setCornerRadius(0, true) }
-                        FButton { iconName: "circle"; variant: "ghost"; selected: (sv.d.radius || 0) >= 49.5; tip: "Fully round"; onClicked: app.setCornerRadius(50, true) }
                     }
                 }
 

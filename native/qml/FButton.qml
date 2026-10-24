@@ -13,6 +13,7 @@ AbstractButton {
     property string tip: ""
     property bool selected: false
     property string iconName: ""
+    property bool alignLeft: false // icon and text at the left edge, as a disclosure row; centered otherwise
     property color iconColor: !enabled ? Pal.muted : variant === "primary" ? Pal.s1 : variant === "danger" ? Pal.danger : (selected || hovered ? Pal.fg : Pal.muted)
     readonly property bool iconOnly: iconName !== "" && text === ""
     implicitHeight: Pal.ctl
@@ -52,7 +53,9 @@ AbstractButton {
         implicitHeight: row.implicitHeight
         Row {
             id: row
-            anchors.centerIn: parent
+            anchors.centerIn: b.alignLeft ? undefined : parent
+            anchors.left: b.alignLeft ? parent.left : undefined
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 6
             FIcon { visible: b.iconName !== ""; name: b.iconName; color: b.iconColor; anchors.verticalCenter: parent.verticalCenter }
             Text {
