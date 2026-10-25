@@ -1413,8 +1413,9 @@ ApplicationWindow {
                                 delegate: FMenu {
                                     required property var modelData
                                     title: modelData.name
-                                    FMenuItem { text: "Linked copy"; onTriggered: app.copySelectedTo(modelData.id, true) }
-                                    FMenuItem { text: "Independent copy"; onTriggered: app.copySelectedTo(modelData.id, false) }
+                                    // Close the menu first: the copy rebuilds these scene menus mid-handler.
+                                    FMenuItem { text: "Linked copy"; onTriggered: { const id = modelData.id; copyMenu.close(); app.copySelectedTo(id, true) } }
+                                    FMenuItem { text: "Independent copy"; onTriggered: { const id = modelData.id; copyMenu.close(); app.copySelectedTo(id, false) } }
                                 }
                                 onObjectAdded: (i, o) => copyMenu.insertMenu(i, o)
                                 onObjectRemoved: (i, o) => copyMenu.removeMenu(o)
@@ -1432,7 +1433,7 @@ ApplicationWindow {
                             FMenuItem { text: chrome.keys("Paste linked    Ctrl Shift V"); enabled: app.canPaste; onTriggered: app.pasteLayers(true) }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
-                            FCopyToMenu {}
+                            FCopyToMenu { onCopied: layerMenu.close() }
                             FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
                             FMenuItem { text: "Ungroup"; enabled: layerMenu.row.group; onTriggered: app.ungroupSelected() }
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }

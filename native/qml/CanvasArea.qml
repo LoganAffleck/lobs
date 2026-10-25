@@ -150,7 +150,7 @@ Rectangle {
     }
     FMenu {
         id: canvasMenu
-        FCopyToMenu {}
+        FCopyToMenu { onCopied: canvasMenu.close() }
         MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
         FMenu {
             id: progMenu
