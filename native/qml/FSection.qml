@@ -77,8 +77,10 @@ ColumnLayout {
                         delegate: FMenu {
                             required property var modelData
                             title: "Link with " + modelData.scene
-                            FMenuItem { text: "Keep this scene's values"; onTriggered: app.linkGroup(sec.group, modelData.id, true) }
-                            FMenuItem { text: "Use " + modelData.scene + "'s values"; onTriggered: app.linkGroup(sec.group, modelData.id, false) }
+                            // Close the menu first: linking changes the candidates, which rebuilds these menus
+                            // mid-handler and left the menu open (over a frozen preview: LOBS looked stuck).
+                            FMenuItem { text: "Keep this scene's values"; onTriggered: { const id = modelData.id; linkMenu.close(); app.linkGroup(sec.group, id, true) } }
+                            FMenuItem { text: "Use " + modelData.scene + "'s values"; onTriggered: { const id = modelData.id; linkMenu.close(); app.linkGroup(sec.group, id, false) } }
                         }
                         onObjectAdded: (i, o) => linkMenu.insertMenu(i, o)
                         onObjectRemoved: (i, o) => linkMenu.removeMenu(o)
