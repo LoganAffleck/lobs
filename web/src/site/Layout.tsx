@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export const REPO = 'https://github.com/LoganAffleck/lobs'
-export const VERSION = '0.4.2'
+export const VERSION = '0.5.0'
 export const DISCORD = 'https://discord.gg/CY5QSXchxH'
 /** The installer itself, so the button downloads instead of opening the release page. */
 export const DOWNLOAD = `${REPO}/releases/download/v${VERSION}/LOBS-Setup-${VERSION}.exe`
