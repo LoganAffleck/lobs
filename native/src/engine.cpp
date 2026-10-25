@@ -200,6 +200,8 @@ static const char *obsKind(const QString &kind)
 
 bool Engine::kindAvailable(const QString &kind) const
 {
+	if (kind == "scene")
+		return true; // a LOBS scene, not an OBS module
 	const char *id = obsKindOrNull(kind);
 	return id && obs_source_get_display_name(id); // registered by a module this engine loaded
 }
@@ -450,10 +452,11 @@ void Engine::apply(const Doc &doc)
 		}
 	}
 
-	// 2. Scenes
+	m_hasSceneSources = std::any_of(doc.sources.cbegin(), doc.sources.cend(), [](const Source &s) { return s.kind == "scene"; });
+	// 2. Scenes. Public (named by id), so a layer showing a scene inside another finds it by name.
 	for (const QString &id : doc.sceneOrder)
 		if (!m_scenes.contains(id))
-			m_scenes[id] = obs_scene_create_private(id.toUtf8().constData());
+			m_scenes[id] = obs_scene_create(id.toUtf8().constData());
 
 	// 3. Layers: one lobs_instance per visible-capable leaf, with its own filters.
 	QSet<QString> wanted;
@@ -463,6 +466,9 @@ void Engine::apply(const Doc &doc)
 		for (const Doc::Leaf &leaf : doc.flatten(sceneId)) {
 			const Instance &inst = doc.instances[leaf.id];
 			if (!doc.sources.contains(inst.sourceId) || !kindInfo(doc.sources[inst.sourceId].kind).video)
+				continue;
+			// A scene shown in itself (pasted in, say) would draw forever: it's left out.
+			if (const Source &ss = doc.sources[inst.sourceId]; ss.kind == "scene" && doc.sceneReaches(ss.settings.value("scene").toString(), sceneId))
 				continue;
 			wanted.insert(inst.id);
 			Item &it = m_items[inst.id];
@@ -476,7 +482,7 @@ void Engine::apply(const Doc &doc)
 			}
 			it.applied = now;
 			it.hasApplied = true;
-			QString childName = inst.sourceId;
+			QString childName = src.kind == "scene" ? src.settings.value("scene").toString() : inst.sourceId; // a scene by its own name
 			if (src.kind == "text" && kOwnText) {
 				// Drawn at the layer's own pixel size, so it stays crisp (as shapes).
 				const Transform tt = doc.transform(inst);
@@ -819,12 +825,27 @@ void Engine::parkHiddenFilters()
 		m_parkTimer.start(1000);
 }
 
+bool Engine::sceneWanted(const QString &sceneId) const
+{
+	if (sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId))
+		return true;
+	if (!m_hasSceneSources) // the usual show: no scene inside another, nothing to walk (this runs per layer)
+		return false;
+	QStringList roots{m_editId, m_programId, m_unparkTarget};
+	roots += QStringList(m_showingAll.begin(), m_showingAll.end());
+	roots += m_heldScenes.keys();
+	for (const QString &r : roots)
+		if (!r.isEmpty() && (r == sceneId || m_lastDoc.sceneReaches(r, sceneId)))
+			return true;
+	return false;
+}
+
 void Engine::unparkScene(const QString &sceneId)
 {
 	if (m_applying || sceneId.isEmpty())
 		return; // apply() is already running and brings shown scenes back itself
 	for (const Item &it : m_items)
-		if (it.parked && it.applied.sceneId == sceneId) {
+		if (it.parked && (it.applied.sceneId == sceneId || (m_hasSceneSources && m_lastDoc.sceneReaches(sceneId, it.applied.sceneId)))) { // and scenes shown inside it
 			m_unparkTarget = sceneId;
 			apply(m_lastDoc); // re-attaches this scene's parked filters
 			m_unparkTarget.clear();

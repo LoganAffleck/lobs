@@ -179,6 +179,9 @@ struct Doc {
 	const Instance *parentOf(const QString &id) const;
 	QStringList &siblings(const QString &id);
 	QStringList descendants(const QString &id) const; // including self
+	// `from` is `to`, or shows it through scene sources (directly or nested): placing a source of
+	// scene `from` in scene `to` would make a scene contain itself.
+	bool sceneReaches(const QString &from, const QString &to) const;
 	struct Leaf {
 		QString id;
 		bool visible;

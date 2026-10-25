@@ -235,7 +235,8 @@ private:
 	QHash<QString, int> m_heldScenes; // scene -> number of projectors holding it
 	QString m_unparkTarget; // the scene unparkScene() is preparing
 	bool m_applying = false; // apply() is running (it must not re-enter)
-	bool sceneWanted(const QString &sceneId) const { return sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId); }
+	bool sceneWanted(const QString &sceneId) const; // shown, or inside one that is (engine.cpp)
+	bool m_hasSceneSources = false; // the show has a scene shown inside another (set by apply)
 	lobs::Doc m_lastDoc;
 	void setStatus(const QString &s);
 	void pollStats();

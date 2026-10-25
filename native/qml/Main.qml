@@ -469,6 +469,7 @@ ApplicationWindow {
             title: "Scenes"
             Rectangle {
                 id: scenesGuest
+                property string editingId: "" // the scene whose name is being typed in its row or tile
                 property size kddockwidgets_min_size: Qt.size(240, 160) // panel minimum
                 anchors.fill: parent
                 color: "transparent"
@@ -481,6 +482,20 @@ ApplicationWindow {
                             FButton { iconName: "layout-grid"; variant: "ghost"; selected: win.sceneView === 1; tip: "Grid with live thumbnails"; onClicked: win.sceneView = 1 }
                         ]
                         FButton { iconName: "plus"; text: "Scene"; variant: "secondary"; onClicked: app.addScene(); tip: "Add a scene" }
+                    }
+                    // Right-click on a scene, in the list or the grid.
+                    FMenu {
+                        id: sceneMenu
+                        property var row: ({})
+                        function openFor(r) { row = r; popup() }
+                        FMenuItem { text: "Show this scene"; onTriggered: { app.editScene(sceneMenu.row.id); app.take() } }
+                        FMenuItem { text: "Rename…"; onTriggered: scenesGuest.editingId = sceneMenu.row.id }
+                        // Shows this scene inside the one being edited, as a layer (nested scenes).
+                        FMenuItem { text: "Show in " + app.editSceneName; enabled: sceneMenu.row.id !== app.editSceneId; onTriggered: app.addSceneSource(sceneMenu.row.id) }
+                        FMenuItem { text: "Duplicate with linked layers"; onTriggered: app.duplicateScene(sceneMenu.row.id, true) }
+                        FMenuItem { text: "Duplicate"; onTriggered: app.duplicateScene(sceneMenu.row.id, false) }
+                        MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                        FMenuItem { text: "Delete scene"; enabled: app.scenes.length > 1; onTriggered: app.deleteScene(sceneMenu.row.id) }
                     }
                     StackLayout {
                         Layout.fillWidth: true
@@ -501,7 +516,7 @@ ApplicationWindow {
                                     Accessible.name: String(modelData.name || "Scene")
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.popup() }
+                                    onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.openFor(modelData) }
                                     onDoubleClicked: { app.editScene(modelData.id); app.take() }
                                 }
                                 RowLayout {
@@ -509,18 +524,16 @@ ApplicationWindow {
                                     anchors.leftMargin: 14
                                     anchors.rightMargin: 12
                                     spacing: 6
-                                    Body { text: modelData.name; font.weight: modelData.editing ? 550 : 400; Layout.fillWidth: true }
+                                    Body { visible: scenesGuest.editingId !== modelData.id; text: modelData.name; font.weight: modelData.editing ? 550 : 400; Layout.fillWidth: true }
+                                    InlineRename {
+                                        active: scenesGuest.editingId === modelData.id
+                                        original: modelData.name
+                                        Layout.fillWidth: true
+                                        onRenamed: (n) => app.renameScene(modelData.id, n)
+                                        onFinished: scenesGuest.editingId = ""
+                                    }
                                     FBadge { visible: modelData.program; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
                                     Caption { text: modelData.count }
-                                }
-                                FMenu {
-                                    id: sceneMenu
-                                    FMenuItem { text: "Show this scene"; onTriggered: { app.editScene(modelData.id); app.take() } }
-                                    FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("scene", modelData.id, modelData.name) }
-                                    FMenuItem { text: "Duplicate with linked layers"; onTriggered: app.duplicateScene(modelData.id, true) }
-                                    FMenuItem { text: "Duplicate"; onTriggered: app.duplicateScene(modelData.id, false) }
-                                    MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                    FMenuItem { text: "Delete scene"; enabled: app.scenes.length > 1; onTriggered: app.deleteScene(modelData.id) }
                                 }
                             }
                         }
@@ -564,7 +577,14 @@ ApplicationWindow {
                                     RowLayout {
                                         anchors.left: parent.left; anchors.right: parent.right; anchors.top: thumbBox.bottom
                                         anchors.leftMargin: 8; anchors.rightMargin: 6; anchors.topMargin: 4
-                                        Body { text: modelData.name; font.weight: modelData.editing ? 550 : 400; Layout.fillWidth: true }
+                                        Body { visible: scenesGuest.editingId !== modelData.id; text: modelData.name; font.weight: modelData.editing ? 550 : 400; Layout.fillWidth: true }
+                                        InlineRename {
+                                            active: scenesGuest.editingId === modelData.id
+                                            original: modelData.name
+                                            Layout.fillWidth: true
+                                            onRenamed: (n) => app.renameScene(modelData.id, n)
+                                            onFinished: scenesGuest.editingId = ""
+                                        }
                                         FBadge { visible: modelData.program; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
                                     }
                                     MouseArea {
@@ -572,8 +592,10 @@ ApplicationWindow {
                                         Accessible.name: String(modelData.name || "Scene")
                                         id: tileMouse
                                         anchors.fill: parent
+                                        z: -1 // under the name editor, which takes its own clicks
                                         hoverEnabled: true
-                                        onClicked: app.editScene(modelData.id)
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.openFor(modelData) }
                                         onDoubleClicked: { app.editScene(modelData.id); app.take() }
                                     }
                                 }
@@ -907,6 +929,10 @@ ApplicationWindow {
                 function newFolder() { const f = app.createAssetFolder(); if (f) { selected = [f]; renameDialog.ask("asset", f, "New folder") } }
                 function currentFolderPath() { return app.assetPath ? app.assetsFolder + "/" + app.assetPath : app.assetsFolder }
                 function folderAt(gx, gy) { // folder item under a global point (drop target)
+                    // A parent folder in the breadcrumb takes a drop too (moving an asset back up).
+                    const cp = crumbs.mapFromGlobal(gx, gy)
+                    const crumb = crumbs.childAt(cp.x, cp.y)
+                    if (crumb && crumb.modelData && !crumb.last) return crumb.modelData.dir
                     if (view === 1) { // grid: folders are the compact row above the tiles
                         const flow = assetGrid.headerItem ? assetGrid.headerItem.children[0] : null
                         if (!flow) return ""
@@ -1589,27 +1615,12 @@ ApplicationWindow {
                                     text: modelData.name + (modelData.collapsed ? "  ·  " + modelData.childCount : "")
                                     color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400; Layout.fillWidth: true
                                 }
-                                // Rename in place: Enter or clicking away keeps it, Esc puts it back.
-                                TextInput {
-                                    id: nameEdit
-                                    visible: layerList.editingId === modelData.id
+                                InlineRename {
+                                    active: layerList.editingId === modelData.id
+                                    original: modelData.name
                                     Layout.fillWidth: true
-                                    color: Pal.fg; selectionColor: Pal.focus; selectedTextColor: "white"
-                                    font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550
-                                    clip: true; selectByMouse: true
-                                    property bool done: false
-                                    onVisibleChanged: if (visible) { done = false; text = modelData.name; selectAll(); forceActiveFocus() }
-                                    function finish(keep) {
-                                        if (done) return
-                                        done = true
-                                        const t = text.trim()
-                                        if (keep && t !== "" && t !== modelData.name) app.renameLayer(modelData.id, t)
-                                        layerList.editingId = ""
-                                    }
-                                    onAccepted: finish(true)
-                                    onActiveFocusChanged: if (!activeFocus && visible) finish(true)
-                                    Keys.onEscapePressed: finish(false)
-                                    Rectangle { anchors.fill: parent; anchors.margins: -3; z: -1; radius: 4; color: Pal.s1; border.width: 1; border.color: Pal.focus }
+                                    onRenamed: (n) => app.renameLayer(modelData.id, n)
+                                    onFinished: layerList.editingId = ""
                                 }
                                 FIcon { visible: modelData.linked; name: "link-2"; color: Pal.link; ToolTip.text: "Linked with another scene" }
                                 FBadge { visible: modelData.fx > 0; text: modelData.fx + " fx" }
@@ -1876,7 +1887,7 @@ ApplicationWindow {
                     spacing: 2
                     Row {
                         spacing: 8
-                        FIcon { visible: sv.d.mode !== "multi"; size: 16; name: sv.d.mode === "group" ? "layers" : (sv.d.sourceIcon || ""); anchors.verticalCenter: parent.verticalCenter }
+                        FIcon { visible: sv.d.mode !== "multi"; size: 16; name: sv.d.mode === "group" ? "folder" : (sv.d.sourceIcon || ""); anchors.verticalCenter: parent.verticalCenter }
                         Text { text: sv.d.mode === "multi" ? sv.d.count + " layers" : (sv.d.name || ""); color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; anchors.verticalCenter: parent.verticalCenter }
                     }
                     // (Which source, where it's used and its size are in the Source section below.)
@@ -2366,8 +2377,8 @@ ApplicationWindow {
         width: 380
         function ask(t, id, value) { target = t; targetId = id; rn.text = value; open() }
         function apply() {
-            target === "scene" ? app.renameScene(targetId, rn.text) : target === "source" ? app.renameSource(targetId, rn.text)
-                : app.renameAsset(targetId, rn.text) // layers rename in their row (layerList.rename)
+            // Layers and scenes rename in place (InlineRename); sources and assets here.
+            target === "source" ? app.renameSource(targetId, rn.text) : app.renameAsset(targetId, rn.text)
             close()
         }
         onOpened: { rn.selectAll(); rn.forceActiveFocus() }

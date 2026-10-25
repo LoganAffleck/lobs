@@ -123,6 +123,9 @@ public:
 	// (make a new group of the two).
 	Q_INVOKABLE void dropLayer(const QString &id, const QString &target, const QString &mode);
 	Q_INVOKABLE void renameLayer(const QString &id, const QString &name);
+	// Shows a scene inside the one being edited (a "scene" source, one per scene; never a scene
+	// inside itself, directly or through others).
+	Q_INVOKABLE void addSceneSource(const QString &sceneId);
 	// Groups in the Layers panel open and close; remembered per group (not part of the show).
 	Q_INVOKABLE void setGroupCollapsed(const QString &id, bool collapsed);
 	Q_INVOKABLE void deleteSelected();
@@ -519,6 +522,7 @@ private:
 	QStringList m_selection;
 	QSet<QString> m_collapsedGroups;
 	bool hasSelectedDescendant(const QString &groupId) const;
+	bool nestsSceneInItself(const QString &sourceId, const QString &sceneId); // and says so
 	QString m_poolSelection;
 	QString m_toast;
 	QTimer m_toastTimer, m_saveTimer;

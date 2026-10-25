@@ -2,7 +2,7 @@ import QtQuick
 
 // Pointer handling for an Asset Library item (list row or grid tile).
 //  - click selects (Ctrl toggles, Shift extends); double-click places a file or opens a folder
-//  - drag a file onto the canvas to place it, or onto a folder to move it there
+//  - drag a file onto the canvas to place it, or onto a folder (or one in the path above) to move it there
 //  - right-click for its menu
 MouseArea {
     id: am
@@ -19,6 +19,9 @@ MouseArea {
     anchors.fill: parent
     acceptedButtons: Qt.LeftButton | Qt.RightButton
     hoverEnabled: true
+    // A drag that starts on an asset moves it (into a folder, onto the canvas); the list doesn't
+    // scroll from under it. The wheel, and a drag on empty space, still scroll.
+    preventStealing: true
     function inPreview(p) { return !!previewItem && p.x >= 0 && p.y >= 0 && p.x <= previewItem.width && p.y <= previewItem.height }
     function targetFolder(m) {
         if (!folderAt) return ""

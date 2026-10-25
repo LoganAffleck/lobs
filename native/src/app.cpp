@@ -456,7 +456,7 @@ QVariantList App::layers() const
 			const bool collapsed = i.kind == "group" && m_collapsedGroups.contains(id) && !hasSelectedDescendant(id);
 			out << QVariantMap{{"id", id}, {"name", i.name}, {"depth", depth}, {"group", i.kind == "group"},
 					   {"collapsed", collapsed}, {"childCount", i.kind == "group" ? i.children.size() : 0},
-					   {"icon", i.kind == "group" ? "layers" : (s ? kindInfo(s->kind).icon : "square")}, {"color", s ? s->color : "#555"},
+					   {"icon", i.kind == "group" ? (collapsed ? "folder" : "folder-open") : (s ? kindInfo(s->kind).icon : "square")}, {"color", s ? s->color : "#555"},
 					   {"visible", doc().visibility(i).visible}, {"locked", i.locked}, {"linked", linked},
 					   {"fx", i.kind == "group" ? 0 : doc().filters(i).size()}, {"selected", m_selection.contains(id)},
 					   {"background", isBackgroundLayer(doc(), id)}};
@@ -1052,6 +1052,34 @@ void App::sizeNewLayers()
 		m_sizeTimer.stop();
 }
 
+bool App::nestsSceneInItself(const QString &sourceId, const QString &sceneId)
+{
+	const Source &s = doc().sources[sourceId];
+	if (s.kind != "scene" || !doc().sceneReaches(s.settings.value("scene").toString(), sceneId))
+		return false;
+	showToast("A scene can't show itself, even through another scene");
+	return true;
+}
+
+void App::addSceneSource(const QString &sceneId)
+{
+	if (!doc().scenes.contains(sceneId))
+		return;
+	// One source per scene: placing it again adds another layer of the same source.
+	QString sid;
+	for (const QString &id : doc().sourceOrder)
+		if (doc().sources[id].kind == "scene" && doc().sources[id].settings.value("scene").toString() == sceneId)
+			sid = id;
+	if (doc().sceneReaches(sceneId, m_editScene))
+		return (void)showToast("A scene can't show itself, even through another scene");
+	if (!liveSceneEditAllowed(m_editScene))
+		return;
+	if (sid.isEmpty())
+		m_store.commit("Add scene " + doc().scenes[sceneId].name + " as a source",
+			       [&](Doc &d) { sid = d.addSource("scene", d.scenes[sceneId].name, {{"scene", sceneId}}).id; });
+	placeSource(sid);
+}
+
 void App::placeSource(const QString &id)
 {
 	if (!liveSceneEditAllowed(m_editScene))
@@ -1060,9 +1088,11 @@ void App::placeSource(const QString &id)
 		return;
 	if (!kindInfo(doc().sources[id].kind).video)
 		return showToast("Audio sources aren't placed on the canvas");
+	if (nestsSceneInItself(id, m_editScene))
+		return;
 	QString iid;
 	m_store.commit("Place " + doc().sources[id].name, [&](Doc &d) { iid = d.placeSource(m_editScene, id).id; });
-	if (kindInfo(doc().sources[id].kind).w <= 0)
+	if (kindInfo(doc().sources[id].kind).w <= 0 && doc().sources[id].kind != "scene") // a scene is canvas-sized already
 		waitForSize(iid);
 	m_selection = {iid};
 	m_poolSelection.clear();
@@ -2312,6 +2342,8 @@ void App::poolDrop(const QString &sourceId, double x, double y)
 		updateOverlay();
 		return showToast("Audio sources aren't placed on the canvas");
 	}
+	if (nestsSceneInItself(sourceId, m_editScene))
+		return updateOverlay();
 	const Transform t = dropTransform(doc(), sourceId, toCanvas({x, y}));
 	QString iid;
 	m_store.commit("Place " + doc().sources[sourceId].name, [&](Doc &d) {
@@ -2529,11 +2561,12 @@ void App::repointFiles(const QString &from, const QString &to)
 
 QVariantList App::assetCrumbs() const
 {
-	QVariantList out{QVariantMap{{"name", "Assets"}, {"path", ""}}};
+	// "dir": the folder's absolute path, so a crumb can take an asset dragged onto it.
+	QVariantList out{QVariantMap{{"name", "Assets"}, {"path", ""}, {"dir", assetsFolder()}}};
 	QString acc;
 	for (const QString &part : m_assetDir.split('/', Qt::SkipEmptyParts)) {
 		acc += (acc.isEmpty() ? "" : "/") + part;
-		out << QVariantMap{{"name", part}, {"path", acc}};
+		out << QVariantMap{{"name", part}, {"path", acc}, {"dir", QDir::cleanPath(assetsFolder() + "/" + acc)}};
 	}
 	return out;
 }

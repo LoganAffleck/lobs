@@ -62,6 +62,7 @@ const KindInfo &kindInfo(const QString &kind)
 		{"shape", {"Shape", "square", true, false, 400, 240}},
 		{"mic", {"Microphone", "mic", false, true, -1, -1}},
 		{"desktop_audio", {"Desktop Audio", "volume-2", false, true, -1, -1}},
+		{"scene", {"Scene", "clapperboard", true, false, 0, 0}}, // another scene, shown whole (settings: scene id)
 	};
 	static const KindInfo unknown{"Unknown", "?", true, false, 640, 360};
 	auto it = info.find(kind);
@@ -361,10 +362,36 @@ void Doc::deleteSource(const QString &id)
 
 void Doc::deleteScene(const QString &id)
 {
+	// Sources that showed this scene inside others go with it.
+	for (const QString &sid : QStringList(sourceOrder))
+		if (sources[sid].kind == "scene" && sources[sid].settings.value("scene").toString() == id)
+			deleteSource(sid);
 	for (const QString &l : QStringList(scenes[id].layers))
 		deleteInstance(l);
 	scenes.remove(id);
 	sceneOrder.removeAll(id);
+}
+
+bool Doc::sceneReaches(const QString &from, const QString &to) const
+{
+	// Through the scene sources placed in `from` (in groups too), and theirs, and so on.
+	QSet<QString> seen;
+	std::function<bool(const QString &)> walk = [&](const QString &sceneId) {
+		if (sceneId == to)
+			return true;
+		if (seen.contains(sceneId) || !scenes.contains(sceneId))
+			return false;
+		seen.insert(sceneId);
+		for (const auto &i : instances) {
+			if (i.sceneId != sceneId || i.kind == "group")
+				continue;
+			const auto s = sources.constFind(i.sourceId);
+			if (s != sources.constEnd() && s->kind == "scene" && walk(s->settings.value("scene").toString()))
+				return true;
+		}
+		return false;
+	};
+	return walk(from);
 }
 
 void Doc::moveLayer(const QString &id, int delta)
