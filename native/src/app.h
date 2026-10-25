@@ -212,7 +212,19 @@ public:
 	Q_PROPERTY(int visibleMenus READ visibleMenus NOTIFY visibleMenusChanged)
 	int visibleMenus() const { return m_visibleMenus; }
 	Q_INVOKABLE void menuVisible(bool on) { m_visibleMenus = std::max(0, m_visibleMenus + (on ? 1 : -1)); emit visibleMenusChanged(); }
-	Q_INVOKABLE void resetCovering() { if (m_openPopups || !m_coverers.isEmpty()) { m_openPopups = 0; m_coverers.clear(); updatePreviewHidden(); } }
+	// Dialogs ("dialog:" keys) keep theirs: they set and clear it with their own visibility.
+	Q_INVOKABLE void resetCovering()
+	{
+		bool stale = m_openPopups > 0;
+		for (auto it = m_coverers.begin(); it != m_coverers.end();)
+			if (!it->startsWith("dialog:"))
+				it = m_coverers.erase(it), stale = true;
+			else
+				++it;
+		m_openPopups = 0;
+		if (stale)
+			updatePreviewHidden();
+	}
 	Q_PROPERTY(bool previewHidden READ previewHidden NOTIFY previewHiddenChanged)
 	Q_PROPERTY(int freezeTick READ freezeTick NOTIFY previewHiddenChanged)
 	bool previewHidden() const { return m_previewHidden; }

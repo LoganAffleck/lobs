@@ -17,6 +17,12 @@ Dialog {
         NumberAnimation { property: "opacity"; to: 0; duration: Pal.moderate }
         NumberAnimation { property: "scale"; to: 0.98; duration: Pal.moderate }
     }
+    // The video preview is a native window drawn over the QML, so it hides while any dialog is
+    // up (a dialog over the canvas was invisible under it, leaving only the dimmed backdrop). Keyed,
+    // not the shared popup count: a menu closing as its item opens a dialog can't cancel it.
+    readonly property string coverKey: "dialog:" + d
+    onVisibleChanged: app.setCovering(coverKey, visible)
+    Component.onDestruction: app.setCovering(coverKey, false)
     background: Rectangle { radius: 12; color: Pal.s5; border.width: 1; border.color: Pal.border }
     header: Text {
         text: d.title; leftPadding: 16; topPadding: 16; bottomPadding: 4

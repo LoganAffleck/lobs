@@ -243,13 +243,15 @@ ApplicationWindow {
 
     footer: StatusBar {}
 
+    // The window's popup layer, for the safety net below (Overlay.overlay only resolves on an Item).
+    Item { id: overlayRef; readonly property Item overlay: Overlay.overlay }
     // Safety net for the canvas: if it's stepped aside but nothing is open over it, bring it back.
     Timer {
         interval: 1000; repeat: true; running: true
         property int idleChecks: 0
         onTriggered: {
             if (!app.previewHidden || win.dialogOpen) { idleChecks = 0; return }
-            const kids = Overlay.overlay ? Overlay.overlay.children : []
+            const kids = overlayRef.overlay ? overlayRef.overlay.children : []
             let open = app.visibleMenus > 0
             for (let i = 0; i < kids.length; ++i) if (kids[i].visible && kids[i].opacity > 0) open = true
             idleChecks = open ? 0 : idleChecks + 1
