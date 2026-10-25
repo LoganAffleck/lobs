@@ -11,6 +11,7 @@ MouseArea {
     required property Item ghostItem     // drag ghost (has show(icon, name, x, y))
     required property Item overlayItem   // coordinate space for the ghost
     property var folderAt: null          // fn(globalX, globalY) -> folder path under the point, or ""
+    property var hoverFolder: null       // fn(path): the folder a drop would land in ("" for none), to light it up
     signal menuRequested(var asset)
     signal selectRequested(var asset, int modifiers)
     signal movedToFolder(var asset, string folder)
@@ -36,6 +37,7 @@ MouseArea {
         if (!dragging) return
         const g = mapToItem(overlayItem, m.x, m.y)
         const into = targetFolder(m)
+        if (hoverFolder) hoverFolder(into)
         ghostItem.show(into ? "folder" : asset.icon, into ? "Move to " + into.split("/").pop() : asset.name, g.x, g.y)
         const p = mapToItem(previewItem, m.x, m.y)
         if (!into && asset.placeable && inPreview(p)) app.assetDragMove(asset.path, p.x, p.y)
@@ -45,12 +47,14 @@ MouseArea {
         if (!dragging) return
         dragging = false
         ghostItem.visible = false
+        if (hoverFolder) hoverFolder("")
         const into = targetFolder(m)
         if (into) { app.poolDragCancel(); am.movedToFolder(asset, into); return }
         const p = mapToItem(previewItem, m.x, m.y)
         if (asset.placeable && inPreview(p)) app.assetDrop(asset.path, p.x, p.y)
         else app.poolDragCancel()
     }
+    onCanceled: { if (dragging && hoverFolder) hoverFolder(""); dragging = false; ghostItem.visible = false; app.poolDragCancel() }
     onClicked: (m) => { if (m.button === Qt.RightButton) am.menuRequested(asset) }
     onDoubleClicked: asset.folder ? app.openAssetFolder(asset.path) : asset.placeable ? app.placeAsset(asset.path) : undefined
 }

@@ -928,6 +928,7 @@ ApplicationWindow {
                 function targets(a) { return a && isSel(a.path) ? selected : a ? [a.path] : selected }
                 function newFolder() { const f = app.createAssetFolder(); if (f) { selected = [f]; renameDialog.ask("asset", f, "New folder") } }
                 function currentFolderPath() { return app.assetPath ? app.assetsFolder + "/" + app.assetPath : app.assetsFolder }
+                property string dropFolder: "" // the folder a dragged asset would land in (it lights up)
                 function folderAt(gx, gy) { // folder item under a global point (drop target)
                     // A parent folder in the breadcrumb takes a drop too (moving an asset back up).
                     const cp = crumbs.mapFromGlobal(gx, gy)
@@ -948,10 +949,6 @@ ApplicationWindow {
                 function detailOf(a) { // "1920×1080 · 2.1 MB" / "0:12 · 1280×720 · 8 MB"
                     if (a.folder) return a.size
                     return [a.durationMs ? duration(a.durationMs) : "", a.dims || "", a.size].filter(t => t).join(" · ")
-                }
-                function tipOf(a) {
-                    const used = (a.scenes || []).length ? "Used in " + a.scenes.join(", ") : a.folder ? "" : "Not used in any scene"
-                    return [a.name, detailOf(a), assetSearch.query && a.where ? "In " + a.where : "", used].filter(t => t).join("\n")
                 }
                 function setSort(k) {
                     if (sortKey === k) sortDesc = !sortDesc; else { sortKey = k; sortDesc = k !== "name" } // newest / largest first
@@ -1014,7 +1011,7 @@ ApplicationWindow {
                                 spacing: 0
                                 height: 28 // same for links and the current folder, so they line up
                                 FIcon { visible: index > 0; name: "chevron-right"; size: 12; color: Pal.muted; anchors.verticalCenter: parent.verticalCenter }
-                                FButton { visible: !parent.last; text: modelData.name; variant: "ghost"; implicitHeight: 24; anchors.verticalCenter: parent.verticalCenter; onClicked: app.goToAssetPath(modelData.path) }
+                                FButton { visible: !parent.last; text: modelData.name; variant: "ghost"; selected: assetsGuest.dropFolder === modelData.dir; implicitHeight: 24; anchors.verticalCenter: parent.verticalCenter; onClicked: app.goToAssetPath(modelData.path) }
                                 Text { visible: parent.last; text: modelData.name; leftPadding: 8; rightPadding: 4; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
@@ -1133,9 +1130,11 @@ ApplicationWindow {
                                 width: ListView.view.width
                                 height: 40
                                 Rectangle {
-                                    visible: assetsGuest.isSel(modelData.path)
+                                    readonly property bool target: modelData.folder && assetsGuest.dropFolder === modelData.path
+                                    visible: assetsGuest.isSel(modelData.path) || target
                                     anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1
-                                    radius: Pal.radius - 2; color: Pal.selected
+                                    radius: Pal.radius - 2; color: target ? Pal.s6 : Pal.selected
+                                    border.width: target ? 1 : 0; border.color: Pal.focus
                                 }
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 12
@@ -1165,13 +1164,9 @@ ApplicationWindow {
                                     }
                                     Rectangle { visible: !modelData.folder && modelData.uses > 0; width: 7; height: 7; radius: 3.5; color: "#22c55e" }
                                 }
-                                HoverHandler { id: rowTipHover }
-                                ToolTip.visible: rowTipHover.hovered
-                                ToolTip.delay: 700
-                                ToolTip.text: assetsGuest.tipOf(modelData)
                                 AssetMouse {
                                     asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
-                                    folderAt: assetsGuest.folderAt
+                                    folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
                                     onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
                                     onMenuRequested: (a) => { if (!assetsGuest.isSel(a.path)) assetsGuest.selected = [a.path]; assetMenu.asset = a; assetMenu.popup() }
                                     onMovedToFolder: (a, f) => app.moveAssets(assetsGuest.targets(a), f)
@@ -1213,9 +1208,10 @@ ApplicationWindow {
                                                 readonly property bool sel: assetsGuest.isSel(modelData.path)
                                                 anchors.fill: parent; anchors.margins: 4
                                                 radius: Pal.radius
-                                                color: sel ? Pal.s5 : folderMouse.containsMouse ? Pal.s4 : Pal.s3
-                                                border.width: sel ? 2 : 1
-                                                border.color: sel ? Pal.focus : Pal.border
+                                                readonly property bool target: assetsGuest.dropFolder === modelData.path
+                                                color: target ? Pal.s6 : sel ? Pal.s5 : folderMouse.containsMouse ? Pal.s4 : Pal.s3
+                                                border.width: sel || target ? 2 : 1
+                                                border.color: sel || target ? Pal.focus : Pal.border
                                                 Behavior on color { ColorAnimation { duration: Pal.fast } }
                                                 RowLayout {
                                                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
@@ -1224,14 +1220,10 @@ ApplicationWindow {
                                                     Text { text: modelData.name; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true }
                                                     Rectangle { visible: modelData.uses > 0; width: 7; height: 7; radius: 3.5; color: "#22c55e" }
                                                 }
-                                                HoverHandler { id: folderTip }
-                                                ToolTip.visible: folderTip.hovered
-                                                ToolTip.delay: 700
-                                                ToolTip.text: assetsGuest.tipOf(modelData)
                                                 AssetMouse {
                                                     id: folderMouse
                                                     asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
-                                                    folderAt: assetsGuest.folderAt
+                                                    folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
                                                     onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
                                                     onMenuRequested: (a) => { if (!assetsGuest.isSel(a.path)) assetsGuest.selected = [a.path]; assetMenu.asset = a; assetMenu.popup() }
                                                     onMovedToFolder: (a, f) => app.moveAssets(assetsGuest.targets(a), f)
@@ -1318,14 +1310,10 @@ ApplicationWindow {
                                         horizontalAlignment: Text.AlignHCenter
                                         lineHeight: 1.05
                                     }
-                                    HoverHandler { id: tileTipHover }
-                                    ToolTip.visible: tileTipHover.hovered
-                                    ToolTip.delay: 700
-                                    ToolTip.text: assetsGuest.tipOf(modelData)
                                     AssetMouse {
                                         id: tileMouse
                                         asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
-                                        folderAt: assetsGuest.folderAt
+                                        folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
                                         onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
                                         onMenuRequested: (a) => { if (!assetsGuest.isSel(a.path)) assetsGuest.selected = [a.path]; assetMenu.asset = a; assetMenu.popup() }
                                         onMovedToFolder: (a, f) => app.moveAssets(assetsGuest.targets(a), f)
