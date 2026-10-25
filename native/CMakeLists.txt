@@ -73,7 +73,7 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     # Fluid Functionalism components (QML port)
     qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FSwitch.qml qml/FCheckbox.qml
     qml/FTabs.qml qml/FMenu.qml qml/FMenuItem.qml qml/FSelect.qml qml/FDialog.qml qml/FluidList.qml
-    qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/StatsView.qml qml/CaptionsPanel.qml
+    qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/AudioSettings.qml qml/AudioMath.js qml/StatsView.qml qml/CaptionsPanel.qml
     qml/SettingsPage.qml qml/MixerView.qml qml/FIcon.qml qml/FHelp.qml qml/FScrollView.qml qml/CanvasArea.qml qml/StatusBar.qml qml/OutputControls.qml qml/AssetMouse.qml qml/MeterFader.qml qml/ToolTipStyle.qml qml/SourceFields.qml qml/SourceSection.qml qml/FFontPicker.qml qml/FColorField.qml qml/FSearchField.qml qml/GraphicTools.qml
         qml/TransitionsDialog.qml
         qml/NewProjectDialog.qml

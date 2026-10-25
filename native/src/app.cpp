@@ -127,6 +127,8 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	: QObject(parent), m_engine(engine), m_store(withDefaultDevices(loadDoc(docPath), engine)), m_docPath(docPath)
 {
 	connect(&m_store, &Store::changed, this, &App::onStoreChanged);
+	for (const QString &id : QSettings().value("ui/layers/collapsed").toStringList())
+		m_collapsedGroups.insert(id);
 	// docChanged is cheap for QML; the big lists follow only when they actually changed.
 	connect(this, &App::docChanged, this, &App::refreshModels);
 	m_inspectorTimer.setSingleShot(true);
@@ -449,17 +451,45 @@ QVariantList App::layers() const
 			bool linked = false;
 			for (Group g : kGroups)
 				linked |= !doc().linkedPeers(i, g).isEmpty();
+			// A collapsed group hides its layers, unless one of them is selected (picked on the
+			// canvas, say): then it opens so the selection shows.
+			const bool collapsed = i.kind == "group" && m_collapsedGroups.contains(id) && !hasSelectedDescendant(id);
 			out << QVariantMap{{"id", id}, {"name", i.name}, {"depth", depth}, {"group", i.kind == "group"},
+					   {"collapsed", collapsed}, {"childCount", i.kind == "group" ? i.children.size() : 0},
 					   {"icon", i.kind == "group" ? "layers" : (s ? kindInfo(s->kind).icon : "square")}, {"color", s ? s->color : "#555"},
 					   {"visible", doc().visibility(i).visible}, {"locked", i.locked}, {"linked", linked},
 					   {"fx", i.kind == "group" ? 0 : doc().filters(i).size()}, {"selected", m_selection.contains(id)},
 					   {"background", isBackgroundLayer(doc(), id)}};
-			if (i.kind == "group")
+			if (i.kind == "group" && !collapsed)
 				walk(i.children, depth + 1);
 		}
 	};
 	walk(doc().scenes[m_editScene].layers, 0);
 	return out;
+}
+
+bool App::hasSelectedDescendant(const QString &groupId) const
+{
+	for (const QString &id : m_selection)
+		if (id != groupId && doc().descendants(groupId).contains(id))
+			return true;
+	return false;
+}
+
+void App::setGroupCollapsed(const QString &id, bool collapsed)
+{
+	if (!doc().instances.contains(id) || doc().instances[id].kind != "group")
+		return;
+	if (collapsed) {
+		m_collapsedGroups.insert(id);
+		// Its layers go out of view, so a selection among them moves to the group itself.
+		if (hasSelectedDescendant(id))
+			m_selection = {id}, updateOverlay(), emit docChanged();
+	} else {
+		m_collapsedGroups.remove(id);
+	}
+	QSettings().setValue("ui/layers/collapsed", QStringList(m_collapsedGroups.begin(), m_collapsedGroups.end()));
+	refreshModels();
 }
 
 QString App::singleSelection() const
@@ -3896,7 +3926,9 @@ void App::finishCreate()
 		iid = d.placeSource(m_editScene, sid).id;
 		d.setTransform(iid, t);
 	});
-	m_selection = {iid};
+	// The pencil keeps drawing, so its strokes aren't selected: handles on each stroke got in the
+	// way of the next one. Other shapes and text are selected, ready to adjust.
+	m_selection = m_tool == "pencil" ? QStringList() : QStringList{iid};
 	m_poolSelection.clear();
 	// Like design tools: a shape or text is placed once, then back to selecting (pencil keeps drawing).
 	if (m_tool == "text") {

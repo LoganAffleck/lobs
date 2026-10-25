@@ -123,6 +123,8 @@ public:
 	// (make a new group of the two).
 	Q_INVOKABLE void dropLayer(const QString &id, const QString &target, const QString &mode);
 	Q_INVOKABLE void renameLayer(const QString &id, const QString &name);
+	// Groups in the Layers panel open and close; remembered per group (not part of the show).
+	Q_INVOKABLE void setGroupCollapsed(const QString &id, bool collapsed);
 	Q_INVOKABLE void deleteSelected();
 	Q_INVOKABLE void groupSelected();
 	Q_INVOKABLE void ungroupSelected();
@@ -515,6 +517,8 @@ private:
 	QString assetSource(lobs::Doc &d, const QString &path) const; // find or make the source for a file
 	QString m_editScene;
 	QStringList m_selection;
+	QSet<QString> m_collapsedGroups;
+	bool hasSelectedDescendant(const QString &groupId) const;
 	QString m_poolSelection;
 	QString m_toast;
 	QTimer m_toastTimer, m_saveTimer;

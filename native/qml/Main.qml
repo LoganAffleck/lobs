@@ -36,6 +36,10 @@ ApplicationWindow {
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Undo]; onActivated: app.undo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
+    // F2 renames the selected layer in its row, as File Explorer does with files.
+    // Not while Assets has focus: F2 renames a file there.
+    Shortcut { sequence: "F2"; enabled: !win.focusInside(assetsGuest); onActivated: { const sel = app.layers.filter(l => l.selected); if (sel.length === 1) layerList.rename(sel[0].id) } }
+    function focusInside(item) { for (let f = win.activeFocusItem; f; f = f.parent) if (f === item) return true; return false }
     // Layers clipboard. Text fields keep their own copy and paste (they take these keys first).
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Copy; onActivated: app.copyLayers() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Cut; onActivated: app.cutLayers() }
@@ -191,6 +195,8 @@ ApplicationWindow {
     component RowLabel: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 52 }
     component Caption: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
     function openTransitions() { trDialog.open() }
+    // Brings the Inspector forward (opened if closed), e.g. after picking a source in the mixer.
+    function showInspector() { if (!inspectorDock.isOpen) inspectorDock.show(); inspectorDock.dockWidget.setAsCurrentTab() }
     function togglePanel(d) {
         if (d.isOpen) d.close()
         else if (d === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
@@ -1426,7 +1432,7 @@ ApplicationWindow {
                         FMenu {
                             id: layerMenu
                             property var row: ({}) // the row it was opened on
-                            FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("layer", layerMenu.row.id, layerMenu.row.name) }
+                            FMenuItem { text: "Rename…"; onTriggered: layerList.rename(layerMenu.row.id) }
                             FMenuItem { text: chrome.keys("Copy    Ctrl C"); onTriggered: app.copyLayers() }
                             FMenuItem { text: chrome.keys("Cut    Ctrl X"); visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; onTriggered: app.cutLayers() }
                             FMenuItem { text: chrome.keys("Paste    Ctrl V"); enabled: app.canPaste; onTriggered: app.pasteLayers(false) }
@@ -1459,6 +1465,8 @@ ApplicationWindow {
                         // highlight shows dropping into a group, or, after holding over a layer a
                         // moment, making a new group of the two.
                         property string dragId: ""
+                        property string editingId: "" // the layer whose name is being typed in its row
+                        function rename(id) { editingId = id; const i = app.layers.findIndex(r => r.id === id); if (i >= 0) positionViewAtIndex(i, ListView.Contain) }
                         property int dropIndex: -1
                         property string dropMode: ""   // above | below | into | group | wait
                         property string waitId: ""
@@ -1552,7 +1560,7 @@ ApplicationWindow {
                                     app.selectLayer(modelData.id, m.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
                                     if (m.button === Qt.RightButton) { layerMenu.row = modelData; layerMenu.popup() }
                                 }
-                                onDoubleClicked: renameDialog.ask("layer", modelData.id, modelData.name)
+                                onDoubleClicked: layerList.rename(modelData.id)
                             }
                             RowLayout {
                                 anchors.fill: parent
@@ -1560,8 +1568,49 @@ ApplicationWindow {
                                 anchors.rightMargin: 8
                                 spacing: 6
                                 Rectangle { width: 6; height: 6; radius: 3; color: modelData.color; visible: !modelData.group }
+                                // A group opens and closes; closed, its layers are out of the list.
+                                FIcon {
+                                    visible: modelData.group
+                                    name: modelData.collapsed ? "chevron-right" : "chevron-down"
+                                    color: chevronMouse.containsMouse ? Pal.fg : Pal.muted
+                                    Layout.leftMargin: -6
+                                    MouseArea {
+                                        id: chevronMouse
+                                        anchors.fill: parent; anchors.margins: -4
+                                        hoverEnabled: true
+                                        Accessible.role: Accessible.Button
+                                        Accessible.name: modelData.collapsed ? "Show the group's layers" : "Hide the group's layers"
+                                        onClicked: app.setGroupCollapsed(modelData.id, !modelData.collapsed)
+                                    }
+                                }
                                 FIcon { name: modelData.icon; color: modelData.visible ? Pal.fg : Pal.muted }
-                                Body { text: modelData.name; color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400; Layout.fillWidth: true }
+                                Body {
+                                    visible: layerList.editingId !== modelData.id
+                                    text: modelData.name + (modelData.collapsed ? "  ·  " + modelData.childCount : "")
+                                    color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400; Layout.fillWidth: true
+                                }
+                                // Rename in place: Enter or clicking away keeps it, Esc puts it back.
+                                TextInput {
+                                    id: nameEdit
+                                    visible: layerList.editingId === modelData.id
+                                    Layout.fillWidth: true
+                                    color: Pal.fg; selectionColor: Pal.focus; selectedTextColor: "white"
+                                    font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550
+                                    clip: true; selectByMouse: true
+                                    property bool done: false
+                                    onVisibleChanged: if (visible) { done = false; text = modelData.name; selectAll(); forceActiveFocus() }
+                                    function finish(keep) {
+                                        if (done) return
+                                        done = true
+                                        const t = text.trim()
+                                        if (keep && t !== "" && t !== modelData.name) app.renameLayer(modelData.id, t)
+                                        layerList.editingId = ""
+                                    }
+                                    onAccepted: finish(true)
+                                    onActiveFocusChanged: if (!activeFocus && visible) finish(true)
+                                    Keys.onEscapePressed: finish(false)
+                                    Rectangle { anchors.fill: parent; anchors.margins: -3; z: -1; radius: 4; color: Pal.s1; border.width: 1; border.color: Pal.focus }
+                                }
                                 FIcon { visible: modelData.linked; name: "link-2"; color: Pal.link; ToolTip.text: "Linked with another scene" }
                                 FBadge { visible: modelData.fx > 0; text: modelData.fx + " fx" }
                                 Row {
@@ -1629,7 +1678,7 @@ ApplicationWindow {
             id: audioDock
             uniqueName: "audio"
             title: "Audio Mixer"
-            MixerView { id: audioGuest; property size kddockwidgets_min_size: Qt.size(300, 150); anchors.fill: parent }
+            MixerView { id: audioGuest; property size kddockwidgets_min_size: Qt.size(300, 150); anchors.fill: parent; onInspectRequested: win.showInspector() }
         }
 
         KDDW.DockWidget {
@@ -2123,6 +2172,13 @@ ApplicationWindow {
                         Text { text: sv.d.name || ""; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; anchors.verticalCenter: parent.verticalCenter } }
                     Caption { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: (sv.d.kindLabel || "") + " · input settings apply to every scene that uses it. Size, crop and filters are set per layer." }
                     SourceFields { d: sv.d; active: sv.d.mode === "source" }
+                    // Sources with sound: what the mixer's "..." used to open, here instead.
+                    AudioSettings {
+                        readonly property var entry: sv.d.mode === "source" ? app.mixer.find(m => m.id === sv.d.id) : undefined
+                        visible: !!entry
+                        s: entry || ({ id: "", name: "", icon: "", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 })
+                        Layout.fillWidth: true; Layout.topMargin: 8
+                    }
                     Text { text: "Used in"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.subtitle; font.weight: 550; Layout.topMargin: 8 }
                     Repeater {
                         model: sv.d.usedIn || []
@@ -2311,7 +2367,7 @@ ApplicationWindow {
         function ask(t, id, value) { target = t; targetId = id; rn.text = value; open() }
         function apply() {
             target === "scene" ? app.renameScene(targetId, rn.text) : target === "source" ? app.renameSource(targetId, rn.text)
-                : target === "asset" ? app.renameAsset(targetId, rn.text) : app.renameLayer(targetId, rn.text)
+                : app.renameAsset(targetId, rn.text) // layers rename in their row (layerList.rename)
             close()
         }
         onOpened: { rn.selectAll(); rn.forceActiveFocus() }
