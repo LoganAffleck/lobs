@@ -73,3 +73,22 @@ story("LA-04", "An audio source's mixer settings show in the Inspector", () => {
 	t.grab("la04-inspector.png");
 	check("no popover over the mixer", ui("Applies to this source in every scene.").length <= 1);
 });
+
+story("LA-05", "Shift-click in Layers selects everything between; Ctrl-click toggles one", () => {
+	fresh();
+	const ids = ["L1", "L2", "L3", "L4", "L5"].map(n => placeColor(n, "#3366ff"));
+	t.wait(300);
+	const row = n => ui(n).findIndex(i => i.text === n && i.cls === "Body");
+	// Newest on top: L5, L4, L3, L2, L1.
+	t.clickItem("L5", row("L5")); t.wait(200);
+	t.clickItem("L2", row("L2"), "shift"); t.wait(300);
+	const sel = app.layers.filter(r => r.selected).map(r => r.name);
+	eq("Shift selects L5 down to L2", JSON.stringify(sel), JSON.stringify(["L5", "L4", "L3", "L2"]));
+	check("not the background", !sel.includes("Background"));
+	t.clickItem("L3", row("L3"), "ctrl"); t.wait(200);
+	eq("Ctrl takes one out", JSON.stringify(app.layers.filter(r => r.selected).map(r => r.name)), JSON.stringify(["L5", "L4", "L2"]));
+	t.clickItem("L1", row("L1")); t.wait(200);
+	t.clickItem("L4", row("L4"), "shift"); t.wait(300);
+	eq("Shift upward works too", JSON.stringify(app.layers.filter(r => r.selected).map(r => r.name)), JSON.stringify(["L4", "L3", "L2", "L1"]));
+	t.grab("la05-range.png");
+});

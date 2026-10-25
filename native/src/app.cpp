@@ -1162,6 +1162,38 @@ void App::selectLayer(const QString &id, bool additive)
 		m_selection.contains(id) ? (void)m_selection.removeAll(id) : m_selection.append(id);
 	else
 		m_selection = {id};
+	m_selectAnchor = id;
+	m_poolSelection.clear();
+	updateOverlay();
+	emit docChanged();
+}
+
+void App::selectLayerRange(const QString &id)
+{
+	// Shift-click: everything listed between the last clicked layer and this one, as File
+	// Explorer does. Not the locked background, and not layers whose group is in the range too.
+	QStringList rows;
+	QSet<QString> background;
+	for (const QVariant &v : layers()) {
+		const QVariantMap r = v.toMap();
+		rows << r["id"].toString();
+		if (r["background"].toBool())
+			background.insert(rows.last());
+	}
+	const int a = int(rows.indexOf(m_selectAnchor)), b = int(rows.indexOf(id));
+	if (a < 0 || b < 0)
+		return selectLayer(id, false);
+	QStringList range = rows.mid(std::min(a, b), std::abs(a - b) + 1);
+	range.removeIf([&](const QString &r) { return background.contains(r) && r != id; });
+	QStringList sel;
+	for (const QString &r : range) {
+		bool inSelectedGroup = false;
+		for (const QString &g : range)
+			inSelectedGroup |= g != r && doc().instances[g].kind == "group" && doc().descendants(g).contains(r);
+		if (!inSelectedGroup)
+			sel << r;
+	}
+	m_selection = sel; // the anchor stays, so another Shift-click redraws the range from it
 	m_poolSelection.clear();
 	updateOverlay();
 	emit docChanged();

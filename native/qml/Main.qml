@@ -1571,7 +1571,8 @@ ApplicationWindow {
                                 onCanceled: { dragged = false; layerList.dragId = ""; layerList.dropIndex = -1 }
                                 onClicked: (m) => {
                                     if (dragged) return
-                                    app.selectLayer(modelData.id, m.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))
+                                    if (m.modifiers & Qt.ShiftModifier) app.selectLayerRange(modelData.id) // everything between
+                                    else app.selectLayer(modelData.id, m.modifiers & Qt.ControlModifier)
                                     if (m.button === Qt.RightButton) { layerMenu.row = modelData; layerMenu.popup() }
                                 }
                                 onDoubleClicked: layerList.rename(modelData.id)

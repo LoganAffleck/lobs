@@ -113,6 +113,7 @@ public:
 	Q_INVOKABLE void refreshBrowser(const QString &id) { m_engine->refreshBrowser(id); }
 	// layers
 	Q_INVOKABLE void selectLayer(const QString &id, bool additive);
+	Q_INVOKABLE void selectLayerRange(const QString &id); // Shift-click in Layers
 	Q_INVOKABLE void clearSelection(); // nothing selected: layers and Sources rows
 	Q_INVOKABLE void toggleVisible(const QString &id);
 	Q_INVOKABLE void toggleLock(const QString &id);
@@ -520,6 +521,7 @@ private:
 	QString assetSource(lobs::Doc &d, const QString &path) const; // find or make the source for a file
 	QString m_editScene;
 	QStringList m_selection;
+	QString m_selectAnchor; // the layer last clicked (without Shift): one end of a Shift-click range
 	QSet<QString> m_collapsedGroups;
 	bool hasSelectedDescendant(const QString &groupId) const;
 	bool nestsSceneInItself(const QString &sourceId, const QString &sceneId); // and says so
