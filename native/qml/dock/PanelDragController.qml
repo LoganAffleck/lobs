@@ -19,6 +19,29 @@ Item {
     property var target: null        // { kind: "side"|"tab"|"outer", entry, location, rect }
 
     readonly property int tabStrip: 36
+    // Tab strips in the main window (they register themselves): over one, a drop goes between
+    // its tabs, at the exact place, rather than at the end of the group.
+    property var tabBars: []
+    function registerTabBar(b) { if (tabBars.indexOf(b) < 0) tabBars = tabBars.concat([b]) }
+    function unregisterTabBar(b) { tabBars = tabBars.filter(x => x !== b) }
+    function tabTarget(x, y) {
+        for (const bar of tabBars) {
+            if (!bar || !bar.visible || bar.width < 2) continue
+            const o = bar.mapToItem(ctl, 0, 0)
+            if (x < o.x || x > o.x + bar.width || y < o.y || y > o.y + bar.height) continue
+            const slots = bar.tabSlots()
+            if (!slots.length) return null
+            const titles = slots.map(s => s.title)
+            // Only the dragged panel here: nowhere else to put it.
+            if (titles.length === 1 && dragged && titles[0] === dragged.dock.title) return null
+            let index = slots.length
+            for (let i = 0; i < slots.length; ++i)
+                if (x - o.x < slots[i].x + slots[i].w / 2) { index = i; break }
+            const lx = index < slots.length ? slots[index].x - 2 : slots[slots.length - 1].x + slots[slots.length - 1].w + 1
+            return { kind: "tabAt", titles: titles, index: index, rect: Qt.rect(o.x + lx, o.y + 6, 3, bar.height - 12) }
+        }
+        return null
+    }
     readonly property int edgeBand: 36
 
     function entryForTitle(title) {
@@ -61,6 +84,8 @@ Item {
         const area = dockArea.mapToItem(ctl, 0, 0)
         const A = Qt.rect(area.x, area.y, dockArea.width, dockArea.height)
         if (!inside(A, x, y)) return null
+        const onTabs = tabTarget(x, y)
+        if (onTabs) return onTabs
         // Outer edges of the whole layout: dock along that full side.
         const third = 0.28
         if (x - A.x < edgeBand) return { kind: "outer", location: KDDW.KDDockWidgets.Location_OnLeft, rect: Qt.rect(A.x, A.y, A.width * third, A.height) }
@@ -91,7 +116,18 @@ Item {
         finish()
         if (!t || !p) return
         const w = t.rect.width, h = t.rect.height
-        if (t.kind === "tab") {
+        if (t.kind === "tabAt") {
+            const name = p.dock.uniqueName
+            const from = t.titles.indexOf(p.dock.title)
+            if (from >= 0) { // same group: from where it was to the gap it was dropped in
+                dockTabs.move(name, t.index > from ? t.index - 1 : t.index)
+            } else {
+                const host = t.titles.map(entryForTitle).find(e => !!e) // a panel of that group LOBS knows
+                if (!host) return
+                host.dock.addDockWidgetAsTab(p.dock)
+                dockTabs.move(name, t.index)
+            }
+        } else if (t.kind === "tab") {
             t.entry.dock.addDockWidgetAsTab(p.dock)
         } else if (t.kind === "side") {
             dockArea.addDockWidget(p.dock, t.location, t.entry.dock, Qt.size(w, h))

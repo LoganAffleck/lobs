@@ -26,6 +26,21 @@ KDDW.TabBarBase {
 
     HoverHandler { id: stripHover }
 
+    // The drag controller asks where a dragged tab would go among these (tabSlots: in this bar's
+    // coordinates, in order).
+    function tabSlots() {
+        const out = []
+        for (let i = 0; i < tabRow.children.length; ++i) {
+            const t = tabRow.children[i]
+            if (t.tabIndex === undefined) continue
+            out.push({ title: t.title, x: tabRow.x + t.x, w: t.width })
+        }
+        return out.sort((a, b) => a.x - b.x)
+    }
+    onInMainWindowChanged: if (inMainWindow) mainWin.panelDrag.registerTabBar(root)
+    Component.onCompleted: if (inMainWindow) mainWin.panelDrag.registerTabBar(root)
+    Component.onDestruction: if (inMainWindow) mainWin.panelDrag.unregisterTabBar(root)
+
     // Docked panels: LOBS handles press/drag/click here (the panel keeps its slot while you drag;
     // see PanelDragController). Floating windows fall through to KDDockWidgets' own dragging.
     readonly property var mainWin: Window.window

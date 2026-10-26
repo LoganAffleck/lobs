@@ -3,6 +3,7 @@
 #include "window_chrome.h"
 #include "captions.h"
 #include "crash_report.h"
+#include "dock_tabs.h"
 #include "app_updater.h"
 #include "app.h"
 
@@ -689,6 +690,7 @@ int main(int argc, char *argv[])
 	WindowChrome chrome;
 	Captioner captions(&engine);
 	CrashReport crashReport(crashDir);
+	DockTabs dockTabs;
 	if (selfTest) // a self-test never waits on the crash prompt (it covered every later test's window, LOBS-041);
 		crashReport.dismiss(); // run.ps1 reports crashes, and the dump stays in the folder
 	AppUpdater appUpdater(app.arguments().contains("--updated"));
@@ -721,6 +723,7 @@ int main(int argc, char *argv[])
 	qml.rootContext()->setContextProperty("captions", &captions);
 	qml.rootContext()->setContextProperty("chrome", &chrome);
 	qml.rootContext()->setContextProperty("crashReport", &crashReport);
+	qml.rootContext()->setContextProperty("dockTabs", &dockTabs);
 	qml.rootContext()->setContextProperty("permissions", &permissions);
 	qml.rootContext()->setContextProperty("appUpdater", &appUpdater);
 	qml.addImageProvider("thumbs", new ThumbProvider(&engine));

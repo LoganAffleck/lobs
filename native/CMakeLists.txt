@@ -49,6 +49,7 @@ qt_add_executable(LOBS WIN32 MACOSX_BUNDLE
     src/captions.cpp src/captions.h
     src/crash_report.cpp src/crash_report.h
     src/app_updater.cpp src/app_updater.h
+    src/dock_tabs.h
     src/rows_model.h
     src/projector.h
     src/browser_view.h

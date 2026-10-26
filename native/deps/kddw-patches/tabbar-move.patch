@@ -1,0 +1,46 @@
+diff --git a/src/qtquick/views/TabBar.cpp b/src/qtquick/views/TabBar.cpp
+index 6e543bc..36c117d 100644
+--- a/src/qtquick/views/TabBar.cpp
++++ b/src/qtquick/views/TabBar.cpp
+@@ -206,9 +206,8 @@ QQuickItem *TabBar::tabAt(int index) const
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ void TabBar::moveTabTo(int from, int to)
+ {
+-    Q_UNUSED(from);
+-    Q_UNUSED(to);
+-    // Not implemented yet
++    // LOBS patch: the tabs' model follows the core tab bar's new order.
++    d->m_dockWidgetModel->move(from, to);
+ }
+ 
+ bool TabBar::tabBarAutoHide() const
+@@ -481,6 +480,17 @@ void DockWidgetModel::setCurrentIndex(int index)
+     }
+ }
+ 
++void DockWidgetModel::move(int from, int to)
++{
++    const int n = d->m_dockWidgets.size();
++    if (from < 0 || from >= n || to < 0 || to >= n || from == to)
++        return;
++    // Qt's destination row is "before which row", counted before the move.
++    beginMoveRows(QModelIndex(), from, from, QModelIndex(), to > from ? to + 1 : to);
++    d->m_dockWidgets.move(from, to);
++    endMoveRows();
++}
++
+ bool DockWidgetModel::insert(Core::DockWidget *dw, int index)
+ {
+     if (d->m_dockWidgets.contains(dw)) {
+diff --git a/src/qtquick/views/TabBar.h b/src/qtquick/views/TabBar.h
+index 6988df0..ee884ec 100644
+--- a/src/qtquick/views/TabBar.h
++++ b/src/qtquick/views/TabBar.h
+@@ -136,6 +136,7 @@ public:
+     void remove(Core::DockWidget *);
+     int indexOf(const Core::DockWidget *);
+     bool insert(Core::DockWidget *dw, int index);
++    void move(int from, int to); // LOBS patch: reorder one tab
+     bool contains(Core::DockWidget *dw) const;
+     int currentIndex() const;
+     void setCurrentIndex(int index);
