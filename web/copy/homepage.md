@@ -1,4 +1,4 @@
-# LOBS homepage copy, v4
+﻿# LOBS homepage copy, v4
 
 The homepage is just the hero.
 
@@ -8,5 +8,5 @@ OBS with a creative UI for building awesome scenes.
 
 **[Download for Windows]**
 
-Free · Open source · Windows 64-bit · v0.5.0 preview
+Free Â· Open source Â· Windows 64-bit Â· v0.5.1 preview
 
