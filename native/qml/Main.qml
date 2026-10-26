@@ -23,6 +23,9 @@ ApplicationWindow {
     flags: chrome.nativeControls ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
                                  : Qt.Window | Qt.FramelessWindowHint
     readonly property bool maximized: visibility === Window.Maximized
+    // Filling the screen (maximized or full screen), nothing sits against its edges: the top bar
+    // and the status bar keep this much room from them (a window's own edge does that otherwise).
+    readonly property int screenEdgeRoom: maximized || visibility === Window.FullScreen ? 6 : 0
     font.family: Pal.font
     font.pixelSize: Pal.body
 
@@ -289,12 +292,14 @@ ApplicationWindow {
     // ---------------- header ----------------
     header: Rectangle {
         id: topBar
-        height: 44
+        height: 44 + win.screenEdgeRoom
         color: Pal.s1
         Component.onCompleted: { chrome.captionItem = topBar; chrome.captionHeight = height }
+        onHeightChanged: chrome.captionHeight = height
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Pal.border }
         RowLayout {
             anchors.fill: parent
+            anchors.topMargin: win.screenEdgeRoom
             anchors.leftMargin: 14 + chrome.leadingInset
             anchors.rightMargin: 10
             spacing: 2

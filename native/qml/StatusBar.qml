@@ -5,7 +5,8 @@ import QtQuick.Layouts
 // Bottom status bar: what's running and how healthy it is, at a glance. Click for full stats.
 Rectangle {
     id: bar
-    implicitHeight: 26
+    readonly property int edgeRoom: Window.window && Window.window.screenEdgeRoom !== undefined ? Window.window.screenEdgeRoom : 0 // filling the screen
+    implicitHeight: 26 + edgeRoom
     color: Pal.s1
     readonly property var st: app.liveStats || ({})
     readonly property var ss: app.streamStats || ({})
@@ -25,7 +26,7 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 12; anchors.rightMargin: 12
+        anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.bottomMargin: bar.edgeRoom
         spacing: 16
         Text { text: app.status; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; elide: Text.ElideRight; Layout.fillWidth: true }
         Seg {
