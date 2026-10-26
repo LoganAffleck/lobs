@@ -166,7 +166,7 @@ Item {
     // Where it will land.
     Rectangle {
         id: zone
-        visible: ctl.target !== null
+        visible: ctl.target !== null && ctl.target.kind !== "tabAt"
         x: ctl.target ? ctl.target.rect.x : 0
         y: ctl.target ? ctl.target.rect.y : 0
         width: ctl.target ? ctl.target.rect.width : 0
@@ -188,6 +188,18 @@ Item {
             height: Pal.ctl
             Text { id: tabLabel; anchors.centerIn: parent; text: "Add as tab"; color: "white"; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
         }
+    }
+
+    // Where a dragged tab goes among a strip's tabs: no glide (the zone's animation made it fly in
+    // from wherever the zone was last), it just sits in the gap.
+    Rectangle {
+        visible: ctl.target !== null && ctl.target.kind === "tabAt"
+        x: visible ? ctl.target.rect.x : 0
+        y: visible ? ctl.target.rect.y : 0
+        width: visible ? ctl.target.rect.width : 0
+        height: visible ? ctl.target.rect.height : 0
+        radius: 1.5
+        color: Pal.focus
     }
 
     // Chip that follows the cursor.
