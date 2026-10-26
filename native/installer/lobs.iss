@@ -5,7 +5,7 @@
 
 #define AppName "LOBS"
 #ifndef AppVersion
-#define AppVersion "0.5.0"
+#define AppVersion "0.5.1"
 #endif
 #define EngineVersion "32.2.2"
 #define Dist "..\dist"
