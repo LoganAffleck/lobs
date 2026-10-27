@@ -137,10 +137,25 @@ public:
 	void startSharedPreview(std::function<void()> onFrame);
 	void stopSharedPreview();
 	void setSharedPreviewSize(int width, int height) { m_spWantW = width, m_spWantH = height; }
-	struct SharedFrames { int generation = 0; uint32_t handles[3] = {}; int width = 0, height = 0; };
+	static constexpr int kSharedFrames = 6;
+	struct SharedFrames { int generation = 0; uint32_t handles[kSharedFrames] = {}; int width = 0, height = 0; };
 	SharedFrames sharedPreviewFrames() const; // handles change with the generation (on resize)
 	int sharedPreviewGeneration() const { return m_spGen; }
-	int takeSharedPreviewFrame() { const int p = m_spPublished; m_spDisplayed = p; return p; } // the newest; held until the next take
+	// The newest finished frame. The UI's render thread calls this once per frame; the last three
+	// it took stay off-limits to the engine (the GPU may still be sampling them).
+	int takeSharedPreviewFrame()
+	{
+		const int p = m_spPublished;
+		if (p >= 0 && p != m_spHist[0]) {
+			m_spHist[2] = m_spHist[1], m_spHist[1] = m_spHist[0], m_spHist[0] = p;
+			uint32_t held = 0;
+			for (int h : m_spHist)
+				if (h >= 0)
+					held |= 1u << h;
+			m_spHeld = held;
+		}
+		return p;
+	}
 	void *graphicsDevice() const; // ID3D11Device* on Windows
 	void renderSharedPreview(); // graphics thread, after each main render
 	// Device pixels per point on the preview's screen (2 on Retina, 1.5 at 150% on Windows):
@@ -299,8 +314,13 @@ private:
 	obs_display *m_display = nullptr;
 	bool m_spOn = false;
 	std::function<void()> m_spOnFrame;
-	std::atomic<int> m_spWantW{0}, m_spWantH{0}, m_spGen{0}, m_spPublished{-1}, m_spDisplayed{-1};
-	struct gs_texture *m_spTex[3] = {};
+	std::atomic<int> m_spWantW{0}, m_spWantH{0}, m_spGen{0}, m_spPublished{-1};
+	std::atomic<uint32_t> m_spHeld{0}; // textures the UI may still be reading
+	int m_spHist[3] = {-1, -1, -1};     // UI render thread only
+	uint32_t m_spPending = 0;           // drawn, GPU not done yet (graphics thread)
+	uint64_t m_spSeq[kSharedFrames] = {}, m_spSeqNext = 0;
+	void *m_spDone[kSharedFrames] = {}; // ID3D11Query (event) per texture
+	struct gs_texture *m_spTex[kSharedFrames] = {};
 	int m_spW = 0, m_spH = 0;
 	uint64_t m_spLastFrame = 0;
 	mutable void *m_spDevice = nullptr;

@@ -313,8 +313,8 @@ protected:
 			return delete node, nullptr;
 		}
 		const int p = m_engine->takeSharedPreviewFrame();
-		if (p < 0 || p > 2 || !m_textures[p])
-			return node; // nothing drawn at this size yet: keep the last frame
+		if (p < 0 || p >= Engine::kSharedFrames || !m_textures[p])
+			return node; // nothing drawn at this size yet: keep the last frame (its texture is kept too)
 		if (!node) {
 			node = new QSGSimpleTextureNode;
 			node->setOwnsTexture(false);
@@ -323,6 +323,7 @@ protected:
 		node->setTexture(m_textures[p]);
 		const qreal dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
 		node->setRect(QRectF(0, 0, m_texSize.width() / dpr, m_texSize.height() / dpr));
+		releaseTextures(m_oldTextures, m_oldD3d); // a frame at the new size is up: the old ones can go
 		return node;
 	}
 	void releaseResources() override { dropTextures(); }
@@ -380,7 +381,11 @@ private:
 	// Render thread: the engine's textures, opened on Qt's own device (same GPU, or it fails).
 	bool openTextures()
 	{
-		releaseTextures();
+		// The node may still show one of the current textures: they become the old set, freed
+		// once a frame from the new set replaces it (freeing them here flashed black).
+		releaseTextures(m_oldTextures, m_oldD3d);
+		for (int i = 0; i < Engine::kSharedFrames; i++)
+			m_oldTextures[i] = m_textures[i], m_oldD3d[i] = m_d3d[i], m_textures[i] = nullptr, m_d3d[i] = nullptr;
 		QSGRendererInterface *ri = window() ? window()->rendererInterface() : nullptr;
 		if (!ri || ri->graphicsApi() != QSGRendererInterface::Direct3D11)
 			return false;
@@ -392,7 +397,7 @@ private:
 		m_gen = f.generation;
 		if (!f.handles[0])
 			return f.generation == 0; // not made yet: try again on the next frame
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < Engine::kSharedFrames; i++) {
 			ID3D11Texture2D *tex = nullptr;
 			if (FAILED(dev->OpenSharedResource(reinterpret_cast<HANDLE>(uintptr_t(f.handles[i])), __uuidof(ID3D11Texture2D), reinterpret_cast<void **>(&tex))) || !tex)
 				return false;
@@ -418,27 +423,30 @@ private:
 	// Off the render thread (the window goes away, or this item does): freed on it, later.
 	void dropTextures()
 	{
+		constexpr int n = Engine::kSharedFrames;
 		struct Free : QRunnable {
-			QSGTexture *t[3]; ID3D11Texture2D *d[3];
-			void run() override { for (int i = 0; i < 3; i++) { delete t[i]; if (d[i]) d[i]->Release(); } }
+			QSGTexture *t[2 * n] = {}; ID3D11Texture2D *d[2 * n] = {};
+			void run() override { for (int i = 0; i < 2 * n; i++) { delete t[i]; if (d[i]) d[i]->Release(); } }
 		};
 		auto *job = new Free;
-		for (int i = 0; i < 3; i++)
+		for (int i = 0; i < n; i++) {
 			job->t[i] = m_textures[i], job->d[i] = m_d3d[i], m_textures[i] = nullptr, m_d3d[i] = nullptr;
+			job->t[n + i] = m_oldTextures[i], job->d[n + i] = m_oldD3d[i], m_oldTextures[i] = nullptr, m_oldD3d[i] = nullptr;
+		}
 		m_gen = -1;
 		if (window())
 			window()->scheduleRenderJob(job, QQuickWindow::NoStage);
 		else
 			job->run(), delete job;
 	}
-	void releaseTextures() // render thread
+	static void releaseTextures(QSGTexture **t, ID3D11Texture2D **d) // render thread
 	{
-		for (int i = 0; i < 3; i++) {
-			delete m_textures[i];
-			m_textures[i] = nullptr;
-			if (m_d3d[i])
-				m_d3d[i]->Release();
-			m_d3d[i] = nullptr;
+		for (int i = 0; i < Engine::kSharedFrames; i++) {
+			delete t[i];
+			t[i] = nullptr;
+			if (d[i])
+				d[i]->Release();
+			d[i] = nullptr;
 		}
 	}
 
@@ -448,8 +456,8 @@ private:
 	std::atomic<bool> m_pending{false};
 	bool m_failed = false;
 	int m_gen = -1;
-	QSGTexture *m_textures[3] = {};
-	ID3D11Texture2D *m_d3d[3] = {};
+	QSGTexture *m_textures[Engine::kSharedFrames] = {}, *m_oldTextures[Engine::kSharedFrames] = {};
+	ID3D11Texture2D *m_d3d[Engine::kSharedFrames] = {}, *m_oldD3d[Engine::kSharedFrames] = {};
 	QSize m_texSize;
 };
 #endif

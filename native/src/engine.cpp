@@ -10,6 +10,7 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <d3d11.h>
 #else
 #include <dlfcn.h>
 #endif
@@ -1693,13 +1694,19 @@ void Engine::stopSharedPreview()
 	obs_remove_main_rendered_callback(sharedPreviewRendered, this);
 	m_spOn = false;
 	obs_enter_graphics();
-	for (gs_texture_t *&t : m_spTex) {
-		gs_texture_destroy(t);
-		t = nullptr;
+	for (int i = 0; i < kSharedFrames; i++) {
+		gs_texture_destroy(m_spTex[i]);
+		m_spTex[i] = nullptr;
+#ifdef Q_OS_WIN
+		if (m_spDone[i])
+			static_cast<ID3D11Query *>(m_spDone[i])->Release();
+		m_spDone[i] = nullptr;
+#endif
 	}
 	obs_leave_graphics();
 	m_spW = m_spH = 0;
 	m_spPublished = -1;
+	m_spPending = 0;
 }
 
 Engine::SharedFrames Engine::sharedPreviewFrames() const
@@ -1718,6 +1725,10 @@ void *Engine::graphicsDevice() const
 	return m_spDevice;
 }
 
+// The UI reads these frames on its own GPU device, with nothing between the two devices to keep
+// them in step. So a frame is published only once the GPU has finished drawing it (an event
+// query, polled without waiting), and a frame is never drawn into a texture the UI may still be
+// sampling: the last few it took (it keeps up to two frames in flight) or the newest.
 void Engine::renderSharedPreview()
 {
 	const int w = m_spWantW, h = m_spWantH;
@@ -1729,16 +1740,32 @@ void Engine::renderSharedPreview()
 		return;
 	m_spLastFrame = frame;
 	obs_enter_graphics();
+#ifdef Q_OS_WIN
+	auto *dev = static_cast<ID3D11Device *>(gs_get_device_obj());
+	ID3D11DeviceContext *ctx = nullptr;
+	if (dev)
+		dev->GetImmediateContext(&ctx);
+#endif
 	if (w != m_spW || h != m_spH || !m_spTex[0]) {
-		// New size: three fresh textures; the UI opens them again when the generation changes.
+		// New size: fresh textures; the UI opens them again when the generation changes (and
+		// keeps showing its last frame until one at the new size is ready).
 		SharedFrames f;
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < kSharedFrames; i++) {
 			gs_texture_destroy(m_spTex[i]);
 			m_spTex[i] = gs_texture_create(uint32_t(w), uint32_t(h), GS_RGBA, 1, nullptr, GS_RENDER_TARGET | GS_SHARED_TEX);
 			f.handles[i] = m_spTex[i] ? gs_texture_get_shared_handle(m_spTex[i]) : 0;
+#ifdef Q_OS_WIN
+			if (!m_spDone[i] && dev) {
+				D3D11_QUERY_DESC qd{D3D11_QUERY_EVENT, 0};
+				ID3D11Query *q = nullptr;
+				if (SUCCEEDED(dev->CreateQuery(&qd, &q)))
+					m_spDone[i] = q;
+			}
+#endif
 		}
 		m_spW = w, m_spH = h;
 		m_spPublished = -1;
+		m_spPending = 0;
 		f.width = w, f.height = h, f.generation = m_spGen + 1;
 		{
 			QMutexLocker lock(&m_spLock);
@@ -1746,13 +1773,35 @@ void Engine::renderSharedPreview()
 		}
 		m_spGen = f.generation;
 	}
-	// Draw into the one the UI isn't showing and that isn't the newest (it may take that next).
-	const int shown = m_spDisplayed, newest = m_spPublished;
-	int k = 0;
-	while (k == shown || k == newest)
-		k++;
-	bool drawn = false;
-	if (m_spTex[k]) {
+	// Frames the GPU has finished since last time: the newest of them is published.
+	bool published = false;
+	int newestDone = -1;
+	uint64_t newestSeq = 0;
+	for (int i = 0; i < kSharedFrames; i++) {
+		if (!(m_spPending & (1u << i)))
+			continue;
+		bool done = true;
+#ifdef Q_OS_WIN
+		if (ctx && m_spDone[i])
+			done = ctx->GetData(static_cast<ID3D11Query *>(m_spDone[i]), nullptr, 0, D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK;
+#endif
+		if (!done)
+			continue;
+		m_spPending &= ~(1u << i);
+		if (m_spSeq[i] > newestSeq)
+			newestSeq = m_spSeq[i], newestDone = i;
+	}
+	if (newestDone >= 0 && (m_spPublished < 0 || newestSeq > m_spSeq[m_spPublished])) {
+		m_spPublished = newestDone;
+		published = true;
+	}
+	// Draw into a texture that's free: not held by the UI, not the newest, not still drawing.
+	const uint32_t busy = m_spHeld | m_spPending | (m_spPublished >= 0 ? 1u << m_spPublished : 0u);
+	int k = -1;
+	for (int i = 0; i < kSharedFrames && k < 0; i++)
+		if (!(busy & (1u << i)) && m_spTex[i])
+			k = i;
+	if (k >= 0) {
 		gs_texture_t *prevRt = gs_get_render_target();
 		gs_zstencil_t *prevZs = gs_get_zstencil_target();
 		gs_viewport_push();
@@ -1766,15 +1815,23 @@ void Engine::renderSharedPreview()
 		gs_set_render_target(prevRt, prevZs);
 		gs_projection_pop();
 		gs_viewport_pop();
-		gs_flush(); // the UI's device reads it next: the commands must be on the GPU first
-		drawn = true;
+		m_spSeq[k] = ++m_spSeqNext;
+#ifdef Q_OS_WIN
+		if (ctx && m_spDone[k])
+			ctx->End(static_cast<ID3D11Query *>(m_spDone[k]));
+		m_spPending |= 1u << k;
+#else
+		m_spPublished = k, published = true;
+#endif
+		gs_flush(); // on its way to the GPU; published once the query says it's done
 	}
+#ifdef Q_OS_WIN
+	if (ctx)
+		ctx->Release();
+#endif
 	obs_leave_graphics();
-	if (drawn) {
-		m_spPublished = k;
-		if (m_spOnFrame)
-			m_spOnFrame();
-	}
+	if (published && m_spOnFrame)
+		m_spOnFrame();
 }
 
 void Engine::resizePreview(int width, int height)
