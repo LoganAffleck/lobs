@@ -321,6 +321,7 @@ protected:
 			node->setFiltering(QSGTexture::Nearest); // drawn at exactly this size: 1:1 pixels
 		}
 		node->setTexture(m_textures[p]);
+		m_shown = m_textures[p];
 		const qreal dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
 		node->setRect(QRectF(0, 0, m_texSize.width() / dpr, m_texSize.height() / dpr));
 		releaseTextures(m_oldTextures, m_oldD3d); // a frame at the new size is up: the old ones can go
@@ -381,11 +382,19 @@ private:
 	// Render thread: the engine's textures, opened on Qt's own device (same GPU, or it fails).
 	bool openTextures()
 	{
-		// The node may still show one of the current textures: they become the old set, freed
-		// once a frame from the new set replaces it (freeing them here flashed black).
-		releaseTextures(m_oldTextures, m_oldD3d);
-		for (int i = 0; i < Engine::kSharedFrames; i++)
-			m_oldTextures[i] = m_textures[i], m_oldD3d[i] = m_d3d[i], m_textures[i] = nullptr, m_d3d[i] = nullptr;
+		// The set holding the texture on screen is never freed here: it becomes (or stays) the old
+		// set, freed once a frame from the new set replaces it. Sizes can change several times
+		// before one does (startup, a window drag); freeing the shown one crashed in the renderer.
+		const auto holds = [this](QSGTexture *const *set) { return m_shown && std::find(set, set + Engine::kSharedFrames, m_shown) != set + Engine::kSharedFrames; };
+		if (holds(m_textures)) {
+			releaseTextures(m_oldTextures, m_oldD3d);
+			for (int i = 0; i < Engine::kSharedFrames; i++)
+				m_oldTextures[i] = m_textures[i], m_oldD3d[i] = m_d3d[i], m_textures[i] = nullptr, m_d3d[i] = nullptr;
+		} else {
+			releaseTextures(m_textures, m_d3d); // not on screen (the shown one is in the old set, or none is)
+			if (!holds(m_oldTextures))
+				releaseTextures(m_oldTextures, m_oldD3d), m_shown = nullptr;
+		}
 		QSGRendererInterface *ri = window() ? window()->rendererInterface() : nullptr;
 		if (!ri || ri->graphicsApi() != QSGRendererInterface::Direct3D11)
 			return false;
@@ -434,6 +443,7 @@ private:
 			job->t[n + i] = m_oldTextures[i], job->d[n + i] = m_oldD3d[i], m_oldTextures[i] = nullptr, m_oldD3d[i] = nullptr;
 		}
 		m_gen = -1;
+		m_shown = nullptr;
 		if (window())
 			window()->scheduleRenderJob(job, QQuickWindow::NoStage);
 		else
@@ -457,6 +467,7 @@ private:
 	bool m_failed = false;
 	int m_gen = -1;
 	QSGTexture *m_textures[Engine::kSharedFrames] = {}, *m_oldTextures[Engine::kSharedFrames] = {};
+	QSGTexture *m_shown = nullptr; // what the node draws (render thread): its set must outlive it
 	ID3D11Texture2D *m_d3d[Engine::kSharedFrames] = {}, *m_oldD3d[Engine::kSharedFrames] = {};
 	QSize m_texSize;
 };
