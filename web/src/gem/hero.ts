@@ -21,6 +21,12 @@ export interface HeroGemOptions {
   onReady?: () => void
   /** Element that takes pointer input (hover to lean, drag to spin). Defaults to the canvas. */
   target?: HTMLElement
+  /** Look settings over the hero's own (the overlay drops the hero's low lights). */
+  look?: Partial<GemParams>
+  /** Turn speed in degrees a second (the hero: 2.4). */
+  turn?: number
+  /** Draw on transparent instead of black: the stone keeps its brightness as alpha (overlay). */
+  transparent?: boolean
 }
 
 export function mountHeroGem(canvas: HTMLCanvasElement, opts: HeroGemOptions): () => void {
@@ -33,11 +39,11 @@ export function mountHeroGem(canvas: HTMLCanvasElement, opts: HeroGemOptions): (
   const p: GemParams = {
     ...DEFAULTS, ...LOGO, bounces: 5, background: '#000000', exposure: (LOGO.exposure ?? 1) * 0.92,
     bayer: style === 'bayer' || style === 'retro', ditherLevels: style === 'retro' ? 6 : 0,
-    ...HERO_LIGHT,
+    ...HERO_LIGHT, ...opts.look,
   }
   // For tuning: ?gemlook=<JSON> overrides any look settings on the page.
   try { Object.assign(p, JSON.parse(new URLSearchParams(location.search).get('gemlook') ?? '{}')) } catch {}
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' })
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !!opts.transparent, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1)) // it fills the screen: 1x is plenty
   renderer.toneMapping = THREE.NeutralToneMapping
 
@@ -79,6 +85,16 @@ export function mountHeroGem(canvas: HTMLCanvasElement, opts: HeroGemOptions): (
   finish.uniforms.uFalloff.value = 1
   finish.uniforms.uLevels.value = p.ditherLevels
   composer.addPass(finish)
+  // On black, the image is light added to whatever is behind it: as premultiplied color, that's
+  // the same picture with its brightest channel as alpha.
+  if (opts.transparent) {
+    renderer.setClearColor(0x000000, 0)
+    composer.addPass(new ShaderPass({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main() { vec3 c = texture2D(tDiffuse, vUv).rgb; gl_FragColor = vec4(c, max(c.r, max(c.g, c.b))); }',
+    }))
+  }
 
   let seed = 0
   function sample(weight: number) {
@@ -118,7 +134,7 @@ export function mountHeroGem(canvas: HTMLCanvasElement, opts: HeroGemOptions): (
   function pose(t: number) {
     gem.rotation.set(
       D(p.tilt + 14 * Math.sin(t * 0.06) + lean.y * 18),
-      D(t * 2.4 + spinAngle + lean.x * 22),
+      D(t * (opts.turn ?? 2.4) + spinAngle + lean.x * 22),
       D(9 * Math.sin(t * 0.04 + 1.3) - lean.x * 8),
     )
     gem.updateMatrixWorld()
