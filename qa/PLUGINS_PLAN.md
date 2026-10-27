@@ -17,9 +17,10 @@ Yes, on OBS 32 libobs. `obs_add_module_path(bin, data)` before `obs_load_all_mod
 adds a search path, and `%module%` in the path works the same way as OBS's own
 `%ProgramData%/obs-studio/plugins/%module%/bin/64bit` user-plugin path. Things that block
 or limit a plugin:
-1. **obs-frontend-api.dll** is not in LOBS's engine. Any plugin that imports it (docks,
-   menu items, most "tools") fails `LoadLibrary` with error 126. That's the line between
-   plugins that can work and plugins that can't. We report it as "needs OBS's window".
+1. **obs-frontend-api.dll** (corrected after testing): the engine does ship it
+   (`bin/64bit`), but it only forwards calls to a registered frontend, and LOBS registers none.
+   So plugins that use it still load; their docks, menu items and event hooks do nothing
+   (the log says "Tried to call obs_frontend_... with no callbacks!"). See "Next session".
 2. **Qt.** LOBS ships Qt 6.11.1; OBS 32 plugins are built with OBS's Qt 6.8. Qt 6 keeps
    binary compatibility going forward, so a plugin built for 6.8 can run on 6.11. But LOBS
    doesn't ship every Qt module (e.g. `Qt6Widgets`), and a plugin's own `QDialog`
@@ -140,3 +141,17 @@ encoders (they load and work, but aren't offered in the Stream/Recording UI), ma
   Add Source shows Source Clone with the plugin icon. All 8 stories pass.
 - Run it: `$env:LOBS_PLUGINS_DIR = "$PWD\qa\runs\plugins"; qa\run.ps1 95-plugins` (the first
   launch installs from qa/plugins/*.zip, the second checks).
+
+## Next session: plugins that add docks
+Register LOBS as the frontend with `obs_frontend_set_callbacks_internal()` (what OBS's own app
+does), answering the calls plugins use:
+- `obs_frontend_add_dock_by_id(id, title, QWidget*)`: show the widget in a LOBS window (LOBS's
+  KDDockWidgets is the Qt Quick flavor, so likely a floating window first). Needs LOBS to start
+  as a QApplication; Qt6Widgets.dll already ships in the QA build.
+- Tools menu items to a Plugins menu; events (scene changed, stream or record started, exit)
+  from LOBS's state; scene, recording and streaming queries and controls mapped onto the engine;
+  per-plugin config files.
+- Calls tied to OBS's window (main window, preview, Studio Mode) return a safe empty answer, and
+  the Plugins page says the plugin is partly supported.
+Start with a spike: docks, menus and events only, tested on one popular dock plugin (ask before
+downloading it). Also still open: plugin transitions, and plugins on the macOS branch.
