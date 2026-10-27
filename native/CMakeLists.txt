@@ -48,6 +48,7 @@ qt_add_executable(LOBS WIN32 MACOSX_BUNDLE
     src/rows_model.cpp
     src/window_chrome.h
     src/captions.cpp src/captions.h
+    src/plugins.cpp src/plugins.h
     src/crash_report.cpp src/crash_report.h
     src/app_updater.cpp src/app_updater.h
     src/dock_tabs.h
@@ -79,6 +80,7 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/AudioSettings.qml qml/AudioMath.js qml/InlineRename.qml qml/StatsView.qml qml/CaptionsPanel.qml
     qml/SettingsPage.qml qml/MixerView.qml qml/FIcon.qml qml/FHelp.qml qml/FScrollView.qml qml/CanvasArea.qml qml/StatusBar.qml qml/OutputControls.qml qml/AssetMouse.qml qml/MeterFader.qml qml/ToolTipStyle.qml qml/SourceFields.qml qml/BrowserOptions.qml qml/SourceSection.qml qml/FFontPicker.qml qml/FColorField.qml qml/FSearchField.qml qml/GraphicTools.qml
         qml/TransitionsDialog.qml
+        qml/ObsProperties.qml
         qml/NewProjectDialog.qml
         qml/SetupWizard.qml
         qml/TwitchPanel.qml

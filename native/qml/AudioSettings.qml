@@ -154,6 +154,11 @@ ColumnLayout {
                         onReleased: (v) => app.setAudioFilterValue(au.s.id, fxCard.index, p.key, v, true)
                     }
                 }
+                ObsProperties {
+                    visible: !!fxCard.fx.obs
+                    active: visible
+                    scope: "audio"; targetId: au.s.id; index: fxCard.index
+                }
                 Text {
                     visible: !fxCard.fx.known
                     Layout.fillWidth: true; wrapMode: Text.WordWrap

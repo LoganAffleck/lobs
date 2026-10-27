@@ -11,6 +11,7 @@
 
 #include "permissions.h"
 #include "platform.h"
+#include "plugins.h"
 
 #include <QDir>
 #include <QDateTime>
@@ -44,10 +45,34 @@
 
 using namespace lobs;
 
+// A plugin's type ("obs:<id>") as OBS names it, or empty when its plugin isn't loaded.
+static QString pluginTypeLabel(const QString &type)
+{
+	const char *name = type.startsWith("obs:") ? obs_source_get_display_name(type.mid(4).toUtf8().constData()) : nullptr;
+	return name ? QString::fromUtf8(name) : QString();
+}
+
 static QString filterLabel(const QString &type)
 {
+	if (type.startsWith("obs:")) {
+		const QString l = pluginTypeLabel(type);
+		return l.isEmpty() ? type.mid(4) + " (plugin not loaded)" : l;
+	}
 	const VfxType *t = videoFx(type);
 	return t ? t->label : type;
+}
+
+// Plugin source kinds for kindInfo: named by OBS, sized by the source itself.
+static void registerPluginKinds()
+{
+	for (const QString &id : lobs::plugins::inputTypes()) {
+		const QByteArray i = id.toUtf8();
+		const uint32_t flags = obs_get_source_output_flags(i.constData());
+		if (flags & (OBS_SOURCE_CAP_DISABLED | OBS_SOURCE_DEPRECATED))
+			continue;
+		const char *name = obs_source_get_display_name(i.constData());
+		lobs::pluginKinds()["obs:" + id] = {name ? QString::fromUtf8(name) : id, "puzzle", bool(flags & OBS_SOURCE_VIDEO), bool(flags & OBS_SOURCE_AUDIO), 0, 0};
+	}
 }
 
 static Doc loadDoc(const QString &path)
@@ -138,6 +163,7 @@ void App::fillMissingDevices()
 App::App(Engine *engine, const QString &docPath, QObject *parent)
 	: QObject(parent), m_engine(engine), m_store(withDefaultDevices(loadDoc(docPath), engine)), m_docPath(docPath)
 {
+	registerPluginKinds();
 	connect(&m_store, &Store::changed, this, &App::onStoreChanged);
 	for (const QString &id : QSettings().value("ui/layers/collapsed").toStringList())
 		m_collapsedGroups.insert(id);
@@ -586,7 +612,8 @@ QVariantMap App::inspector() const
 						params << QVariantMap{{"key", p.key}, {"label", p.label}, {"kind", p.kind}, {"value", videoFxValue(f.settings, p)},
 								      {"min", p.min}, {"max", p.max}, {"decimals", p.decimals}, {"scale", p.scale}, {"suffix", p.suffix},
 								      {"options", p.options}, {"fileFilter", p.fileFilter}, {"visible", videoFxParamActive(f.settings, *t, p)}};
-				fs << QVariantMap{{"type", f.type}, {"label", filterLabel(f.type)}, {"enabled", f.enabled}, {"params", params}};
+				fs << QVariantMap{{"type", f.type}, {"label", filterLabel(f.type)}, {"enabled", f.enabled}, {"params", params},
+						  {"obs", f.type.startsWith("obs:")}, {"loaded", !f.type.startsWith("obs:") || !pluginTypeLabel(f.type).isEmpty()}, {"layer", i.id}};
 			}
 			m["filters"] = fs;
 			m["source"] = sourceInfo(s); // Source section at the top of the layer inspector
@@ -619,7 +646,163 @@ QVariantList App::filterTypes() const
 	QVariantList out;
 	for (const VfxType &t : videoFxTypes())
 		out << QVariantMap{{"name", t.label}, {"value", t.type}};
+	// Plugins' video filters, after LOBS's own.
+	for (const QString &id : lobs::plugins::filterTypes()) {
+		const uint32_t flags = obs_get_source_output_flags(id.toUtf8().constData());
+		if ((flags & OBS_SOURCE_VIDEO) && !(flags & (OBS_SOURCE_CAP_DISABLED | OBS_SOURCE_DEPRECATED)))
+			out << QVariantMap{{"name", pluginTypeLabel("obs:" + id) + " (plugin)"}, {"value", "obs:" + id}};
+	}
 	return out;
+}
+
+QVariantList App::plugins() const
+{
+	const auto names = [](const QStringList &ids) {
+		QStringList n;
+		for (const QString &id : ids) {
+			const QString l = pluginTypeLabel("obs:" + id);
+			n << (l.isEmpty() ? id : l);
+		}
+		return n;
+	};
+	QVariantList out;
+	for (const lobs::plugins::Plugin &p : lobs::plugins::list())
+		out << QVariantMap{{"id", p.name}, {"name", p.name}, {"title", p.title}, {"version", p.version}, {"folder", QDir::toNativeSeparators(p.folder)},
+				   {"status", p.status}, {"reason", p.reason}, {"sources", names(p.sources)}, {"filters", names(p.filters)},
+				   {"transitions", names(p.transitions)}, {"other", p.other}, {"sourceIds", p.sources}, {"filterIds", p.filters}};
+	return out;
+}
+
+bool App::pluginsNeedRestart() const { return lobs::plugins::restartNeeded(); }
+
+QString App::pluginsFolder() const { return QDir::toNativeSeparators(lobs::plugins::folder()); }
+
+void App::openPluginsFolder() const { QDesktopServices::openUrl(QUrl::fromLocalFile(lobs::plugins::folder())); }
+
+QString App::addPlugin(const QString &pathOrUrl)
+{
+	const QUrl url(pathOrUrl);
+	const QString path = url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
+	QStringList names;
+	const QString err = lobs::plugins::install(path, &names);
+	blog(err.isEmpty() ? LOG_INFO : LOG_WARNING, "[lobs] add plugin %s: %s", path.toUtf8().constData(),
+	     (err.isEmpty() ? names.join(", ") : err).toUtf8().constData());
+	emit pluginsChanged();
+	return err;
+}
+
+QString App::removePlugin(const QString &name)
+{
+	const QString err = lobs::plugins::remove(name);
+	emit pluginsChanged();
+	return err;
+}
+
+void App::setPluginEnabled(const QString &name, bool on)
+{
+	lobs::plugins::setEnabled(name, on);
+	emit pluginsChanged();
+}
+
+QVariantList App::pluginSourceTypes() const
+{
+	registerPluginKinds();
+	QVariantList out;
+	for (auto it = lobs::pluginKinds().constBegin(); it != lobs::pluginKinds().constEnd(); ++it)
+		out << QVariantMap{{"kind", it.key()}, {"label", it->label}, {"icon", it->icon}, {"video", it->video}};
+	std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) { return a.toMap()["label"].toString().localeAwareCompare(b.toMap()["label"].toString()) < 0; });
+	return out;
+}
+
+// The live OBS object a properties editor is for (borrowed), or null.
+static obs_source_t *propertiesTarget(const Engine *engine, const Doc &d, const QString &scope, const QString &id, int index)
+{
+	if (scope == "source")
+		return engine->inputSource(id);
+	if (scope == "filter" && d.instances.contains(id)) {
+		const QVector<Filter> fs = d.filters(d.instances[id]);
+		return index >= 0 && index < fs.size() ? engine->layerFilter(id, fs[index].id) : nullptr;
+	}
+	if (scope == "audio" && d.sources.contains(id)) {
+		const QVector<Filter> &fs = d.sources[id].audio.filters;
+		return index >= 0 && index < fs.size() ? engine->audioFilter(id, fs[index].id) : nullptr;
+	}
+	return nullptr;
+}
+
+QVariantList App::obsProperties(const QString &scope, const QString &id, int index) const
+{
+	return lobs::plugins::describe(propertiesTarget(m_engine, doc(), scope, id, index));
+}
+
+void App::setObsProperty(const QString &scope, const QString &id, int index, const QString &key, const QVariant &value, bool final)
+{
+	obs_source_t *target = propertiesTarget(m_engine, doc(), scope, id, index);
+	if (!target)
+		return;
+	const QVariant v = lobs::plugins::toObsValue(target, key, value);
+	const QVariantMap also = lobs::plugins::modified(target, key, v); // what the plugin's callback changed
+	const auto put = [&](QVariantMap &st) {
+		st[key] = v;
+		for (auto it = also.begin(); it != also.end(); ++it)
+			st[it.key()] = it.value();
+	};
+	const QString editKey = QString("obsprop:%1:%2:%3:%4").arg(scope, id).arg(index).arg(key);
+	if (scope == "source") {
+		if (!liveSourceEditAllowed(id))
+			return;
+		liveEdit(editKey, "Edit " + doc().sources.value(id).name, [&](Doc &d) { put(d.sources[id].settings); }, final);
+	} else if (scope == "filter") {
+		if (!liveEditAllowed({id}))
+			return;
+		liveEdit(editKey, "Edit filter", [&](Doc &d) {
+			QVector<Filter> fs = d.filters(d.instances[id]);
+			if (index >= 0 && index < fs.size()) {
+				put(fs[index].settings);
+				d.setFilters(id, fs);
+			}
+		}, final);
+	} else if (scope == "audio") {
+		liveEdit(editKey, "Edit audio effect", [&](Doc &d) {
+			QVector<Filter> &fs = d.sources[id].audio.filters;
+			if (index >= 0 && index < fs.size())
+				put(fs[index].settings);
+		}, final);
+	}
+}
+
+// A new plugin filter or source gets what OBS's properties view would set on opening, as part
+// of the step that added it.
+void App::settleObsLists(const QString &scope, const QString &id, int index)
+{
+	const QVariantMap fix = lobs::plugins::settleLists(propertiesTarget(m_engine, doc(), scope, id, index));
+	if (fix.isEmpty())
+		return;
+	m_store.amend([&](Doc &d) {
+		const auto put = [&](QVariantMap &st) {
+			for (auto it = fix.begin(); it != fix.end(); ++it)
+				st[it.key()] = it.value();
+		};
+		if (scope == "source" && d.sources.contains(id)) {
+			put(d.sources[id].settings);
+		} else if (scope == "filter" && d.instances.contains(id)) {
+			QVector<Filter> fs = d.filters(d.instances[id]);
+			if (index >= 0 && index < fs.size()) {
+				put(fs[index].settings);
+				d.setFilters(id, fs);
+			}
+		} else if (scope == "audio" && d.sources.contains(id)) {
+			QVector<Filter> &fs = d.sources[id].audio.filters;
+			if (index >= 0 && index < fs.size())
+				put(fs[index].settings);
+		}
+	});
+}
+
+void App::clickObsProperty(const QString &scope, const QString &id, int index, const QString &key)
+{
+	if (lobs::plugins::clickButton(propertiesTarget(m_engine, doc(), scope, id, index), key))
+		emit docChanged(); // the editor lists the properties again
 }
 
 // ---------- scenes ----------
@@ -1018,6 +1201,8 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 		if (place && k.video && d.scenes.contains(m_editScene))
 			iid = d.placeSource(m_editScene, sid).id;
 	});
+	if (kind.startsWith("obs:"))
+		settleObsLists("source", sid, -1);
 	if (!iid.isEmpty()) {
 		m_selection = {iid}, m_poolSelection.clear();
 		if (k.w <= 0)
@@ -1784,11 +1969,13 @@ void App::addFilter(const QString &type)
 	if (!liveEditAllowed(m_selection))
 		return;
 	const QString id = singleSelection();
-	if (id.isEmpty() || !videoFx(type))
+	if (id.isEmpty() || !(videoFx(type) || !pluginTypeLabel(type).isEmpty()))
 		return;
 	QVector<Filter> fs = doc().filters(doc().instances[id]);
 	fs << Filter{uid("flt_"), type, true, videoFxDefaults(type)};
 	m_store.commit("Add " + filterLabel(type), [&](Doc &d) { d.setFilters(id, fs); });
+	if (type.startsWith("obs:"))
+		settleObsLists("filter", id, int(fs.size()) - 1);
 }
 
 void App::removeFilter(int index)
@@ -3485,8 +3672,11 @@ QVariantList App::mixer() const
 				for (const FxParam &p : t->params)
 					params << QVariantMap{{"key", p.key}, {"label", p.label}, {"suffix", p.suffix}, {"min", p.min}, {"max", p.max},
 							      {"decimals", p.decimals}, {"value", f.settings.value(p.key, p.def).toDouble()}};
-			const QString label = t ? t->label : f.settings.value("_label", f.type.mid(4)).toString();
-			fx << QVariantMap{{"type", f.type}, {"label", label}, {"enabled", f.enabled}, {"params", params}, {"known", t != nullptr}};
+			const QString plugin = t ? QString() : pluginTypeLabel(f.type);
+			const QString label = t ? t->label : !plugin.isEmpty() ? plugin : f.settings.value("_label", f.type.mid(4)).toString();
+			// A plugin's filter gets the generic editor; one imported from OBS whose module LOBS ships doesn't.
+			fx << QVariantMap{{"type", f.type}, {"label", label}, {"enabled", f.enabled}, {"params", params}, {"known", t != nullptr || !plugin.isEmpty()},
+					  {"obs", !plugin.isEmpty()}};
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
 				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"global", global}, {"warnings", warn}, {"fx", fx},
@@ -3501,15 +3691,24 @@ QVariantList App::audioFxTypes() const
 	for (const FxType &t : lobs::audioFxTypes())
 		if (obs_source_get_display_name(t.obsId.toUtf8().constData())) // e.g. no NVIDIA effects on macOS
 			out << QVariantMap{{"type", t.type}, {"label", t.label}};
+	// Plugins' audio filters, after LOBS's own.
+	for (const QString &id : lobs::plugins::filterTypes()) {
+		const uint32_t flags = obs_get_source_output_flags(id.toUtf8().constData());
+		if ((flags & OBS_SOURCE_AUDIO) && !(flags & (OBS_SOURCE_VIDEO | OBS_SOURCE_CAP_DISABLED | OBS_SOURCE_DEPRECATED)))
+			out << QVariantMap{{"type", "obs:" + id}, {"label", pluginTypeLabel("obs:" + id) + " (plugin)"}};
+	}
 	return out;
 }
 
 void App::addAudioFilter(const QString &sourceId, const QString &type)
 {
 	const FxType *t = audioFx(type);
-	if (!t || !doc().sources.contains(sourceId))
+	const QString label = t ? t->label : pluginTypeLabel(type);
+	if (label.isEmpty() || !doc().sources.contains(sourceId))
 		return;
-	m_store.commit("Add " + t->label, [&](Doc &d) { d.sources[sourceId].audio.filters << Filter{uid("afx_"), type, true, audioFxDefaults(type)}; });
+	m_store.commit("Add " + label, [&](Doc &d) { d.sources[sourceId].audio.filters << Filter{uid("afx_"), type, true, audioFxDefaults(type)}; });
+	if (type.startsWith("obs:"))
+		settleObsLists("audio", sourceId, int(doc().sources[sourceId].audio.filters.size()) - 1);
 }
 
 void App::removeAudioFilter(const QString &sourceId, int index)

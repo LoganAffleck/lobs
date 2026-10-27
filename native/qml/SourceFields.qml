@@ -180,6 +180,12 @@ ColumnLayout {
         text: sf.st.file || ""
         onEditingFinished: if (text !== (sf.st.file || "")) app.setSourceSetting(sf.d.id, "file", text)
     }
+    // A plugin's source: its own settings, from OBS.
+    ObsProperties {
+        visible: String(sf.d.kind || "").startsWith("obs:")
+        active: visible && sf.active
+        scope: "source"; targetId: visible ? sf.d.id : ""
+    }
     // Playback for a video or audio file: play/pause, from the start, stop, seek.
     MediaControls {
         visible: sf.d.kind === "media" && sf.active

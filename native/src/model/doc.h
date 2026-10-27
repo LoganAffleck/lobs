@@ -125,6 +125,7 @@ struct KindInfo {
 	int w, h; // default size; 0 = canvas
 };
 const KindInfo &kindInfo(const QString &kind);
+QHash<QString, KindInfo> &pluginKinds(); // "obs:<id>" sources from plugins, filled in at startup
 QStringList allKinds();
 
 struct Doc {

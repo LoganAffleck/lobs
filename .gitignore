@@ -29,6 +29,8 @@ native/resources/icon-preview.html
 # QA build and run output
 native/build-qa/
 qa/runs/
+# Third-party OBS plugin zips for qa/scenarios/95-plugins.js (downloaded, not committed)
+qa/plugins/
 
 # Website
 web/node_modules/

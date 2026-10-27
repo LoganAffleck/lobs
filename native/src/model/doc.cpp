@@ -65,8 +65,21 @@ const KindInfo &kindInfo(const QString &kind)
 		{"scene", {"Scene", "clapperboard", true, false, 0, 0}}, // another scene, shown whole (settings: scene id)
 	};
 	static const KindInfo unknown{"Unknown", "?", true, false, 640, 360};
+	static const KindInfo missingPlugin{"Plugin source (not loaded)", "puzzle", true, false, 0, 0};
 	auto it = info.find(kind);
-	return it == info.end() ? unknown : *it;
+	if (it != info.end())
+		return *it;
+	if (kind.startsWith("obs:")) {
+		const auto p = pluginKinds().constFind(kind);
+		return p == pluginKinds().constEnd() ? missingPlugin : *p;
+	}
+	return unknown;
+}
+
+QHash<QString, KindInfo> &pluginKinds()
+{
+	static QHash<QString, KindInfo> kinds;
+	return kinds;
 }
 
 QStringList allKinds()

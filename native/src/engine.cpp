@@ -2,6 +2,7 @@
 #include "model/audio_fx.h"
 #include "model/video_fx.h"
 #include "permissions.h"
+#include "plugins.h"
 #include <QUuid>
 #include "platform.h"
 #include <QtGlobal>
@@ -134,6 +135,7 @@ bool Engine::start(const QString &runtimeRoot)
 	}
 	// Hotkeys work while another app (a game) has focus, like OBS.
 	obs_hotkey_enable_background_press(true);
+	lobs::plugins::loadAll(); // third-party plugins, one at a time (see plugins.h)
 	obs_log_loaded_modules();
 	obs_post_load_modules();
 	lobs_register_instance_source();
@@ -190,6 +192,13 @@ static const char *obsKindOrNull(const QString &kind)
 		{"browser", "browser_source"},      {"color", "color_source_v3"},       {"text", kTextSource},
 		{"shape", "lobs_frame"}, // drawn per layer (see apply); the input itself stays empty
 	};
+	if (kind.startsWith("obs:")) { // a plugin's source, by its OBS id
+		static QHash<QString, QByteArray> ids;
+		auto it = ids.find(kind);
+		if (it == ids.end())
+			it = ids.insert(kind, kind.mid(4).toUtf8());
+		return obs_source_get_display_name(it->constData()) ? it->constData() : nullptr;
+	}
 	return map.value(kind, nullptr);
 }
 
@@ -260,6 +269,8 @@ static QJsonObject textSettings(const Source &s, int pixelHeight)
 static QJsonObject inputSettings(const Doc &doc, const Source &s)
 {
 	const QVariantMap &st = s.settings;
+	if (s.kind.startsWith("obs:"))
+		return QJsonObject::fromVariantMap(st); // the plugin's own settings, as OBS keeps them
 	if (s.kind == "color")
 		return {{"color", hexToAbgr(st.value("color", "#000000").toString())}, {"width", doc.canvasW}, {"height", doc.canvasH}};
 	if (s.kind == "text")
@@ -307,6 +318,10 @@ static obs_data_t *toData(const QJsonObject &o)
 
 static obs_data_t *filterData(const Doc &doc, const Filter &f, QString &kind)
 {
+	if (f.type.startsWith("obs:")) { // a plugin's filter: its settings as OBS keeps them
+		kind = f.type.mid(4);
+		return obs_source_get_display_name(kind.toUtf8().constData()) ? toData(QJsonObject::fromVariantMap(f.settings)) : nullptr;
+	}
 	const VfxType *t = videoFx(f.type);
 	if (!t)
 		return nullptr;
@@ -1579,6 +1594,29 @@ void Engine::applyAudioFilters(obs_source_t *in, const QString &sourceId, const 
 			obs_source_set_enabled(fsrc, f.enabled);
 		obs_source_release(fsrc);
 	}
+}
+
+obs_source *Engine::inputSource(const QString &sourceId) const
+{
+	return m_inputs.value(sourceId);
+}
+
+obs_source *Engine::layerFilter(const QString &instanceId, const QString &filterId) const
+{
+	const auto it = m_items.constFind(instanceId);
+	if (it == m_items.constEnd() || !it->inst)
+		return nullptr;
+	obs_source_t *f = obs_source_get_filter_by_name(it->inst, filterId.toUtf8().constData());
+	obs_source_release(f); // borrowed: the layer keeps it
+	return f;
+}
+
+obs_source *Engine::audioFilter(const QString &sourceId, const QString &filterId) const
+{
+	obs_source_t *in = m_inputs.value(sourceId);
+	obs_source_t *f = in ? obs_source_get_filter_by_name(in, filterId.toUtf8().constData()) : nullptr;
+	obs_source_release(f);
+	return f;
 }
 
 QJsonObject Engine::inputFilters() const

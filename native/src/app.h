@@ -171,6 +171,20 @@ public:
 	Q_INVOKABLE void setVisibleFlag(bool visible);
 	Q_INVOKABLE void fit(const QString &mode);
 	Q_INVOKABLE QVariantList filterTypes() const; // [{name, value}] for the Add filter menu
+	// Third-party OBS plugins (Settings > Plugins; see plugins.h).
+	Q_INVOKABLE QVariantList plugins() const;
+	Q_INVOKABLE bool pluginsNeedRestart() const;
+	Q_INVOKABLE QString pluginsFolder() const;
+	Q_INVOKABLE void openPluginsFolder() const;
+	Q_INVOKABLE QString addPlugin(const QString &pathOrUrl); // a folder or .zip; returns an error or empty
+	Q_INVOKABLE QString removePlugin(const QString &name);
+	Q_INVOKABLE void setPluginEnabled(const QString &name, bool on);
+	Q_INVOKABLE QVariantList pluginSourceTypes() const; // [{kind, label, icon}] for Add Source
+	// A plugin source's or filter's own settings, from obs_properties. scope: "source" (id = source),
+	// "filter" (id = layer, index = filter), "audio" (id = source, index = audio filter).
+	Q_INVOKABLE QVariantList obsProperties(const QString &scope, const QString &id, int index) const;
+	Q_INVOKABLE void setObsProperty(const QString &scope, const QString &id, int index, const QString &key, const QVariant &value, bool final);
+	Q_INVOKABLE void clickObsProperty(const QString &scope, const QString &id, int index, const QString &key);
 	Q_INVOKABLE void addFilter(const QString &type);
 	Q_INVOKABLE void removeFilter(int index);
 	Q_INVOKABLE void toggleFilter(int index);
@@ -283,6 +297,7 @@ public:
 	// The same check for adding layers to a scene, and for changing a source that is on air.
 	bool liveSceneEditAllowed(const QString &sceneId);
 	bool liveSourceEditAllowed(const QString &sourceId);
+	void settleObsLists(const QString &scope, const QString &id, int index); // see plugins::settleLists
 	QVariantMap streamStats() const { return m_engine->streamStats(); }
 	QVariantMap settings() const;
 	QVariantList encoders() const { return m_engine->encoders(); }
@@ -459,6 +474,7 @@ public:
 
 signals:
 	void docChanged();
+	void pluginsChanged();
 	void recentShowsChanged();
 	void clipboardChanged();
 	// The big lists, each emitted only when its contents changed (so QML rebuilds only those).

@@ -122,7 +122,7 @@ ApplicationWindow {
                 Platform.MenuItem { text: "Save"; shortcut: "Ctrl+S"; onTriggered: win.save() }
                 Platform.MenuItem { text: "Save As…"; shortcut: "Ctrl+Shift+S"; onTriggered: saveDialog.open() }
                 // Moved to the LOBS menu by macOS.
-                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(6) }
+                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(7) }
                 Platform.MenuItem { text: "Settings…"; shortcut: "Ctrl+,"; role: Platform.MenuItem.PreferencesRole; onTriggered: settingsPage.show() }
             }
             Platform.Menu {
@@ -2064,6 +2064,17 @@ ApplicationWindow {
                                     Body { text: card.modelData.label; font.weight: 550; Layout.fillWidth: true; Layout.leftMargin: 4 }
                                     FButton { iconName: "trash-2"; variant: "ghost"; onClicked: app.removeFilter(card.index); tip: "Remove filter" }
                                 }
+                                // A plugin's filter: its own settings, from OBS.
+                                ObsProperties {
+                                    visible: !!card.modelData.obs && !!card.modelData.loaded && card.visible
+                                    active: visible
+                                    scope: "filter"; targetId: card.modelData.layer || ""; index: card.index
+                                }
+                                Caption {
+                                    visible: !!card.modelData.obs && !card.modelData.loaded
+                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    text: "Its plugin isn't loaded, so this filter does nothing. Add the plugin in Settings > Plugins."
+                                }
                                 Repeater {
                                     id: paramRows
                                     // Kept like the cards: a filter with fewer settings hides the rest.
@@ -2318,6 +2329,7 @@ ApplicationWindow {
                     model: [["camera", "video", "Camera"], ["display", "monitor", "Display"], ["window", "app-window", "Window"], ["game", "gamepad-2", "Game"],
                             ["browser", "globe", "Browser"], ["mic", "mic", "Mic"], ["desktop_audio", "volume-2", "Sound"]]
                            .filter(k => app.kindAvailable(k[0])) // no game capture on macOS
+                           .concat(addDialog.visible ? app.pluginSourceTypes().map(t => [t.kind, t.icon, t.label]) : []) // from plugins (Settings > Plugins)
                     delegate: Rectangle {
                         required property var modelData
                         readonly property bool on: addDialog.kind === modelData[0]
@@ -2329,7 +2341,8 @@ ApplicationWindow {
                         Column {
                             anchors.centerIn: parent; spacing: 4
                             FIcon { name: modelData[1]; size: 18; color: on ? Pal.fg : Pal.muted; anchors.horizontalCenter: parent.horizontalCenter }
-                            Text { text: modelData[2]; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: on ? 550 : 400; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: modelData[2]; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: on ? 550 : 400; anchors.horizontalCenter: parent.horizontalCenter
+                                   width: Math.min(implicitWidth, 88); elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter }
                         }
                         MouseArea { Accessible.role: Accessible.Button; Accessible.name: String(modelData[2]); id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: { addDialog.kind = modelData[0]; Qt.callLater(addDialog.refreshDevices) } }
                     }

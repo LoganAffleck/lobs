@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 // Full-page settings: sidebar sections on the left, grouped cards on the right.
 // Every change saves immediately (the stream key has an explicit save, since it's a secret).
@@ -26,6 +27,7 @@ Rectangle {
         { title: "Audio", icon: "audio-lines", desc: "Devices for your global mic and desktop audio." },
         { title: "Hotkeys", icon: "keyboard", desc: "Work even while a game has focus." },
         { title: "Updates", icon: "refresh-cw", desc: "New versions of LOBS and its OBS engine." },
+        { title: "Plugins", icon: "puzzle", desc: "OBS plugins that add sources and filters." },
         { title: "About", icon: "info", desc: "Versions, licenses and where LOBS keeps its files." }
     ]
 
@@ -509,9 +511,124 @@ Rectangle {
                         }
                     }
 
+                    // ===== Plugins =====
+                    ColumnLayout {
+                        id: plug
+                        visible: page.section === 6
+                        Layout.fillWidth: true
+                        spacing: 0
+                        property var list: []
+                        property bool restart: false
+                        property string error: ""
+                        function refresh() { list = app.plugins(); restart = app.pluginsNeedRestart() }
+                        function add(url) { error = app.addPlugin(url.toString()); refresh() }
+                        onVisibleChanged: if (visible) { error = ""; refresh() }
+                        Connections { target: app; function onPluginsChanged() { plug.refresh() } }
+                        FileDialog { id: pluginZip; title: "Add a plugin from its .zip"; nameFilters: ["Plugin archives (*.zip)", "All files (*)"]; onAccepted: plug.add(selectedFile) }
+                        FolderDialog { id: pluginDir; title: "Add a plugin from its folder"; onAccepted: plug.add(selectedFolder) }
+                        Rectangle {
+                            visible: plug.restart
+                            Layout.fillWidth: true; Layout.topMargin: 8
+                            implicitHeight: bannerRow.implicitHeight + 20
+                            radius: 12
+                            color: Pal.s3
+                            border.width: 1; border.color: Pal.borderStrong
+                            RowLayout {
+                                id: bannerRow
+                                anchors.fill: parent; anchors.margins: 10; anchors.leftMargin: 16
+                                FIcon { name: "refresh-cw"; color: Pal.fg }
+                                Text { text: "Restart LOBS to apply plugin changes."; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                                FButton { text: "Restart LOBS"; variant: "primary"; visible: Qt.platform.os === "windows"; onClicked: engineUpdater.restartLobs() }
+                            }
+                        }
+                        GroupTitle { text: "Installed" }
+                        Card {
+                            SettingRow {
+                                visible: plug.list.length === 0
+                                divider: false
+                                title: "No plugins"
+                                description: "Add an OBS plugin for 64-bit Windows from its .zip or folder."
+                                Item {}
+                            }
+                            Repeater {
+                                model: plug.list
+                                delegate: SettingRow {
+                                    required property var modelData
+                                    required property int index
+                                    readonly property var pl: modelData
+                                    divider: index > 0
+                                    title: pl.title + (pl.version ? "  " + pl.version : "")
+                                    description: {
+                                        const parts = []
+                                        if (pl.status === "loaded") {
+                                            const adds = []
+                                            if (pl.sources.length) adds.push((pl.sources.length === 1 ? "source: " : "sources: ") + pl.sources.join(", "))
+                                            if (pl.filters.length) adds.push((pl.filters.length === 1 ? "filter: " : "filters: ") + pl.filters.join(", "))
+                                            parts.push("Loaded" + (adds.length ? ". Adds " + adds.join("; ") : ". Adds nothing LOBS can show") + ".")
+                                            if (pl.transitions.length) parts.push("Its transitions (" + pl.transitions.join(", ") + ") aren't in LOBS yet.")
+                                        } else if (pl.status === "failed") {
+                                            parts.push("Didn't load. " + pl.reason)
+                                        } else {
+                                            parts.push(pl.reason)
+                                        }
+                                        parts.push(pl.folder)
+                                        return parts.join("\n")
+                                    }
+                                    Row {
+                                        property bool fillSlot: false
+                                        spacing: 6
+                                        FButton {
+                                            visible: pl.status !== "removing"
+                                            text: pl.status === "disabled" || pl.status === "crashed" ? "Turn on" : "Turn off"
+                                            variant: "ghost"
+                                            onClicked: app.setPluginEnabled(pl.name, pl.status === "disabled" || pl.status === "crashed")
+                                        }
+                                        FButton {
+                                            visible: pl.status !== "removing"
+                                            iconName: "trash-2"; variant: "ghost"; tip: "Remove " + pl.title
+                                            onClicked: plug.error = app.removePlugin(pl.name)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Text {
+                            visible: plug.error.length > 0
+                            Layout.fillWidth: true; Layout.topMargin: 8
+                            wrapMode: Text.WordWrap
+                            color: "#fbbf24"; font.family: Pal.font; font.pixelSize: Pal.body
+                            text: plug.error
+                        }
+                        GroupTitle { text: "Add" }
+                        Card {
+                            SettingRow {
+                                divider: false
+                                title: "Add a plugin"
+                                description: "From the plugin's .zip or its unpacked folder."
+                                Row {
+                                    property bool fillSlot: false
+                                    spacing: 6
+                                    FButton { text: ".zip…"; variant: "secondary"; onClicked: pluginZip.open() }
+                                    FButton { text: "Folder…"; variant: "secondary"; onClicked: pluginDir.open() }
+                                }
+                            }
+                            SettingRow {
+                                title: "Plugins folder"
+                                description: app.pluginsFolder()
+                                FButton { property bool fillSlot: false; text: "Open"; variant: "secondary"; onClicked: app.openPluginsFolder() }
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true; Layout.topMargin: 12
+                            wrapMode: Text.WordWrap
+                            color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+                            text: "Plugins built for OBS 32 that add sources or filters work. Ones that add docks, menus or their own windows to OBS don't load. Their sources show under Plugins in Add Source, and their filters at the end of each Add filter list. A plugin runs inside LOBS, so only add plugins you trust."
+                        }
+                    }
+
                     // ===== About =====
                     ColumnLayout {
-                        visible: page.section === 6
+                        visible: page.section === 7
                         Layout.fillWidth: true
                         spacing: 0
                         GroupTitle { text: "LOBS" }
