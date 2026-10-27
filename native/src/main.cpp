@@ -285,11 +285,9 @@ public:
 		m_engine->stopSharedPreview();
 		dropTextures();
 	}
-	void setSize(QSizeF size)
-	{
-		setWidth(size.width());
-		setHeight(size.height());
-	}
+	// Both at once: a new size changes the preview scale, which re-lays out the box and resizes
+	// this again from inside; separate setWidth/setHeight would then restore the stale height.
+	void setSize(QSizeF size) { QQuickItem::setSize(size); }
 
 protected:
 	void geometryChange(const QRectF &n, const QRectF &o) override
@@ -373,9 +371,11 @@ private:
 			return;
 		const qreal dpr = window()->effectiveDevicePixelRatio();
 		const int pw = int(width() * dpr), ph = int(height() * dpr);
-		m_app->setPreviewSize(QSizeF(pw / dpr, ph / dpr), dpr);
 		m_engine->setPreviewDpr(dpr);
 		m_engine->setSharedPreviewSize(pw, ph);
+		// Last: the new scale re-lays out the box, which can resize this (and sync again) from
+		// inside; anything after it would overwrite that newer size with this one.
+		m_app->setPreviewSize(QSizeF(pw / dpr, ph / dpr), dpr);
 	}
 	// Render thread: the engine's textures, opened on Qt's own device (same GPU, or it fails).
 	bool openTextures()
