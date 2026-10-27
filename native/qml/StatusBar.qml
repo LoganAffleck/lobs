@@ -63,6 +63,7 @@ Rectangle {
         property bool coversPreview: false
         // Only step the native preview aside if this popup actually overlaps it (no flash otherwise).
         function overlapsPreview() {
+            if (app.previewInScene) return false
             const w = parent ? parent.Window.window : null
             const p = w ? w.previewItem : null
             if (!p || !p.visible || !parent) return false

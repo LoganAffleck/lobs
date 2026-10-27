@@ -26,6 +26,7 @@ FButton {
         property bool coversPreview: false
         // True if this popup's rect overlaps the canvas preview (a native window above all QML).
         function overlapsPreview(popup) {
+            if (app.previewInScene) return false
             const w = popup.parent ? popup.parent.Window.window : null
             const p = w ? w.previewItem : null
             if (!p || !p.visible || !popup.parent) return false

@@ -2,9 +2,10 @@ import QtQuick
 import QtQuick.Controls
 
 // Styles and places the one tooltip every control shares (ToolTip.toolTip): a dark card in the
-// app font that wraps long text, kept clear of the canvas preview (a native window above all
-// QML that would cut it off). It flips to whichever side of its control is free; if none is,
-// the preview steps aside while the tooltip shows, as menus do.
+// app font that wraps long text. With the native preview window (above all QML, it would cut the
+// tip off) it's kept clear of the canvas: it flips to whichever side of its control is free; if
+// none is, the preview steps aside while the tooltip shows, as menus do. The in-scene preview
+// needs none of that.
 Item {
     id: ts
     visible: false
@@ -34,7 +35,7 @@ Item {
 
     function place() {
         const t = tip, owner = t ? t.parent : null
-        if (!owner || !previewItem || !previewItem.visible) return
+        if (!owner || !previewItem || !previewItem.visible || app.previewInScene) return // in the scene: nothing to dodge
         const pv = rectOf(previewItem), o = owner.mapToGlobal(0, 0)
         const w = t.width, h = t.height, gap = 6
         // Candidates relative to the owner: above (default), below, left, right, above-left-aligned.

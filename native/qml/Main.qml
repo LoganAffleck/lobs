@@ -261,7 +261,7 @@ ApplicationWindow {
     Item { id: overlayRef; readonly property Item overlay: Overlay.overlay }
     // Safety net for the canvas: if it's stepped aside but nothing is open over it, bring it back.
     Timer {
-        interval: 1000; repeat: true; running: true
+        interval: 1000; repeat: true; running: !app.previewInScene // in the scene it never steps aside
         property int idleChecks: 0
         onTriggered: {
             if (!app.previewHidden || win.dialogOpen) { idleChecks = 0; return }

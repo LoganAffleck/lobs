@@ -132,16 +132,20 @@ Rectangle {
         }
     }
     // The central item is created before it's placed in the window, so wait for one.
-    Image {
+    Loader {
         // Frozen frame of the edited scene, rendered by the engine when the live view steps aside.
+        // Only the native preview window steps aside; the in-scene preview never does.
         parent: preview
         anchors.fill: parent
-        visible: app.previewHidden && status === Image.Ready
-        fillMode: Image.PreserveAspectFit
-        cache: false
-        asynchronous: false
-        sourceSize.width: Math.round(preview.width * Screen.devicePixelRatio)
-        source: app.previewHidden && app.editSceneId ? "image://thumbs/" + app.editSceneId + "?freeze" + app.freezeTick : ""
+        active: !app.previewInScene
+        sourceComponent: Image {
+            visible: app.previewHidden && status === Image.Ready
+            fillMode: Image.PreserveAspectFit
+            cache: false
+            asynchronous: false
+            sourceSize.width: Math.round(preview.width * Screen.devicePixelRatio)
+            source: app.previewHidden && app.editSceneId ? "image://thumbs/" + app.editSceneId + "?freeze" + app.freezeTick : ""
+        }
     }
     // Right-click on the canvas.
     Connections {

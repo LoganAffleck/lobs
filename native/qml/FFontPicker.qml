@@ -62,6 +62,7 @@ FButton {
         }
         property bool coversPreview: false
         function overlapsPreview() {
+            if (app.previewInScene) return false
             const w = fp.Window.window, p = w ? w.previewItem : null
             if (!p || !p.visible) return false
             const a = p.mapToGlobal(0, 0), b = fp.mapToGlobal(x, y)

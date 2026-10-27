@@ -105,8 +105,8 @@ static void logHandler(int level, const char *fmt, va_list args, void *)
 	}
 }
 
-// The preview in the UI's scene: only with LOBS_SCENE_PREVIEW=1 until its crash is fixed.
-static bool scenePreviewEnabled() { return qEnvironmentVariableIntValue("LOBS_SCENE_PREVIEW") == 1; } // opt-in: still crashes now and then
+// The preview in the UI's scene by default; LOBS_NATIVE_PREVIEW=1 asks for the native window.
+static bool scenePreviewEnabled() { return qEnvironmentVariableIntValue("LOBS_NATIVE_PREVIEW") != 1; }
 
 // The canvas's keys: nudge, delete, undo, tools... (the native preview window and PreviewItem).
 bool canvasKey(App *app, QKeyEvent *e)
@@ -717,7 +717,8 @@ int main(int argc, char *argv[])
 #endif
 #ifdef Q_OS_WIN
 	// The preview drawn in the UI scene (PreviewItem) crashes Qt's threaded render loop now and
-	// then (in QRhi::beginFrame); on the GUI thread's loop it doesn't. Set before the app exists.
+	// then (in QRhi::beginFrame); on the GUI thread's loop it doesn't, and costs ~0.6 ms a frame
+	// there. Set before the app exists.
 	if (scenePreviewEnabled() && !qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
 		qputenv("QSG_RENDER_LOOP", "basic");
 #endif

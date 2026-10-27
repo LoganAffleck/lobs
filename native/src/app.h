@@ -246,8 +246,17 @@ public:
 	Q_PROPERTY(int freezeTick READ freezeTick NOTIFY previewHiddenChanged)
 	bool previewHidden() const { return m_previewHidden; }
 	int freezeTick() const { return m_freezeTick; }
-	// Drawn in the UI's scene (PreviewItem): popups draw over it, so it never steps aside.
-	void setPreviewInScene(bool on) { m_previewInScene = on; updatePreviewHidden(); }
+	// Drawn in the UI's scene (PreviewItem): popups draw over it, so it never steps aside and
+	// QML skips its overlap checks, tooltip dodging and frozen still.
+	Q_PROPERTY(bool previewInScene READ previewInScene NOTIFY previewInSceneChanged)
+	void setPreviewInScene(bool on)
+	{
+		if (on != m_previewInScene) {
+			m_previewInScene = on;
+			emit previewInSceneChanged();
+		}
+		updatePreviewHidden();
+	}
 	bool previewInScene() const { return m_previewInScene; }
 	void updatePreviewHidden()
 	{
@@ -479,6 +488,7 @@ signals:
 	void thumbTickChanged();
 	void previewVisibilityRequested(bool visible);
 	void previewHiddenChanged();
+	void previewInSceneChanged();
 	void streamStatsChanged();
 	void settingsChanged();
 	void levelsChanged();

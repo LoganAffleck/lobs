@@ -31,8 +31,10 @@ story("PV-02", "A menu over the canvas leaves the video live", () => {
 	sel(k); app.fit("fill"); app.clearSelection();
 	t.wait(600);
 	t.canvasClick(960, 540); t.wait(200);
-	const ws = t.windowSize();
-	t.clickAt(Math.round(ws.w / 2), Math.round(ws.h * 0.45), "", true); t.wait(500); // right-click mid-canvas
+	// Right-click the middle of the preview item itself (the native window's host when in-scene is off).
+	const pv = t.items("objectName=previewItem").concat(t.items("objectName=preview"))[0];
+	check("found the preview", !!pv);
+	t.clickAt(Math.round(pv.x + pv.w / 2), Math.round(pv.y + pv.h / 2), "", true); t.wait(500);
 	check("a menu is open", t.items("Open projector").length > 0);
 	check("preview still not hidden", !app.previewHidden);
 	const before = redShare(t.grab("pv02-menu-red.png"));

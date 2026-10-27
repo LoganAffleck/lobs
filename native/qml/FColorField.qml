@@ -85,6 +85,7 @@ FButton {
                 // Applied when you let go, so one drag is one undo step.
                 function commit() { cf.picked(current); hex.text = current.toUpperCase() }
                 function overlapsPreview() {
+                    if (app.previewInScene) return false
                     const w = cf.Window.window, p = w ? w.previewItem : null
                     if (!p || !p.visible) return false
                     const a = p.mapToGlobal(0, 0), b = cf.mapToGlobal(x, y)

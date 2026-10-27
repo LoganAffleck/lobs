@@ -16,6 +16,7 @@ Item {
     property var panels: []          // [{ dock, guest, icon }]
     property var dragged: null       // entry from panels
     property bool active: false
+    property bool coveredPreview: false // this drag stepped the native preview aside
     property var target: null        // { kind: "side"|"tab"|"outer", entry, location, rect }
 
     readonly property int tabStrip: 36
@@ -64,7 +65,8 @@ Item {
         chipIcon.name = p.icon
         chipText.text = p.dock.title
         active = true
-        app.popupOpened() // the native preview would cover the overlay
+        coveredPreview = !app.previewInScene
+        if (coveredPreview) app.popupOpened() // the native preview would cover the overlay
         move(gx, gy)
         return true
     }
@@ -143,7 +145,7 @@ Item {
         active = false
         target = null
         dragged = null
-        app.popupClosed()
+        if (coveredPreview) { coveredPreview = false; app.popupClosed() }
     }
 
     Keys.onEscapePressed: cancel()
