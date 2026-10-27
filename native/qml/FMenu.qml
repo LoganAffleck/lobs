@@ -3,6 +3,9 @@ import QtQuick.Controls
 
 // Dropdown menu: one surface step above the page, rounded, rows highlight on hover.
 Menu {
+    // Drawn in the window's own scene, never as a separate OS window: a new popup window
+    // raced the main window's rendering (null swapchain in QRhi::beginFrame / grabWindow).
+    popupType: Popup.Item
     id: m
     padding: 4
     z: 1000 // above full-page overlays like Settings

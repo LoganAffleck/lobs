@@ -2,6 +2,7 @@
 #include "model/audio_fx.h"
 #include "model/video_fx.h"
 #include "permissions.h"
+#include <QUuid>
 #include "platform.h"
 #include <QtGlobal>
 #ifdef Q_OS_WIN
@@ -270,8 +271,11 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 		// is routed through libobs so it shows up in the mixer like any other source.
 		const int w = st.value("width").toInt(), h = st.value("height").toInt();
 		QJsonObject o{{"url", st.value("url").toString()}, {"width", w > 0 ? w : doc.canvasW}, {"height", h > 0 ? h : doc.canvasH},
-			      {"reroute_audio", true}, {"shutdown", false}, {"restart_when_active", false}};
-		if (st.contains("css"))
+			      {"is_local_file", st.value("local").toBool()}, {"local_file", st.value("file").toString()},
+			      {"reroute_audio", st.value("controlAudio", true).toBool()}, {"shutdown", st.value("shutdown").toBool()},
+			      {"restart_when_active", st.value("restart").toBool()}, {"webpage_control_level", st.value("permissions", 1).toInt()},
+			      {"fps_custom", st.value("fps").toInt() > 0}, {"fps", st.value("fps").toInt() > 0 ? st.value("fps").toInt() : 30}};
+		if (!st.value("css").toString().isEmpty())
 			o["css"] = st.value("css").toString(); // else the plugin's default: transparent page background
 		return o;
 	}
@@ -385,9 +389,15 @@ void Engine::apply(const Doc &doc)
 	const bool canvasSame = m_appliedCanvasW == doc.canvasW && m_appliedCanvasH == doc.canvasH;
 	m_appliedCanvasW = doc.canvasW, m_appliedCanvasH = doc.canvasH;
 
-	// 1. Inputs: one per pool source, named by its id.
+	// 1. Inputs: one per pool source, named by its id. A browser source on no scene shuts its
+	// page down (nothing shows it, and a page costs a browser process and its CPU).
+	QSet<QString> placed;
+	for (const Instance &i : doc.instances)
+		placed.insert(i.sourceId);
 	for (const QString &id : doc.sourceOrder) {
-		const Source &s = doc.sources[id];
+		Source s = doc.sources[id];
+		if (s.kind == "browser" && !placed.contains(id))
+			s.settings["shutdown"] = true;
 		if (canvasSame && m_inputs.contains(id) && m_appliedInput.value(id) == s)
 			continue;
 		// Not created until macOS allows it (it would block, or fail); left unapplied, it's
@@ -1243,8 +1253,6 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 	obs_properties_t *props = in ? obs_source_properties(in) : obs_get_source_properties(obsKind(kind));
 	if (obs_property_t *p = props ? obs_properties_get(props, prop) : nullptr) {
 		for (size_t i = 0, n = obs_property_list_item_count(p); i < n; i++) {
-			if (obs_property_list_item_disabled(p, i))
-				continue;
 			const bool isInt = obs_property_list_format(p) == OBS_COMBO_FORMAT_INT;
 			const char *v = isInt ? nullptr : obs_property_list_item_string(p, i);
 			if (!isInt && !v)
@@ -1252,11 +1260,31 @@ QVariantList Engine::listDevices(const QString &sourceId, const QString &kind) c
 			const QString value = v ? QString::fromUtf8(v) : QString::number(obs_property_list_item_int(p, i));
 			if (value.isEmpty() && QString::fromUtf8(obs_property_list_item_name(p, i)).trimmed().isEmpty())
 				continue; // a blank placeholder (macOS's camera list starts with one)
-			out << QVariantMap{{"name", QString::fromUtf8(obs_property_list_item_name(p, i))}, {"value", value}};
+			// Disabled: open in another source (Windows cameras work in one place at a time). Still
+			// listed, so a camera in the show isn't "not found"; pickers say it's in use.
+			QVariantMap item{{"name", QString::fromUtf8(obs_property_list_item_name(p, i))}, {"value", value}};
+			if (obs_property_list_item_disabled(p, i))
+				item["inUse"] = true;
+			out << item;
 		}
 	}
 	obs_properties_destroy(props);
 	return out;
+}
+
+obs_source *Engine::createPreviewInput(const QString &kind, const QVariantMap &settings) const
+{
+	if (!obsKindOrNull(kind) || !Permissions::allows(kind))
+		return nullptr;
+	Doc doc;
+	doc.canvasW = m_canvasW, doc.canvasH = m_canvasH;
+	Source s;
+	s.kind = kind, s.settings = settings;
+	obs_data_t *d = toData(inputSettings(doc, s));
+	const QByteArray name = ("lobs_addpreview_" + QUuid::createUuid().toString(QUuid::Id128).left(8)).toUtf8();
+	obs_source_t *src = obs_source_create_private(obsKind(kind), name.constData(), d);
+	obs_data_release(d);
+	return src;
 }
 
 // ---------- preview ----------
@@ -1497,6 +1525,12 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 					gs_effect_set_vec4(color, &c);
 					for (auto [hx, hy] : {std::pair{0.0f, 0.0f}, {w, 0.0f}, {0.0f, h}, {w, h}})
 						fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+					// Mid-edge handles stretch one side; smaller, so corners read as the main ones.
+					const float es = 8 * px;
+					if (w > 6 * hs)
+						fillRect(w / 2 - es / 2, -es / 2, es, es), fillRect(w / 2 - es / 2, h - es / 2, es, es);
+					if (h > 6 * hs)
+						fillRect(-es / 2, h / 2 - es / 2, es, es), fillRect(w - es / 2, h / 2 - es / 2, es, es);
 				}
 				gs_matrix_pop();
 			}
@@ -1597,6 +1631,114 @@ void Engine::attachPreview(void *hwnd, int width, int height)
 	obs_display_add_draw_callback(m_display, drawCallback, this);
 }
 
+// After the main mix is drawn, inside the graphics context (taking it from a tick callback would
+// lock in the opposite order to libobs's own rendering, and can deadlock).
+static void sharedPreviewRendered(void *data)
+{
+	static_cast<Engine *>(data)->renderSharedPreview();
+}
+
+void Engine::startSharedPreview(std::function<void()> onFrame)
+{
+	if (!m_started || m_spOn)
+		return;
+	m_spOnFrame = std::move(onFrame);
+	graphicsDevice(); // here, on the UI thread, not later on the render thread
+	m_spOn = true;
+	obs_add_main_rendered_callback(sharedPreviewRendered, this);
+}
+
+void Engine::stopSharedPreview()
+{
+	if (!m_spOn)
+		return;
+	obs_remove_main_rendered_callback(sharedPreviewRendered, this);
+	m_spOn = false;
+	obs_enter_graphics();
+	for (gs_texture_t *&t : m_spTex) {
+		gs_texture_destroy(t);
+		t = nullptr;
+	}
+	obs_leave_graphics();
+	m_spW = m_spH = 0;
+	m_spPublished = -1;
+}
+
+Engine::SharedFrames Engine::sharedPreviewFrames() const
+{
+	QMutexLocker lock(&m_spLock);
+	return m_spFrames;
+}
+
+void *Engine::graphicsDevice() const
+{
+	if (!m_spDevice && m_started) { // asked once; the device lives as long as the engine
+		obs_enter_graphics();
+		m_spDevice = gs_get_device_obj();
+		obs_leave_graphics();
+	}
+	return m_spDevice;
+}
+
+void Engine::renderSharedPreview()
+{
+	const int w = m_spWantW, h = m_spWantH;
+	if (w < 16 || h < 16 || w > 16384 || h > 16384)
+		return;
+	// Once per video frame, however many mixes are drawn in it.
+	const uint64_t frame = obs_get_video_frame_time();
+	if (frame == m_spLastFrame)
+		return;
+	m_spLastFrame = frame;
+	obs_enter_graphics();
+	if (w != m_spW || h != m_spH || !m_spTex[0]) {
+		// New size: three fresh textures; the UI opens them again when the generation changes.
+		SharedFrames f;
+		for (int i = 0; i < 3; i++) {
+			gs_texture_destroy(m_spTex[i]);
+			m_spTex[i] = gs_texture_create(uint32_t(w), uint32_t(h), GS_RGBA, 1, nullptr, GS_RENDER_TARGET | GS_SHARED_TEX);
+			f.handles[i] = m_spTex[i] ? gs_texture_get_shared_handle(m_spTex[i]) : 0;
+		}
+		m_spW = w, m_spH = h;
+		m_spPublished = -1;
+		f.width = w, f.height = h, f.generation = m_spGen + 1;
+		{
+			QMutexLocker lock(&m_spLock);
+			m_spFrames = f;
+		}
+		m_spGen = f.generation;
+	}
+	// Draw into the one the UI isn't showing and that isn't the newest (it may take that next).
+	const int shown = m_spDisplayed, newest = m_spPublished;
+	int k = 0;
+	while (k == shown || k == newest)
+		k++;
+	bool drawn = false;
+	if (m_spTex[k]) {
+		gs_texture_t *prevRt = gs_get_render_target();
+		gs_zstencil_t *prevZs = gs_get_zstencil_target();
+		gs_viewport_push();
+		gs_projection_push();
+		gs_set_render_target(m_spTex[k], nullptr);
+		gs_set_viewport(0, 0, w, h);
+		vec4 clear;
+		vec4_from_rgba(&clear, 0xFF171717);
+		gs_clear(GS_CLEAR_COLOR, &clear, 1.0f, 0);
+		drawPreview(uint32_t(w), uint32_t(h));
+		gs_set_render_target(prevRt, prevZs);
+		gs_projection_pop();
+		gs_viewport_pop();
+		gs_flush(); // the UI's device reads it next: the commands must be on the GPU first
+		drawn = true;
+	}
+	obs_leave_graphics();
+	if (drawn) {
+		m_spPublished = k;
+		if (m_spOnFrame)
+			m_spOnFrame();
+	}
+}
+
 void Engine::resizePreview(int width, int height)
 {
 	// A squeezed layout can report a zero or negative size; a negative one cast to uint32_t
@@ -1663,6 +1805,7 @@ void Engine::shutdown()
 		obs_display_destroy(m_display);
 		m_display = nullptr;
 	}
+	stopSharedPreview();
 	if (m_previewTex) {
 		obs_enter_graphics();
 		gs_texrender_destroy(m_previewTex);

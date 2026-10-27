@@ -15,6 +15,7 @@ FButton {
     Timer { id: openTimer; interval: 350; onTriggered: card.open() }
 
     Popup {
+        popupType: Popup.Item // in the scene, not an OS window (see FMenu)
         id: card
         y: h.height + 4
         x: Math.min(0, (h.Window.window ? h.Window.window.width : 9999) - h.mapToItem(null, 0, 0).x - width - 8)

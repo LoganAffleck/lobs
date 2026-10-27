@@ -10,6 +10,7 @@
 
 #include <QElapsedTimer>
 #include <atomic>
+#include <functional>
 
 #include <QHash>
 #include <QColor>
@@ -123,10 +124,25 @@ public:
 	int audioSampleRate() const;
 	void sendCaption(const QString &text, double seconds);
 	QVariantList listDevices(const QString &sourceId, const QString &kind) const;
+	// A private input (in no scene, never heard) with the settings a new source of this kind
+	// would get: the Add dialog previews it before the source exists. The caller releases it.
+	obs_source *createPreviewInput(const QString &kind, const QVariantMap &settings) const;
 
 	// Preview
 	void attachPreview(void *hwnd, int width, int height);
 	void resizePreview(int width, int height);
+	// The preview drawn into the UI's own scene instead of a native window (Windows, D3D11): each
+	// frame lands in one of three textures shared with the UI's GPU device, so menus and dialogs
+	// can draw over it. onFrame is called on the graphics thread when a new frame is ready.
+	void startSharedPreview(std::function<void()> onFrame);
+	void stopSharedPreview();
+	void setSharedPreviewSize(int width, int height) { m_spWantW = width, m_spWantH = height; }
+	struct SharedFrames { int generation = 0; uint32_t handles[3] = {}; int width = 0, height = 0; };
+	SharedFrames sharedPreviewFrames() const; // handles change with the generation (on resize)
+	int sharedPreviewGeneration() const { return m_spGen; }
+	int takeSharedPreviewFrame() { const int p = m_spPublished; m_spDisplayed = p; return p; } // the newest; held until the next take
+	void *graphicsDevice() const; // ID3D11Device* on Windows
+	void renderSharedPreview(); // graphics thread, after each main render
 	// Device pixels per point on the preview's screen (2 on Retina, 1.5 at 150% on Windows):
 	// handles, outlines and labels are sized in points, as the canvas hit-testing is.
 	void setPreviewDpr(double dpr) { m_previewDpr = float(dpr > 0 ? dpr : 1); }
@@ -278,6 +294,15 @@ private:
 	QSet<QString> m_showingAll;         // scenes held showing for thumbnails
 
 	obs_display *m_display = nullptr;
+	bool m_spOn = false;
+	std::function<void()> m_spOnFrame;
+	std::atomic<int> m_spWantW{0}, m_spWantH{0}, m_spGen{0}, m_spPublished{-1}, m_spDisplayed{-1};
+	struct gs_texture *m_spTex[3] = {};
+	int m_spW = 0, m_spH = 0;
+	uint64_t m_spLastFrame = 0;
+	mutable void *m_spDevice = nullptr;
+	mutable QMutex m_spLock; // m_spHandles
+	SharedFrames m_spFrames;
 	bool m_pixelPerfect = true;
 	std::atomic<float> m_previewDpr{1.0f}; // read on the graphics thread
 	obs_source *m_laser = nullptr;

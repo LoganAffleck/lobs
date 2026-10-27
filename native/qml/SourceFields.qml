@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "AudioMath.js" as AudioMath
 
 // A source's input settings (device, window, page, file, text, color). Used by the source
 // inspector and by the Source section of the layer inspector, so both edit the same things.
@@ -34,37 +35,61 @@ ColumnLayout {
         currentValue: sf.st.device
         onPicked: (v) => app.setSourceSetting(sf.d.id, "device", v)
     }
+    // A page's sound, right here: volume and mute without a trip to the mixer (once it's on a
+    // scene, which is when it's in the mixer).
     RowLayout {
-        visible: sf.d.kind === "browser"
+        id: pageAudio
+        readonly property var mx: sf.d.kind === "browser" ? (app.mixer.find(r => r.id === sf.d.id) || null) : null
+        readonly property bool speakers: sf.st.controlAudio === false // plays straight out, past the mixer
+        visible: !!mx
         Layout.fillWidth: true
         spacing: 6
-        FInput {
+        FButton {
+            iconName: pageAudio.mx && pageAudio.mx.muted ? "volume-x" : "volume-2"
+            variant: "ghost"
+            tip: pageAudio.mx && pageAudio.mx.muted ? "Muted. Click to unmute." : "Mute"
+            onClicked: app.setAudio(sf.d.id, "muted", !pageAudio.mx.muted, true)
+        }
+        Text {
+            visible: pageAudio.speakers
             Layout.fillWidth: true
-            placeholderText: "https://"
-            text: sf.st.url || ""
-            onEditingFinished: if (text !== (sf.st.url || "")) app.setSourceSetting(sf.d.id, "url", text)
+            text: "Plays on your speakers, not in the stream"
+            color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+            elide: Text.ElideRight
         }
-        FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "Reload the page"; onClicked: app.refreshBrowser(sf.d.id) }
+        MeterFader {
+            visible: !pageAudio.speakers
+            Layout.fillWidth: true
+            implicitHeight: 14
+            value: pageAudio.mx ? AudioMath.posFromLin(pageAudio.mx.volume) : 0
+            levels: (pageAudio.mx && app.levels[sf.d.id]) || [-60, -60]
+            muted: !!(pageAudio.mx && pageAudio.mx.muted)
+            onMoved: (v) => app.setAudio(sf.d.id, "volume", AudioMath.linFromPos(v), false)
+            onReleased: (v) => app.setAudio(sf.d.id, "volume", AudioMath.linFromPos(v), true)
+        }
+        Text {
+            visible: !pageAudio.speakers
+            text: pageAudio.mx ? AudioMath.toDb(pageAudio.mx.volume) + " dB" : ""
+            color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+            Layout.preferredWidth: 50; horizontalAlignment: Text.AlignRight
+        }
+        FButton {
+            id: routeButton
+            iconName: "ellipsis"; variant: "ghost"; tip: "Where the page's sound goes"
+            onClicked: routeMenu.popup(routeButton, 0, routeButton.height + 4)
+            FMenu {
+                id: routeMenu
+                FMenuItem { text: "In the mixer (stream and recording)"; selected: !pageAudio.speakers; onTriggered: app.setSourceSetting(sf.d.id, "controlAudio", true) }
+                FMenuItem { text: "Your speakers only"; selected: pageAudio.speakers; onTriggered: app.setSourceSetting(sf.d.id, "controlAudio", false) }
+            }
+        }
     }
-    RowLayout {
+    BrowserOptions {
         visible: sf.d.kind === "browser"
-        Layout.fillWidth: true
-        spacing: 6
-        Text { text: "Page size"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
-        Item { Layout.fillWidth: true }
-        FInput {
-            Layout.preferredWidth: 72
-            placeholderText: "Canvas"
-            text: sf.st.width ? String(sf.st.width) : ""
-            onEditingFinished: app.setSourceSetting(sf.d.id, "width", parseInt(text) || undefined)
-        }
-        Text { text: "×"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
-        FInput {
-            Layout.preferredWidth: 72
-            placeholderText: "Canvas"
-            text: sf.st.height ? String(sf.st.height) : ""
-            onEditingFinished: app.setSourceSetting(sf.d.id, "height", parseInt(text) || undefined)
-        }
+        st: sf.st
+        showRefresh: true
+        onChanged: (key, value) => app.setSourceSetting(sf.d.id, key, value)
+        onRefreshRequested: app.refreshBrowser(sf.d.id)
     }
     // Text: what it says, then font, weight and color.
     FInput {

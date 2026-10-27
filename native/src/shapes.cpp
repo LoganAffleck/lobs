@@ -90,7 +90,8 @@ QImage renderShape(const QVariantMap &st, int width, int height)
 	const QColor fill = colorOf(st.value("fill")), stroke = colorOf(st.value("stroke"));
 	const double sw = std::max(0.0, st.value("strokeWidth", 6).toDouble());
 	QPen pen = stroke.isValid() && sw > 0 ? QPen(stroke, sw, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin) : QPen(Qt::NoPen);
-	const QRectF box = QRectF(0, 0, w, h).adjusted(sw / 2, sw / 2, -sw / 2, -sw / 2);
+	const double in = pen.style() == Qt::NoPen ? 0 : sw / 2; // no stroke: the shape fills its box
+	const QRectF box = QRectF(0, 0, w, h).adjusted(in, in, -in, -in);
 	if (shape == "rect" || shape == "ellipse") {
 		p.setPen(pen);
 		p.setBrush(fill.isValid() ? QBrush(fill) : QBrush(Qt::NoBrush));

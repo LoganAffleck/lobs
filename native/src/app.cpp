@@ -74,11 +74,23 @@ static Doc loadDoc(const QString &path)
 	return d;
 }
 
+QVariantList App::devicesForKind(const QString &kind) { return m_engine->listDevices({}, kind); }
+
+QString App::sourceUsingDevice(const QString &kind, const QString &device) const
+{
+	if (device.isEmpty())
+		return {};
+	for (const Source &s : doc().sources)
+		if (s.kind == kind && s.settings.value("device").toString() == device)
+			return s.id;
+	return {};
+}
+
 static QString firstRealDevice(Engine *engine, const QString &kind)
 {
 	for (const QVariant &v : engine->listDevices({}, kind)) {
 		const QVariantMap m = v.toMap();
-		if (!m["name"].toString().contains("Virtual", Qt::CaseInsensitive) && !m["value"].toString().isEmpty())
+		if (!m["name"].toString().contains("Virtual", Qt::CaseInsensitive) && !m["value"].toString().isEmpty() && !m["inUse"].toBool())
 			return m["value"].toString();
 	}
 	return {};
@@ -971,7 +983,7 @@ void App::duplicateScene(const QString &id, bool linked)
 
 // ---------- pool ----------
 
-void App::addSource(const QString &kind, const QString &name, const QString &extra, bool place)
+void App::addSource(const QString &kind, const QString &name, const QString &extra, bool place, const QVariantMap &more)
 {
 	if (place && !liveSceneEditAllowed(m_editScene))
 		return;
@@ -984,6 +996,9 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 		if (!url.isEmpty() && !url.contains("://") && !QFileInfo(url).isAbsolute())
 			url.prepend("https://"); // "streamlabs.com/alert-box/..." just works
 		settings = {{"url", url}};
+		for (auto it = more.begin(); it != more.end(); ++it)
+			if (it.key() != "url" && it.value().isValid())
+				settings[it.key()] = it.value();
 	}
 	else if (kind == "camera" || kind == "display" || kind == "window" || kind == "mic" || kind == "desktop_audio") {
 		// The device picked in the Add dialog, else this machine's first (a window has no default).
@@ -996,8 +1011,10 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 		sid = d.addSource(kind, name.trimmed().isEmpty() ? k.label : name.trimmed(), settings).id;
 		// Browser audio goes into the mix, not your speakers: monitor it by default so alerts are
 		// heard. (Desktop Audio capturing the monitor device is deduplicated by libobs.)
-		if (kind == "browser")
+		if (kind == "browser" && settings.value("controlAudio", true).toBool())
 			d.sources[sid].audio.monitor = "monitor_and_output";
+		if (more.value("mono").toBool())
+			d.sources[sid].audio.mono = true;
 		if (place && k.video && d.scenes.contains(m_editScene))
 			iid = d.placeSource(m_editScene, sid).id;
 	});
@@ -1519,8 +1536,27 @@ void App::scrubTransform(const QString &field, double value, bool final, bool ke
 		return;
 	}
 	const Doc &base = m_store.gestureBase() ? *m_store.gestureBase() : doc();
-	const Transform t = withField(base.transform(base.instances[id]), field, value, keepAspect);
-	applyEdit(m_store, "Set " + field, [&](Doc &d) { d.setTransform(id, t); }, mode);
+	const bool page = (field == "w" || field == "h") && pageFollowsLayer(base, id);
+	const Transform t = withField(base.transform(base.instances[id]), field, value, keepAspect && !page);
+	applyEdit(m_store, "Set " + field, [&](Doc &d) { d.setTransform(id, t); if (page) sizePage(d, id, t); }, mode);
+}
+
+// A browser layer (uncropped, not turned off in its options) whose page takes the layer's size.
+bool App::pageFollowsLayer(const Doc &d, const QString &id)
+{
+	const Instance &i = d.instances.value(id);
+	const Source &s = d.sources.value(i.sourceId);
+	if (s.kind != "browser" || !s.settings.value("responsive", true).toBool())
+		return false;
+	const Crop c = d.crop(i);
+	return !c.l && !c.t && !c.r && !c.b;
+}
+
+void App::sizePage(Doc &d, const QString &id, const Transform &t)
+{
+	QVariantMap &st = d.sources[d.instances[id].sourceId].settings;
+	st["width"] = int(std::max(16.0, std::round(t.w)));
+	st["height"] = int(std::max(16.0, std::round(t.h)));
 }
 
 void App::setSize(const QString &field, double value, bool keepAspect)
@@ -1530,8 +1566,9 @@ void App::setSize(const QString &field, double value, bool keepAspect)
 		return;
 	if (!liveEditAllowed({id}))
 		return;
-	const Transform t = withField(doc().transform(doc().instances[id]), field, value, keepAspect);
-	m_store.commit("Resize", [&](Doc &d) { d.setTransform(id, t); });
+	const bool page = pageFollowsLayer(doc(), id);
+	const Transform t = withField(doc().transform(doc().instances[id]), field, value, keepAspect && !page);
+	m_store.commit("Resize", [&](Doc &d) { d.setTransform(id, t); if (page) sizePage(d, id, t); });
 }
 
 // Sets a layer's crop and keeps its scale: the box shrinks or grows by what's trimmed, and
@@ -1581,6 +1618,50 @@ void App::cropToAspect(double ratio)
 		}
 	}
 	m_store.commit(ratio > 0 ? "Crop to aspect" : "Remove crop", [&](Doc &d) { cropKeepingScale(d, id, nc, ns); });
+	m_cropAspects[id] = std::max(0.0, ratio);
+}
+
+double App::cropAspect() const
+{
+	const QString id = singleSelection();
+	if (id.isEmpty() || !doc().instances.contains(id))
+		return 0;
+	if (m_cropAspects.contains(id))
+		return m_cropAspects[id];
+	// Not picked this session: a crop that is one of the presets keeps it.
+	const Instance &i = doc().instances[id];
+	const Crop c = doc().crop(i);
+	if (!c.l && !c.t && !c.r && !c.b)
+		return 0;
+	const Transform t = doc().transform(i);
+	const double r = t.w / std::max(1.0, t.h);
+	for (double p : {16 / 9.0, 4 / 3.0, 1.0, 9 / 16.0})
+		if (std::abs(r / p - 1) < 0.01)
+			return p;
+	return 0;
+}
+
+void App::setCropAspect(double ratio)
+{
+	const QString id = singleSelection();
+	if (id.isEmpty())
+		return;
+	if (ratio > 0)
+		return cropToAspect(ratio);
+	m_cropAspects[id] = 0; // free: the crop stays, handles no longer hold a ratio
+	emit docChanged();
+}
+
+void App::cancelCrop()
+{
+	const QString id = singleSelection();
+	if (m_cropMode && !id.isEmpty() && m_cropEntry.instances.contains(id) && doc().instances.contains(id)) {
+		const Crop c = m_cropEntry.crop(m_cropEntry.instances[id]);
+		const Transform t = m_cropEntry.transform(m_cropEntry.instances[id]);
+		if (!(c == doc().crop(doc().instances[id])) || !(t == doc().transform(doc().instances[id])))
+			m_store.commit("Cancel crop", [&](Doc &d) { d.setCrop(id, c); d.setTransform(id, t); });
+	}
+	setCropMode(false);
 }
 
 void App::setCornerRadius(double pct, bool final)
@@ -1604,6 +1685,8 @@ void App::setCropMode(bool on)
 	if (on == m_cropMode)
 		return;
 	m_cropMode = on;
+	if (on)
+		m_cropEntry = doc();
 	updateOverlay();
 	emit docChanged();
 }
@@ -3368,11 +3451,18 @@ void App::setMixerPinned(const QString &id, bool pinned)
 QVariantList App::mixer() const
 {
 	QVariantList out;
+	// A page, video or capture with sound joins the mixer once it's on a scene; mics and desktop
+	// audio are always there (they're heard without a layer).
+	QSet<QString> placed;
+	for (const Instance &i : doc().instances)
+		placed.insert(i.sourceId);
 	for (const QString &id : mixerArrangement(doc())) {
 		const Source &s = doc().sources[id];
 		if (!s.hasAudio)
 			continue;
 		const bool global = !kindInfo(s.kind).video;
+		if (!global && !placed.contains(id))
+			continue;
 		QVariantList tracks;
 		for (bool t : s.audio.tracks)
 			tracks << t;
@@ -3589,6 +3679,13 @@ int App::hitHandle(QPointF c) const
 	for (int k = 0; k < 4; k++)
 		if (std::abs(c.x() - corners[k].x()) <= r && std::abs(c.y() - corners[k].y()) <= r)
 			return k;
+	// Edges (4 left, 5 top, 6 right, 7 bottom): anywhere along the side, a few pixels either way.
+	const double e = 6 / canvasScale();
+	const bool inX = c.x() > t.x + r && c.x() < t.x + t.w - r, inY = c.y() > t.y + r && c.y() < t.y + t.h - r;
+	if (inY && std::abs(c.x() - t.x) <= e) return 4;
+	if (inX && std::abs(c.y() - t.y) <= e) return 5;
+	if (inY && std::abs(c.x() - (t.x + t.w)) <= e) return 6;
+	if (inX && std::abs(c.y() - (t.y + t.h)) <= e) return 7;
 	return -1;
 }
 
@@ -3599,8 +3696,8 @@ Qt::CursorShape App::cursorAt(QPointF p) const
 	if (m_tool != "select")
 		return Qt::CrossCursor;
 	const int h = hitHandle(toCanvas(p));
-	if (h == 10 || h == 12) return Qt::SizeHorCursor;
-	if (h == 11 || h == 13) return Qt::SizeVerCursor;
+	if (h == 10 || h == 12 || h == 4 || h == 6) return Qt::SizeHorCursor;
+	if (h == 11 || h == 13 || h == 5 || h == 7) return Qt::SizeVerCursor;
 	if (h == 14 || h == 17) return Qt::SizeFDiagCursor;
 	if (h == 15 || h == 16) return Qt::SizeBDiagCursor;
 	if (h == 0 || h == 3) return Qt::SizeFDiagCursor;
@@ -3644,6 +3741,13 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 		m_dragIds = {singleSelection()};
 		return;
 	}
+	if (m_cropMode && m_handle < 0 && hitTest(c) == singleSelection()) {
+		if (doc().instances[singleSelection()].locked)
+			return showToast("Layer is locked");
+		m_drag = Drag::CropPan; // inside the crop box: moves the crop over the image
+		m_dragIds = {singleSelection()};
+		return;
+	}
 	if (m_cropMode && hitTest(c) != singleSelection())
 		setCropMode(false);
 	if (m_handle >= 0) {
@@ -3675,6 +3779,13 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 		if (m_selection.contains(path[k]))
 			level = k;
 	const QString target = dbl ? path[std::min(int(path.size()) - 1, level + 1)] : path[std::max(0, level)];
+	if (dbl && level == int(path.size()) - 1 && m_selection == QStringList{leaf} && doc().instances[leaf].kind != "group") {
+		setCropMode(true); // double-click the selected layer: crop it
+		if (m_cropMode) {
+			m_drag = Drag::None;
+			return;
+		}
+	}
 	if (dbl)
 		m_selection = {target};
 	if (mods & Qt::ShiftModifier) {
@@ -3799,6 +3910,60 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 		if (h == 12 || h == 15 || h == 17) right = right0 - dl;
 		if (h == 11 || h == 14 || h == 15) top = top0 + dt;
 		if (h == 13 || h == 16 || h == 17) bottom = bottom0 - dt;
+		// Hold a ratio: the picked one, or with Shift the crop's own. Ratios are on the canvas;
+		// in source pixels they're scaled by the layer's stretch.
+		double ratio = cropAspect();
+		if (mods & Qt::ShiftModifier)
+			ratio = bt.w / std::max(1.0, bt.h);
+		if (ratio > 0) {
+			const double W = ns.width(), H = ns.height(), rs = ratio * sy / sx;
+			const bool corner = h >= 14, horiz = h == 10 || h == 12;
+			const bool movesLeft = h == 10 || h == 14 || h == 16, movesTop = h == 11 || h == 14 || h == 15;
+			double vw = W - left - right, vh = H - top - bottom;
+			if (corner ? std::abs(dl * sx) >= std::abs(dt * sy) : horiz)
+				vh = vw / rs;
+			else
+				vw = vh * rs;
+			// Room left for each side: the fixed side stays, a centered side may use the whole source.
+			const double roomW = corner || horiz ? W - (movesLeft ? right0 : left0) : W;
+			const double roomH = corner || !horiz ? H - (movesTop ? bottom0 : top0) : H;
+			if (vw > roomW) vw = roomW, vh = vw / rs;
+			if (vh > roomH) vh = roomH, vw = vh * rs;
+			vw = std::max(1.0, vw), vh = std::max(1.0, vh);
+			auto place = [](int &a, int &b, int a0, int b0, double total, double v, int mode) {
+				// mode: 1 = a moves (b fixed), 2 = b moves, 0 = both, around their center
+				if (mode == 1) { b = b0; a = int(std::lround(total - b0 - v)); }
+				else if (mode == 2) { a = a0; b = int(std::lround(total - a0 - v)); }
+				else {
+					const double mid = (a0 + (total - b0)) / 2;
+					double s = std::clamp(mid - v / 2, 0.0, total - v);
+					a = int(std::lround(s)); b = int(std::lround(total - s - v));
+				}
+			};
+			place(left, right, left0, right0, W, vw, corner || horiz ? (movesLeft ? 1 : 2) : 0);
+			place(top, bottom, top0, bottom0, H, vh, corner || !horiz ? (movesTop ? 1 : 2) : 0);
+		}
+		m_store.gesture([&](Doc &d) { cropKeepingScale(d, id, nc, ns); });
+		updateOverlay();
+		return;
+	}
+	if (m_drag == Drag::CropPan) {
+		// The crop window slides over the image, which stays where it is on the canvas.
+		const QString id = m_dragIds.value(0);
+		const Instance &bi = m_dragBase.instances[id];
+		const QSize ns = m_engine->sourceSize(bi.sourceId);
+		if (ns.isEmpty())
+			return;
+		const Transform bt = m_dragBase.transform(bi);
+		const Crop bc = m_dragBase.crop(bi);
+		const double sx = bt.w / std::max(1, ns.width() - bc.l - bc.r), sy = bt.h / std::max(1, ns.height() - bc.t - bc.b);
+		int dl = int(std::lround((c.x() - m_dragStart.x()) / sx)), dt = int(std::lround((c.y() - m_dragStart.y()) / sy));
+		Crop nc = bc;
+		int &left = bt.flipH ? nc.r : nc.l, &right = bt.flipH ? nc.l : nc.r;
+		int &top = bt.flipV ? nc.b : nc.t, &bottom = bt.flipV ? nc.t : nc.b;
+		const int l0 = left, r0 = right, t0 = top, b0 = bottom;
+		dl = std::clamp(dl, -l0, r0), dt = std::clamp(dt, -t0, b0);
+		left = l0 + dl, right = r0 - dl, top = t0 + dt, bottom = b0 - dt;
 		m_store.gesture([&](Doc &d) { cropKeepingScale(d, id, nc, ns); });
 		updateOverlay();
 		return;
@@ -3850,17 +4015,38 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 	} else {
 		const QString id = m_dragIds.first();
 		const Transform t0 = base.transform(base.instances[id]);
+		const bool page = pageFollowsLayer(base, id);
+		if (m_handle >= 4) {
+			// An edge stretches its side (Alt: both sides, around the middle).
+			const bool centered = mods & Qt::AltModifier, horiz = m_handle == 4 || m_handle == 6;
+			Transform t = t0;
+			if (horiz) {
+				const double fixed = centered ? t0.x + t0.w / 2 : m_handle == 4 ? t0.x + t0.w : t0.x;
+				const double w = std::max(8.0, std::abs(c.x() - fixed) * (centered ? 2 : 1));
+				t.x = std::round(centered ? fixed - w / 2 : m_handle == 4 ? fixed - w : fixed), t.w = std::round(w);
+			} else {
+				const double fixed = centered ? t0.y + t0.h / 2 : m_handle == 5 ? t0.y + t0.h : t0.y;
+				const double h = std::max(8.0, std::abs(c.y() - fixed) * (centered ? 2 : 1));
+				t.y = std::round(centered ? fixed - h / 2 : m_handle == 5 ? fixed - h : fixed), t.h = std::round(h);
+			}
+			m_store.gesture([&](Doc &d) { d.setTransform(id, t); if (page) sizePage(d, id, t); });
+			return;
+		}
 		const bool left = m_handle == 0 || m_handle == 2, top = m_handle == 0 || m_handle == 1;
-		const double ax = left ? t0.x + t0.w : t0.x, ay = top ? t0.y + t0.h : t0.y; // opposite corner
-		double w = std::max(8.0, std::abs(c.x() - ax)), h = std::max(8.0, std::abs(c.y() - ay));
-		if (!(mods & Qt::ShiftModifier)) {
+		const bool centered = mods & Qt::AltModifier; // Alt: grows from the middle
+		const double ax = centered ? t0.x + t0.w / 2 : left ? t0.x + t0.w : t0.x, ay = centered ? t0.y + t0.h / 2 : top ? t0.y + t0.h : t0.y; // opposite corner
+		const double k = centered ? 2 : 1;
+		double w = std::max(8.0, std::abs(c.x() - ax) * k), h = std::max(8.0, std::abs(c.y() - ay) * k);
+		// A browser layer resizes like a browser window: the page gets the new size and lays itself
+		// out again (its breakpoints apply), so its proportions are free; Shift keeps them.
+		if (!(mods & Qt::ShiftModifier) != page) {
 			const double aspect = t0.w / std::max(1.0, t0.h);
 			if (w / h > aspect) h = w / aspect;
 			else w = h * aspect;
 		}
 		Transform t = t0;
-		t.x = std::round(left ? ax - w : ax), t.y = std::round(top ? ay - h : ay), t.w = std::round(w), t.h = std::round(h);
-		m_store.gesture([&](Doc &d) { d.setTransform(id, t); });
+		t.x = std::round(centered ? ax - w / 2 : left ? ax - w : ax), t.y = std::round(centered ? ay - h / 2 : top ? ay - h : ay), t.w = std::round(w), t.h = std::round(h);
+		m_store.gesture([&](Doc &d) { d.setTransform(id, t); if (page) sizePage(d, id, t); });
 	}
 }
 
@@ -3894,7 +4080,7 @@ void App::canvasRelease()
 		m_store.endGesture(m_dragIds.size() > 1 ? QString("Move %1 layers").arg(m_dragIds.size()) : "Move " + doc().instances.value(m_dragIds.value(0)).name);
 	else if (m_drag == Drag::Resize)
 		m_store.endGesture("Resize " + doc().instances.value(m_dragIds.value(0)).name);
-	else if (m_drag == Drag::Crop)
+	else if (m_drag == Drag::Crop || m_drag == Drag::CropPan)
 		m_store.endGesture("Crop " + doc().instances.value(m_dragIds.value(0)).name);
 	m_drag = Drag::None;
 	if (m_modelsStale) // the lists the drag skipped

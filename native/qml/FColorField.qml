@@ -55,6 +55,7 @@ FButton {
         Item {
             property alias popup: pop
             Popup {
+                popupType: Popup.Item // in the scene, not an OS window (see FMenu)
                 id: pop
                 // Below the field when it fits, else above. margins keep it inside the window either way.
                 readonly property real roomBelow: cf.Window.window ? cf.Window.window.height - cf.mapToItem(null, 0, cf.height).y : 1000

@@ -53,6 +53,7 @@ Rectangle {
     }
 
     Popup {
+        popupType: Popup.Item // in the scene, not an OS window (see FMenu)
         id: statsPopup
         x: parent.width - width - 8
         y: -height - 6

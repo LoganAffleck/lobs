@@ -37,6 +37,7 @@ FButton {
     }
 
     Popup {
+        popupType: Popup.Item // in the scene, not an OS window (see FMenu)
         id: pop
         y: fp.height + 4
         width: Math.max(fp.width, 280)

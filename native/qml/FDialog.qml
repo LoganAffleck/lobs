@@ -3,6 +3,9 @@ import QtQuick.Controls
 
 // Dialog on the slow spring (with a little bounce); exits one tier faster.
 Dialog {
+    // Drawn in the window's own scene, never as a separate OS window: a new popup window
+    // raced the main window's rendering (null swapchain in QRhi::beginFrame / grabWindow).
+    popupType: Popup.Item
     id: d
     modal: true
     padding: 16

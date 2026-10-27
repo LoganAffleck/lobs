@@ -6,6 +6,7 @@ import QtQuick.Effects
 import com.kdab.dockwidgets 2.0 as KDDW
 import LOBS
 import LOBS.Models
+import LOBS.Web
 import Qt.labs.platform as Platform
 
 // LOBS editor shell, built from the Fluid Functionalism component set (F*.qml).
@@ -39,6 +40,10 @@ ApplicationWindow {
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Undo]; onActivated: app.undo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
+    // Crop mode with the focus off the canvas (after the Inspector's Crop button): Enter keeps
+    // the crop, Esc puts it back. The canvas handles both itself when it has the focus.
+    Shortcut { enabled: app.cropMode && !addDialog.visible; sequence: "Escape"; onActivated: app.cancelCrop() }
+    Shortcut { enabled: app.cropMode && !addDialog.visible; sequences: ["Return", "Enter"]; onActivated: app.cropMode = false }
     // F2 renames the selected layer in its row, as File Explorer does with files.
     // Not while Assets has focus: F2 renames a file there.
     Shortcut { sequence: "F2"; enabled: !win.focusInside(assetsGuest); onActivated: { const sel = app.layers.filter(l => l.selected); if (sel.length === 1) layerList.rename(sel[0].id) } }
@@ -988,42 +993,13 @@ ApplicationWindow {
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 0
-                    // ---- one row: where you are, and actions ----
+                    // ---- actions; the path gets its own row below, inside a folder ----
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
                         Layout.leftMargin: 6; Layout.rightMargin: 6
                         spacing: 0
-                        FButton { visible: app.assetPath !== ""; iconName: "corner-left-up"; variant: "ghost"; tip: "Up one folder  Backspace"; onClicked: app.assetUp() }
-                        // The path: earlier folders are links, the current one is plain text. At the top, nothing (the tab says Assets).
-                        // It gets whatever width is left and clips from the left, so the current folder stays in view.
-                        Item {
-                          visible: app.assetPath !== ""
-                          Layout.fillWidth: true
-                          Layout.minimumWidth: 0
-                          implicitHeight: 28
-                          clip: true
-                          Row {
-                            id: crumbs
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: Math.min(0, parent.width - width)
-                        Repeater {
-                            model: app.assetPath ? app.assetCrumbs : []
-                            delegate: Row {
-                                required property var modelData
-                                required property int index
-                                readonly property bool last: index === app.assetCrumbs.length - 1
-                                spacing: 0
-                                height: 28 // same for links and the current folder, so they line up
-                                FIcon { visible: index > 0; name: "chevron-right"; size: 12; color: Pal.muted; anchors.verticalCenter: parent.verticalCenter }
-                                FButton { visible: !parent.last; text: modelData.name; variant: "ghost"; selected: assetsGuest.dropFolder === modelData.dir; implicitHeight: 24; anchors.verticalCenter: parent.verticalCenter; onClicked: app.goToAssetPath(modelData.path) }
-                                Text { visible: parent.last; text: modelData.name; leftPadding: 8; rightPadding: 4; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550; anchors.verticalCenter: parent.verticalCenter }
-                            }
-                        }
-                          }
-                        }
-                        // Sort and view, next to the path (nothing to sort in an empty folder).
-                        Rectangle { visible: assetsGuest.raw.length > 0 && app.assetPath !== ""; implicitWidth: 1; implicitHeight: 16; color: Pal.border; Layout.leftMargin: 4; Layout.rightMargin: 4 }
+                        // Sort and view (nothing to sort in an empty folder).
                         RowLayout {
                             visible: assetsGuest.raw.length > 0
                             spacing: 0
@@ -1044,7 +1020,7 @@ ApplicationWindow {
                             FButton { iconName: "layout-grid"; variant: "ghost"; selected: assetsGuest.view === 1; tip: "Grid"; onClicked: { assetsGuest.view = 1; app.setUiValue("assets/view", "grid") } }
                             FButton { iconName: "list"; variant: "ghost"; selected: assetsGuest.view === 0; tip: "List"; onClicked: { assetsGuest.view = 0; app.setUiValue("assets/view", "list") } }
                         }
-                        Item { visible: app.assetPath === ""; Layout.fillWidth: true }
+                        Item { Layout.fillWidth: true }
                         FButton {
                             iconName: "search"; variant: "ghost"; selected: assetsGuest.searching
                             tip: chrome.keys("Search all folders  Ctrl F")
@@ -1056,6 +1032,43 @@ ApplicationWindow {
                             onClicked: bgMenu.popup(moreAssets, 0, moreAssets.height + 4)
                         }
                         FButton { iconName: "plus"; text: assetsGuest.width < 360 ? "" : "Add"; variant: "secondary"; tip: "Add files"; onClicked: assetPicker.open(); Layout.leftMargin: 2 }
+                    }
+                    // ---- where you are: up, then the path (right-click: show it in File Explorer) ----
+                    RowLayout {
+                        visible: app.assetPath !== ""
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        Layout.leftMargin: 6; Layout.rightMargin: 6; Layout.bottomMargin: 2
+                        spacing: 0
+                            FButton { visible: app.assetPath !== ""; iconName: "corner-left-up"; variant: "ghost"; tip: "Up one folder  Backspace"; onClicked: app.assetUp() }
+                            // The path: earlier folders are links, the current one is plain text. At the top, nothing (the tab says Assets).
+                            // It gets whatever width is left and clips from the left, so the current folder stays in view.
+                            Item {
+                              Layout.fillWidth: true
+                              Layout.minimumWidth: 0
+                              implicitHeight: 28
+                              clip: true
+                              MouseArea { anchors.fill: parent; acceptedButtons: Qt.RightButton; onClicked: bgMenu.popup() }
+                              Row {
+                                id: crumbs
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: Math.min(0, parent.width - width)
+                            Repeater {
+                                model: app.assetPath ? app.assetCrumbs : []
+                                delegate: Row {
+                                    required property var modelData
+                                    required property int index
+                                    readonly property bool last: index === app.assetCrumbs.length - 1
+                                    spacing: 0
+                                    height: 28 // same for links and the current folder, so they line up
+                                    FIcon { visible: index > 0; name: "chevron-right"; size: 12; color: Pal.muted; anchors.verticalCenter: parent.verticalCenter }
+                                    FButton { visible: !parent.last; text: modelData.name; variant: "ghost"; selected: assetsGuest.dropFolder === modelData.dir; implicitHeight: 24; anchors.verticalCenter: parent.verticalCenter; onClicked: app.goToAssetPath(modelData.path) }
+                                    Text { visible: parent.last; text: modelData.name; leftPadding: 8; rightPadding: 4; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550; anchors.verticalCenter: parent.verticalCenter }
+                                }
+                            }
+                              }
+                            }
+                        FButton { iconName: "folder-search"; variant: "ghost"; tip: "Show this folder in File Explorer"; onClicked: app.revealAsset(assetsGuest.currentFolderPath()) }
                     }
                     FSearchField {
                         id: assetSearch
@@ -1905,6 +1918,15 @@ ApplicationWindow {
                         property bool lockAspect: app.uiFlag("inspector/lockAspect", true)
                         spacing: 6; Layout.fillWidth: true
                         RowLayout {
+                            visible: tf.isLayer
+                            spacing: 4; Layout.fillWidth: true
+                            RowLabel { text: "Layer Fit" }
+                            FButton { iconName: "shrink"; text: "Fit"; variant: "ghost"; onClicked: app.fit("fit"); tip: "Fit inside the canvas, keeping proportions" }
+                            FButton { iconName: "expand"; text: "Fill"; variant: "ghost"; onClicked: app.fit("fill"); tip: "Cover the whole canvas, keeping proportions" }
+                            FButton { iconName: "ratio"; text: "Original"; variant: "ghost"; onClicked: app.fit("aspect"); tip: "Restore the source's own proportions" }
+                            Item { Layout.fillWidth: true }
+                        }
+                        RowLayout {
                             spacing: 6; Layout.fillWidth: true
                             RowLabel { text: "Position" }
                             FNumField { label: "X"; live: true; value: sv.d.x || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("x", v); onScrubbed: (v, f) => app.scrubTransform("x", v, f) }
@@ -1926,15 +1948,6 @@ ApplicationWindow {
                         }
                         RowLayout {
                             visible: tf.isLayer
-                            spacing: 4; Layout.fillWidth: true
-                            RowLabel {}
-                            FButton { text: "Fit"; variant: "ghost"; onClicked: app.fit("fit"); tip: "Fit inside the canvas, keeping proportions" }
-                            FButton { text: "Fill"; variant: "ghost"; onClicked: app.fit("fill"); tip: "Cover the whole canvas, keeping proportions" }
-                            FButton { text: "Original"; variant: "ghost"; onClicked: app.fit("aspect"); tip: "Restore the source's own proportions" }
-                            Item { Layout.fillWidth: true }
-                        }
-                        RowLayout {
-                            visible: tf.isLayer
                             spacing: 6; Layout.fillWidth: true
                             RowLabel { text: "Rotate" }
                             FNumField { suffix: "°"; live: true; from: -360; to: 360; value: sv.d.rot || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("rot", v); onScrubbed: (v, f) => app.scrubTransform("rot", v, f) }
@@ -1952,42 +1965,36 @@ ApplicationWindow {
                     readonly property real va: sv.d.visibleAspect || 0
                     readonly property bool cropped: !!(sv.d.cl || sv.d.ct || sv.d.cr || sv.d.cb)
                     property bool open: app.uiFlag("inspector/cropOpen", false)
-                    function near(r) { return Math.abs(va - r) < 0.01 }
-                    readonly property string summary: !cropped ? "None"
-                        : near(16 / 9) ? "16:9" : near(4 / 3) ? "4:3" : near(1) ? "1:1" : near(9 / 16) ? "9:16" : "Custom"
+                    readonly property var ratios: [0, 16 / 9, 4 / 3, 1, 9 / 16]
+                    readonly property int ratioIndex: Math.max(0, ratios.findIndex(r => r > 0 && Math.abs(app.cropAspect - r) < 0.001))
                     visible: sv.d.mode === "layer"
                     title: croppable ? "Crop & corners" : "Corners"; group: "crop"; linkedWith: sv.d.linkCrop || ""; sections: sv.d.sections || ({})
                     RowLayout {
                         visible: cropSec.croppable
                         spacing: 6; Layout.fillWidth: true
                         RowLabel { text: "Crop" }
-                        // Cropping on the canvas is the main way in; presets and exact values sit
-                        // behind the small button that names the current crop.
+                        // Cropping on the canvas is the main way in; exact values sit behind More.
                         FButton {
                             Layout.fillWidth: true
                             iconName: "crop"; text: app.cropMode ? "Done" : "Crop"
                             variant: app.cropMode ? "primary" : "secondary"
-                            tip: app.cropMode ? "Finish cropping (Enter or Esc)" : "Drag the layer's edges on the canvas to crop"
+                            tip: app.cropMode ? "Finish cropping (Enter). Esc puts it back." : "Drag the edges on the canvas to crop, or inside to move the crop. Double-click a layer to start."
                             onClicked: app.cropMode = !app.cropMode
                         }
                         FButton {
                             variant: "ghost"
-                            text: cropSec.summary
                             iconName: cropSec.open ? "chevron-up" : "chevron-down"
-                            tip: cropSec.open ? "Hide crop presets and values" : "Crop presets and exact values"
+                            tip: cropSec.open ? "Hide exact crop values" : "Exact crop values"
                             onClicked: { cropSec.open = !cropSec.open; app.setUiFlag("inspector/cropOpen", cropSec.open) }
                         }
                     }
-                    // Quick crops, centered on the source; the layer keeps its scale.
+                    // The ratio the crop handles keep. Picking one crops to it, centered; the layer
+                    // keeps its scale. Free lets the edges move on their own (Shift still holds a ratio).
                     RowLayout {
-                        visible: cropSec.croppable && cropSec.open
-                        Layout.fillWidth: true; spacing: 4
-                        RowLabel {}
-                        FButton { text: "None"; variant: "ghost"; selected: !cropSec.cropped; tip: "No crop"; onClicked: app.cropToAspect(0) }
-                        FButton { text: "16:9"; variant: "ghost"; selected: cropSec.near(16 / 9) && cropSec.cropped; onClicked: app.cropToAspect(16 / 9) }
-                        FButton { text: "4:3"; variant: "ghost"; selected: cropSec.near(4 / 3); onClicked: app.cropToAspect(4 / 3) }
-                        FButton { text: "1:1"; variant: "ghost"; selected: cropSec.near(1); tip: "Square"; onClicked: app.cropToAspect(1) }
-                        FButton { text: "9:16"; variant: "ghost"; selected: cropSec.near(9 / 16); tip: "Vertical"; onClicked: app.cropToAspect(9 / 16) }
+                        visible: cropSec.croppable
+                        Layout.fillWidth: true; spacing: 6
+                        RowLabel { text: "Aspect" }
+                        FTabs { model: ["Free", "16:9", "4:3", "1:1", "9:16"]; currentIndex: cropSec.ratioIndex; onActivated: (i) => app.setCropAspect(cropSec.ratios[i]) }
                         Item { Layout.fillWidth: true }
                     }
                     RowLayout {
@@ -1998,6 +2005,7 @@ ApplicationWindow {
                         FNumField { label: "T"; live: true; from: 0; value: sv.d.ct || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("t", v); onScrubbed: (v, f) => app.scrubCrop("t", Math.round(v), f) }
                         FNumField { label: "R"; live: true; from: 0; value: sv.d.cr || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("r", v); onScrubbed: (v, f) => app.scrubCrop("r", Math.round(v), f) }
                         FNumField { label: "B"; live: true; from: 0; value: sv.d.cb || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("b", v); onScrubbed: (v, f) => app.scrubCrop("b", Math.round(v), f) }
+                        FButton { iconName: "rotate-ccw"; variant: "ghost"; enabled: cropSec.cropped; tip: "Remove the crop"; onClicked: app.cropToAspect(0) }
                     }
                     // Rounded corners: 50% of the short side makes a square a circle; the slider's
                     // ends are square and round.
@@ -2226,29 +2234,78 @@ ApplicationWindow {
     FDialog {
         id: addDialog
         title: "Add a source"
-        width: 560
-        property string kind: "camera"
-        // Camera, display and window are picked here, before the source exists (a window has no
-        // sensible default, so Add waits for one).
-        readonly property bool picksDevice: ["camera", "display", "window"].indexOf(kind) >= 0
+        width: 600
+        // The last kind picked comes back next time.
+        property string kind: app.uiValue("addSource/kind", "camera")
+        // Camera, display, window and audio devices are picked here, before the source exists
+        // (a window has no sensible default, so Add waits for one).
+        readonly property bool picksDevice: ["camera", "display", "window", "mic", "desktop_audio"].indexOf(kind) >= 0
+        readonly property bool audioKind: kind === "mic" || kind === "desktop_audio"
         property var devices: []
         property string device: ""
         property string deviceName: ""
-        function refreshDevices() {
-            devices = picksDevice ? app.devicesForKind(kind) : []
-            const first = devices.find(d => d.name.toLowerCase().indexOf("virtual") < 0)
-            device = kind !== "window" && first ? first.value : ""
-            deviceName = kind !== "window" && first ? first.name : ""
+        property bool mono: false
+        property var browserSt: ({})
+        property bool adding: false // the preview lets go of the device before the real source opens it
+        // Windows sometimes answers with no cameras while one is starting or running: the last good
+        // list is kept, and an empty answer is asked again a few times.
+        property var goodLists: ({})
+        property int retries: 0
+        Timer { id: deviceRetry; interval: 400; onTriggered: addDialog.refreshDevices(true) }
+        function refreshDevices(retry) {
+            // Asked for the kind showing now, every time it changes or the dialog opens.
+            const k = kind
+            if (!retry) { retries = 0; deviceRetry.stop() }
+            let list = picksDevice ? app.devicesForKind(k) : []
+            if (k !== kind)
+                return
+            if (list.length) {
+                const g = Object.assign({}, goodLists); g[k] = list; goodLists = g
+            } else if (picksDevice && k !== "window") {
+                if (retries++ < 5) deviceRetry.restart()
+                list = goodLists[k] || []
+            }
+            if (retry && list.length && devices.length && device)
+                return // already showing a list (and a pick): keep it
+            // One already open (in the show, or another app) says so, and a free one is picked first.
+            devices = list.map(d => d.inUse ? Object.assign({}, d, { name: d.name + "  ·  in use" }) : d)
+            const real = d => d.name.toLowerCase().indexOf("virtual") < 0
+            const first = list.find(d => real(d) && !d.inUse) || list.find(real) || list[0]
+            device = k !== "window" && first ? first.value : ""
+            deviceName = k !== "window" && first ? first.name : ""
         }
-        onKindChanged: refreshDevices()
-        onOpened: { refreshDevices(); nameField.forceActiveFocus() }
-        readonly property bool ready: kind !== "window" || device !== ""
+        function setBrowser(key, value) {
+            const s = Object.assign({}, browserSt)
+            if (value === undefined) delete s[key]; else s[key] = value
+            browserSt = s
+        }
+        // Listed once the switch has settled (the preview lets go of the last device first).
+        onKindChanged: { app.setUiValue("addSource/kind", kind); devices = []; device = ""; Qt.callLater(refreshDevices) }
+        onOpened: { adding = false; mono = false; browserSt = ({}); Qt.callLater(refreshDevices); nameField.forceActiveFocus() }
+        readonly property bool ready: kind === "window" ? device !== ""
+            : kind === "browser" ? !!(browserSt.local ? browserSt.file : browserSt.url) : true
+        // A camera already in the show isn't opened again (it would freeze there); its feed shows instead.
+        readonly property string inUseBy: kind === "camera" && visible ? app.sourceUsingDevice(kind, device) : ""
+        readonly property bool busyElsewhere: kind === "camera" && !inUseBy && !!(devices.find(d => d.value === device) || {}).inUse
+        readonly property var previewSettings: kind === "browser" ? browserSt : device ? ({ device: device }) : ({})
         function create() {
             if (!ready)
                 return
+            adding = true
+            // The preview's camera closes on its own thread; the new source opens it a moment later.
+            if (kind === "camera" && !inUseBy) {
+                pendingCreate.restart()
+                return
+            }
+            finishCreate()
+        }
+        Timer { id: pendingCreate; interval: 700; onTriggered: addDialog.finishCreate() }
+        function finishCreate() {
             // A window source is named after its window, unless you named it.
             const name = nameField.text || (kind === "window" ? deviceName.slice(0, 48) : "")
-            app.addSource(kind, name, picksDevice ? device : extraField.text, placeBox.checked)
+            const extra = picksDevice ? device : kind === "browser" ? (browserSt.url || "") : extraField.text
+            const more = kind === "browser" ? browserSt : audioKind ? ({ mono: mono }) : ({})
+            app.addSource(kind, name, extra, placeBox.checked, more)
             nameField.text = ""; extraField.text = ""; close()
         }
         ColumnLayout {
@@ -2259,7 +2316,7 @@ ApplicationWindow {
                 columns: 5; columnSpacing: 6; rowSpacing: 6
                 Repeater {
                     model: [["camera", "video", "Camera"], ["display", "monitor", "Display"], ["window", "app-window", "Window"], ["game", "gamepad-2", "Game"],
-                            ["browser", "globe", "Browser"], ["mic", "mic", "Mic"], ["desktop_audio", "volume-2", "Desktop"]]
+                            ["browser", "globe", "Browser"], ["mic", "mic", "Mic"], ["desktop_audio", "volume-2", "Sound"]]
                            .filter(k => app.kindAvailable(k[0])) // no game capture on macOS
                     delegate: Rectangle {
                         required property var modelData
@@ -2274,69 +2331,153 @@ ApplicationWindow {
                             FIcon { name: modelData[1]; size: 18; color: on ? Pal.fg : Pal.muted; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: modelData[2]; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: on ? 550 : 400; anchors.horizontalCenter: parent.horizontalCenter }
                         }
-                        MouseArea { Accessible.role: Accessible.Button; Accessible.name: String(modelData[2]); id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: addDialog.kind = modelData[0] }
+                        MouseArea { Accessible.role: Accessible.Button; Accessible.name: String(modelData[2]); id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: { addDialog.kind = modelData[0]; Qt.callLater(addDialog.refreshDevices) } }
                     }
                 }
             }
-            FSelect {
-                visible: addDialog.kind === "camera" || addDialog.kind === "display"
+            // The middle (device, preview, options) scrolls when it's taller than the window allows.
+            FScrollView {
+                id: addScroll
                 Layout.fillWidth: true
-                placeholder: "No " + (addDialog.kind === "camera" ? "camera" : "display") + " found"
-                options: addDialog.devices
-                currentValue: addDialog.device
-                onPicked: (v) => addDialog.device = v
-            }
-            ColumnLayout {
-                visible: addDialog.kind === "window"
-                Layout.fillWidth: true
-                spacing: 6
-                RowLayout {
-                    Layout.fillWidth: true
-                    Caption { text: "Choose the window to capture"; Layout.fillWidth: true }
-                    FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "List the open windows again"; onClicked: addDialog.refreshDevices() }
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 220
-                    radius: Pal.radius
-                    color: Pal.s3
-                    border.color: Pal.border
-                    Text {
-                        visible: addDialog.devices.length === 0
-                        anchors.centerIn: parent
-                        width: parent.width - 32
-                        horizontalAlignment: Text.AlignHCenter
-                        wrapMode: Text.WordWrap
-                        text: permissions.missing.some(m => m.id === "screen") ? "Allow Screen Recording to list your windows." : "No windows to capture."
-                        color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                Layout.preferredHeight: Math.min(addMiddle.implicitHeight, Math.max(160, (Overlay.overlay ? Overlay.overlay.height : 900) - 420))
+                ColumnLayout {
+                    id: addMiddle
+                    width: addScroll.availableWidth
+                    spacing: 12
+                    FSelect {
+                        visible: addDialog.picksDevice && addDialog.kind !== "window"
+                        Layout.fillWidth: true
+                        placeholder: "No " + ({ camera: "camera", display: "display", mic: "microphone", desktop_audio: "sound output" })[addDialog.kind] + " found"
+                        options: addDialog.devices
+                        currentValue: addDialog.device
+                        onPicked: (v) => { addDialog.device = v; addDialog.deviceName = (addDialog.devices.find(d => d.value === v) || {}).name || "" }
+                        onDownChanged: if (down) addDialog.refreshDevices() // plugged one in since: list again
                     }
-                    ListView {
-                        id: windowList
-                        anchors.fill: parent
-                        anchors.margins: 4
+                    // What it would show: a camera, display, window or page, live, before it's added.
+                    Rectangle {
+                        visible: ["camera", "display", "browser"].indexOf(addDialog.kind) >= 0 || (addDialog.kind === "window" && addDialog.device !== "")
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.round(width * 9 / 16 * (addDialog.kind === "browser" ? 0.45 : 0.62))
+                        radius: Pal.radius
+                        color: Pal.s1
+                        border.color: Pal.border
                         clip: true
-                        model: addDialog.devices
-                        delegate: Rectangle {
-                            required property var modelData
-                            readonly property bool chosen: addDialog.device === modelData.value
-                            width: windowList.width
-                            height: 30
-                            radius: Pal.radius - 2
-                            color: chosen ? Pal.selected : winMouse.containsMouse ? Pal.hover : "transparent"
-                            Text {
-                                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 10; rightMargin: 10 }
-                                text: modelData.name
-                                elide: Text.ElideRight
-                                color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: chosen ? 550 : 400
+                        SourcePreview {
+                            id: addPreview
+                            anchors.fill: parent; anchors.margins: 1
+                            kind: addDialog.kind
+                            settings: addDialog.previewSettings
+                            sourceId: addDialog.inUseBy
+                            live: addDialog.visible && !addDialog.adding && parent.visible && !addDialog.busyElsewhere
+                        }
+                        Caption {
+                            visible: addDialog.busyElsewhere
+                            anchors.centerIn: parent
+                            text: "Another app is using this camera. Close it there to use it here."
+                        }
+                        Caption {
+                            visible: addDialog.inUseBy !== "" && addPreview.ready
+                            anchors { left: parent.left; bottom: parent.bottom; margins: 8 }
+                            text: "Already in your show, so this is its feed. A camera opens in one place at a time."
+                            color: Pal.fg
+                            Rectangle { anchors.fill: parent; anchors.margins: -4; z: -1; radius: 4; color: "#b0000000" }
+                        }
+                        Caption {
+                            visible: !addPreview.ready && !addDialog.busyElsewhere
+                            anchors.centerIn: parent
+                            text: addDialog.kind === "browser" ? "Enter a URL or pick a file to see the page" : addDialog.device ? "Starting the preview…" : "Nothing to preview"
+                        }
+                        FButton {
+                            visible: addDialog.kind === "browser" && addPreview.ready
+                            anchors { top: parent.top; right: parent.right; margins: 6 }
+                            iconName: "refresh-cw"; variant: "secondary"; tip: "Reload the page"
+                            onClicked: addPreview.reload()
+                        }
+                    }
+                    // Audio: a live meter, so you can tell it's the right one, and mono for one-sided mics.
+                    RowLayout {
+                        visible: addDialog.audioKind
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 8; radius: 4
+                            color: Pal.s1
+                            border.color: Pal.border
+                            Rectangle {
+                                readonly property real f: Math.max(0, Math.min(1, (audioMeter.level + 60) / 60))
+                                width: (parent.width - 2) * f; height: parent.height - 2; x: 1; y: 1; radius: 3
+                                color: audioMeter.level > -9 ? "#e5484d" : audioMeter.level > -20 ? "#f5a524" : "#30a46c"
                             }
-                            MouseArea {
-                                id: winMouse
+                            SourcePreview {
+                                id: audioMeter
+                                visible: false
+                                kind: addDialog.audioKind ? addDialog.kind : ""
+                                settings: addDialog.previewSettings
+                                live: addDialog.visible && !addDialog.adding && addDialog.audioKind
+                            }
+                        }
+                        Caption { text: audioMeter.level > -59 ? Math.round(audioMeter.level) + " dB" : addDialog.kind === "mic" ? "Say something" : "Play something"; Layout.preferredWidth: 84 }
+                        FCheckbox { text: "Mono"; checked: addDialog.mono; onClicked: addDialog.mono = checked }
+                    }
+                    BrowserOptions {
+                        visible: addDialog.kind === "browser"
+                        st: addDialog.browserSt
+                        onChanged: (key, value) => addDialog.setBrowser(key, value)
+                    }
+                    ColumnLayout {
+                        visible: addDialog.kind === "window"
+                        Layout.fillWidth: true
+                        spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Caption { text: "Choose the window to capture"; Layout.fillWidth: true }
+                            FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "List the open windows again"; onClicked: addDialog.refreshDevices() }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 220
+                            radius: Pal.radius
+                            color: Pal.s3
+                            border.color: Pal.border
+                            Text {
+                                visible: addDialog.devices.length === 0
+                                anchors.centerIn: parent
+                                width: parent.width - 32
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
+                                text: permissions.missing.some(m => m.id === "screen") ? "Allow Screen Recording to list your windows." : "No windows to capture."
+                                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+                            }
+                            ListView {
+                                id: windowList
                                 anchors.fill: parent
-                                hoverEnabled: true
-                                Accessible.role: Accessible.Button
-                                Accessible.name: String(modelData.name)
-                                onClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name }
-                                onDoubleClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name; addDialog.create() }
+                                anchors.margins: 4
+                                clip: true
+                                model: addDialog.devices
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property bool chosen: addDialog.device === modelData.value
+                                    width: windowList.width
+                                    height: 30
+                                    radius: Pal.radius - 2
+                                    color: chosen ? Pal.selected : winMouse.containsMouse ? Pal.hover : "transparent"
+                                    Text {
+                                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 10; rightMargin: 10 }
+                                        text: modelData.name
+                                        elide: Text.ElideRight
+                                        color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: chosen ? 550 : 400
+                                    }
+                                    MouseArea {
+                                        id: winMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        Accessible.role: Accessible.Button
+                                        Accessible.name: String(modelData.name)
+                                        onClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name }
+                                        onDoubleClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name; addDialog.create() }
+                                    }
+                                }
                             }
                         }
                     }
@@ -2346,8 +2487,8 @@ ApplicationWindow {
             FInput {
                 id: extraField
                 Layout.fillWidth: true
-                visible: ["text", "color", "image", "media", "browser"].indexOf(addDialog.kind) >= 0
-                placeholderText: addDialog.kind === "text" ? "Text" : addDialog.kind === "color" ? "#1d1b2e" : addDialog.kind === "browser" ? "URL, e.g. your alert box link" : "File path"
+                visible: ["text", "color", "image", "media"].indexOf(addDialog.kind) >= 0
+                placeholderText: addDialog.kind === "text" ? "Text" : addDialog.kind === "color" ? "#1d1b2e" : "File path"
                 onAccepted: addDialog.create()
             }
             FCheckbox { id: placeBox; checked: true; text: "Also place on " + app.editSceneName; visible: ["mic", "desktop_audio"].indexOf(addDialog.kind) < 0 }

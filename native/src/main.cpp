@@ -22,6 +22,7 @@
 #include "shellmeta.h"
 #include "shapes.h"
 #include "browser_view.h"
+#include "source_preview.h"
 #include "startup_mode.h"
 #include "rows_model.h"
 #include <QElapsedTimer>
@@ -51,6 +52,14 @@
 #include <QPalette>
 #include <QColor>
 #include <QQuickWindow>
+#include <QRunnable>
+#include <QSGSimpleTextureNode>
+#include <QSGRendererInterface>
+#ifdef Q_OS_WIN
+#include <QtQuick/qsgtexture_platform.h>
+#include <d3d11.h>
+#include <dxgi.h>
+#endif
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QThreadPool>
@@ -96,6 +105,62 @@ static void logHandler(int level, const char *fmt, va_list args, void *)
 	}
 }
 
+// The preview in the UI's scene: only with LOBS_SCENE_PREVIEW=1 until its crash is fixed.
+static bool scenePreviewEnabled() { return qEnvironmentVariableIntValue("LOBS_SCENE_PREVIEW") == 1; } // opt-in: still crashes now and then
+
+// The canvas's keys: nudge, delete, undo, tools... (the native preview window and PreviewItem).
+bool canvasKey(App *app, QKeyEvent *e)
+{
+	if (app->textKey(e))
+		return true;
+	const bool ctrl = e->modifiers() & Qt::ControlModifier, shift = e->modifiers() & Qt::ShiftModifier;
+	const int step = shift ? 10 : 1;
+	switch (e->key()) {
+	case Qt::Key_Left: return app->nudge(-step, 0), true;
+	case Qt::Key_Right: return app->nudge(step, 0), true;
+	case Qt::Key_Up: return app->nudge(0, -step), true;
+	case Qt::Key_Down: return app->nudge(0, step), true;
+	case Qt::Key_Delete:
+	case Qt::Key_Backspace: return app->deleteSelected(), true;
+	case Qt::Key_Z:
+		if (ctrl) return (shift ? app->redo() : app->undo()), true;
+		break;
+	case Qt::Key_Y:
+		if (ctrl) return app->redo(), true;
+		break;
+	case Qt::Key_D:
+		if (ctrl) return app->duplicateSelected(), true;
+		break;
+	case Qt::Key_G:
+		if (ctrl) return (shift ? app->ungroupSelected() : app->groupSelected()), true;
+		break;
+	case Qt::Key_BracketRight: // forward (Shift: to the front)
+	case Qt::Key_BraceRight:
+		if (ctrl) return app->moveSelected(shift ? -1000 : -1), true;
+		break;
+	case Qt::Key_BracketLeft: // backward (Shift: to the back)
+	case Qt::Key_BraceLeft:
+		if (ctrl) return app->moveSelected(shift ? 1000 : 1), true;
+		break;
+	case Qt::Key_Escape:
+		if (app->cropMode())
+			return app->cancelCrop(), true;
+		return app->setTool("select"), true;
+	case Qt::Key_Return:
+	case Qt::Key_Enter:
+		if (app->cropMode())
+			return app->setCropMode(false), true;
+		break;
+	}
+	if (!ctrl && !(e->modifiers() & Qt::AltModifier)) {
+		static const QHash<int, const char *> keys = {{Qt::Key_V, "select"}, {Qt::Key_T, "text"}, {Qt::Key_R, "rect"}, {Qt::Key_O, "ellipse"},
+							      {Qt::Key_A, "arrow"}, {Qt::Key_P, "pencil"}, {Qt::Key_L, "laser"}};
+		if (const char *t = keys.value(e->key()))
+			return app->setTool(t), true;
+	}
+	return false;
+}
+
 /// Native window libobs draws into; forwards input to the App's canvas logic.
 class PreviewWindow : public QWindow {
 public:
@@ -130,54 +195,8 @@ protected:
 	}
 	void keyPressEvent(QKeyEvent *e) override
 	{
-		if (m_app->textKey(e))
-			return;
-		const bool ctrl = e->modifiers() & Qt::ControlModifier, shift = e->modifiers() & Qt::ShiftModifier;
-		const int step = shift ? 10 : 1;
-		switch (e->key()) {
-		case Qt::Key_Left: return m_app->nudge(-step, 0);
-		case Qt::Key_Right: return m_app->nudge(step, 0);
-		case Qt::Key_Up: return m_app->nudge(0, -step);
-		case Qt::Key_Down: return m_app->nudge(0, step);
-		case Qt::Key_Delete:
-		case Qt::Key_Backspace: return m_app->deleteSelected();
-		case Qt::Key_Z:
-			if (ctrl) return shift ? m_app->redo() : m_app->undo();
-			break;
-		case Qt::Key_Y:
-			if (ctrl) return m_app->redo();
-			break;
-		case Qt::Key_D:
-			if (ctrl) return m_app->duplicateSelected();
-			break;
-		case Qt::Key_G:
-			if (ctrl) return shift ? m_app->ungroupSelected() : m_app->groupSelected();
-			break;
-		case Qt::Key_BracketRight: // forward (Shift: to the front)
-		case Qt::Key_BraceRight:
-			if (ctrl) return m_app->moveSelected(shift ? -1000 : -1);
-			break;
-		case Qt::Key_BracketLeft: // backward (Shift: to the back)
-		case Qt::Key_BraceLeft:
-			if (ctrl) return m_app->moveSelected(shift ? 1000 : 1);
-			break;
-		case Qt::Key_Escape:
-			if (m_app->cropMode())
-				return m_app->setCropMode(false);
-			return m_app->setTool("select");
-		case Qt::Key_Return:
-		case Qt::Key_Enter:
-			if (m_app->cropMode())
-				return m_app->setCropMode(false);
-			break;
-		}
-		if (!ctrl && !(e->modifiers() & Qt::AltModifier)) {
-			static const QHash<int, const char *> keys = {{Qt::Key_V, "select"}, {Qt::Key_T, "text"}, {Qt::Key_R, "rect"}, {Qt::Key_O, "ellipse"},
-								      {Qt::Key_A, "arrow"}, {Qt::Key_P, "pencil"}, {Qt::Key_L, "laser"}};
-			if (const char *t = keys.value(e->key()))
-				return m_app->setTool(t);
-		}
-		QWindow::keyPressEvent(e);
+		if (!canvasKey(m_app, e))
+			QWindow::keyPressEvent(e);
 	}
 
 private:
@@ -240,6 +259,201 @@ public:
 	QUrl dockwidgetFilename() const override { return QUrl("qrc:/qt/qml/LOBS/qml/dock/DockWidgetBg.qml"); }
 };
 
+#ifdef Q_OS_WIN
+/// The preview as an item in the UI's own scene: the engine draws each frame into textures shared
+/// with Qt's D3D11 device (Engine::startSharedPreview) and this shows the newest. Being part of
+/// the scene, menus, dialogs and tooltips draw over the live video; nothing has to hide it.
+/// Takes the canvas's mouse and keys, as the native preview window does.
+class PreviewItem : public QQuickItem {
+public:
+	PreviewItem(QQuickItem *parent, Engine *engine, App *app, std::function<void()> onFailed)
+		: QQuickItem(parent), m_engine(engine), m_app(app), m_onFailed(std::move(onFailed))
+	{
+		setFlag(ItemHasContents, true);
+		setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
+		setAcceptHoverEvents(true);
+		setActiveFocusOnTab(false);
+		setObjectName("previewItem");
+		// New frames arrive on the graphics thread; one update per UI frame is enough.
+		m_engine->startSharedPreview([this] {
+			if (!m_pending.exchange(true))
+				QMetaObject::invokeMethod(this, [this] { m_pending = false; update(); }, Qt::QueuedConnection);
+		});
+	}
+	~PreviewItem() override
+	{
+		m_engine->stopSharedPreview();
+		dropTextures();
+	}
+	void setSize(QSizeF size)
+	{
+		setWidth(size.width());
+		setHeight(size.height());
+	}
+
+protected:
+	void geometryChange(const QRectF &n, const QRectF &o) override
+	{
+		QQuickItem::geometryChange(n, o);
+		syncSize();
+	}
+	void itemChange(ItemChange c, const ItemChangeData &d) override
+	{
+		QQuickItem::itemChange(c, d);
+		if (c == ItemDevicePixelRatioHasChanged || c == ItemSceneChange)
+			syncSize();
+	}
+	QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *) override
+	{
+		auto *node = static_cast<QSGSimpleTextureNode *>(old);
+		if (m_failed)
+			return delete node, nullptr;
+		const int gen = m_engine->sharedPreviewGeneration();
+		if (gen != m_gen && !openTextures()) {
+			m_failed = true;
+			QMetaObject::invokeMethod(this, [this] { if (m_onFailed) m_onFailed(); }, Qt::QueuedConnection);
+			return delete node, nullptr;
+		}
+		const int p = m_engine->takeSharedPreviewFrame();
+		if (p < 0 || p > 2 || !m_textures[p])
+			return node; // nothing drawn at this size yet: keep the last frame
+		if (!node) {
+			node = new QSGSimpleTextureNode;
+			node->setOwnsTexture(false);
+			node->setFiltering(QSGTexture::Nearest); // drawn at exactly this size: 1:1 pixels
+		}
+		node->setTexture(m_textures[p]);
+		const qreal dpr = window() ? window()->effectiveDevicePixelRatio() : 1.0;
+		node->setRect(QRectF(0, 0, m_texSize.width() / dpr, m_texSize.height() / dpr));
+		return node;
+	}
+	void releaseResources() override { dropTextures(); }
+
+	void mousePressEvent(QMouseEvent *e) override
+	{
+		forceActiveFocus(Qt::MouseFocusReason);
+		if (e->button() == Qt::LeftButton)
+			m_app->canvasPress(e->position(), e->modifiers(), false);
+		else if (e->button() == Qt::RightButton)
+			m_app->requestCanvasMenu(e->position());
+		e->accept();
+	}
+	void mouseDoubleClickEvent(QMouseEvent *e) override
+	{
+		if (e->button() == Qt::LeftButton)
+			m_app->canvasPress(e->position(), e->modifiers(), true);
+		e->accept();
+	}
+	void mouseMoveEvent(QMouseEvent *e) override
+	{
+		if (e->buttons() & Qt::LeftButton)
+			m_app->canvasMove(e->position(), e->modifiers());
+	}
+	void mouseReleaseEvent(QMouseEvent *e) override
+	{
+		if (e->button() == Qt::LeftButton)
+			m_app->canvasRelease();
+	}
+	void hoverMoveEvent(QHoverEvent *e) override { setCursor(m_app->cursorAt(e->position())); }
+	void focusOutEvent(QFocusEvent *e) override
+	{
+		m_app->endTextEdit();
+		QQuickItem::focusOutEvent(e);
+	}
+	void keyPressEvent(QKeyEvent *e) override
+	{
+		if (!canvasKey(m_app, e))
+			e->ignore();
+	}
+
+private:
+	void syncSize()
+	{
+		if (!window() || width() < 1 || height() < 1)
+			return;
+		const qreal dpr = window()->effectiveDevicePixelRatio();
+		const int pw = int(width() * dpr), ph = int(height() * dpr);
+		m_app->setPreviewSize(QSizeF(pw / dpr, ph / dpr), dpr);
+		m_engine->setPreviewDpr(dpr);
+		m_engine->setSharedPreviewSize(pw, ph);
+	}
+	// Render thread: the engine's textures, opened on Qt's own device (same GPU, or it fails).
+	bool openTextures()
+	{
+		releaseTextures();
+		QSGRendererInterface *ri = window() ? window()->rendererInterface() : nullptr;
+		if (!ri || ri->graphicsApi() != QSGRendererInterface::Direct3D11)
+			return false;
+		auto *dev = static_cast<ID3D11Device *>(ri->getResource(window(), QSGRendererInterface::DeviceResource));
+		auto *obsDev = static_cast<ID3D11Device *>(m_engine->graphicsDevice());
+		if (!dev || !obsDev || adapterLuid(dev) != adapterLuid(obsDev))
+			return false; // UI and engine on different GPUs: the native window it is
+		const Engine::SharedFrames f = m_engine->sharedPreviewFrames();
+		m_gen = f.generation;
+		if (!f.handles[0])
+			return f.generation == 0; // not made yet: try again on the next frame
+		for (int i = 0; i < 3; i++) {
+			ID3D11Texture2D *tex = nullptr;
+			if (FAILED(dev->OpenSharedResource(reinterpret_cast<HANDLE>(uintptr_t(f.handles[i])), __uuidof(ID3D11Texture2D), reinterpret_cast<void **>(&tex))) || !tex)
+				return false;
+			m_d3d[i] = tex;
+			m_textures[i] = QNativeInterface::QSGD3D11Texture::fromNative(tex, window(), QSize(f.width, f.height));
+			if (!m_textures[i])
+				return false;
+		}
+		m_texSize = QSize(f.width, f.height);
+		return true;
+	}
+	static quint64 adapterLuid(ID3D11Device *d)
+	{
+		IDXGIDevice *dx = nullptr;
+		IDXGIAdapter *ad = nullptr;
+		DXGI_ADAPTER_DESC desc{};
+		if (SUCCEEDED(d->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void **>(&dx))) && SUCCEEDED(dx->GetAdapter(&ad)))
+			ad->GetDesc(&desc);
+		if (ad) ad->Release();
+		if (dx) dx->Release();
+		return (quint64(quint32(desc.AdapterLuid.HighPart)) << 32) | desc.AdapterLuid.LowPart;
+	}
+	// Off the render thread (the window goes away, or this item does): freed on it, later.
+	void dropTextures()
+	{
+		struct Free : QRunnable {
+			QSGTexture *t[3]; ID3D11Texture2D *d[3];
+			void run() override { for (int i = 0; i < 3; i++) { delete t[i]; if (d[i]) d[i]->Release(); } }
+		};
+		auto *job = new Free;
+		for (int i = 0; i < 3; i++)
+			job->t[i] = m_textures[i], job->d[i] = m_d3d[i], m_textures[i] = nullptr, m_d3d[i] = nullptr;
+		m_gen = -1;
+		if (window())
+			window()->scheduleRenderJob(job, QQuickWindow::NoStage);
+		else
+			job->run(), delete job;
+	}
+	void releaseTextures() // render thread
+	{
+		for (int i = 0; i < 3; i++) {
+			delete m_textures[i];
+			m_textures[i] = nullptr;
+			if (m_d3d[i])
+				m_d3d[i]->Release();
+			m_d3d[i] = nullptr;
+		}
+	}
+
+	Engine *m_engine;
+	App *m_app;
+	std::function<void()> m_onFailed;
+	std::atomic<bool> m_pending{false};
+	bool m_failed = false;
+	int m_gen = -1;
+	QSGTexture *m_textures[3] = {};
+	ID3D11Texture2D *m_d3d[3] = {};
+	QSize m_texSize;
+};
+#endif
+
 /// Keeps the native preview window glued to the canvas item. The canvas sits inside the dock
 /// layout, so it can move without its own x/y changing; we re-check its scene rect every frame.
 class PreviewHost : public QObject {
@@ -250,9 +464,38 @@ public:
 
 	Q_INVOKABLE void attach(QQuickItem *item)
 	{
-		if (m_native || !item || !item->window())
+		if (m_native || m_inScene || !item || !item->window())
 			return;
 		m_item = item;
+#ifdef Q_OS_WIN
+		// The preview drawn in the UI's scene, so nothing hides it; the native window is the
+		// fallback (another GPU, no D3D11), and LOBS_NATIVE_PREVIEW=1 asks for it.
+		if (scenePreviewEnabled()) {
+			m_inScene = new PreviewItem(item, m_engine, m_app, [this] {
+				blog(LOG_WARNING, "[lobs] preview: shared textures unavailable, using a native window");
+				m_inScene->deleteLater();
+				m_inScene = nullptr;
+				m_app->setPreviewInScene(false);
+				attachNative();
+			});
+			auto fit = [this] { if (m_inScene && m_item) m_inScene->setSize(m_item->size()); };
+			connect(item, &QQuickItem::widthChanged, m_inScene, fit);
+			connect(item, &QQuickItem::heightChanged, m_inScene, fit);
+			fit();
+			m_app->setPreviewInScene(true);
+			blog(LOG_INFO, "[lobs] preview: drawn in the UI scene (shared textures)");
+			return;
+		}
+#endif
+		attachNative();
+	}
+
+private:
+	void attachNative()
+	{
+		QQuickItem *item = m_item;
+		if (m_native || !item || !item->window())
+			return;
 		QQuickWindow *top = item->window();
 		m_native = new PreviewWindow(top, m_app);
 		m_native->create();
@@ -292,6 +535,11 @@ private:
 	App *m_app;
 	QQuickItem *m_item = nullptr;
 	PreviewWindow *m_native = nullptr;
+#ifdef Q_OS_WIN
+	PreviewItem *m_inScene = nullptr;
+#else
+	QQuickItem *m_inScene = nullptr;
+#endif
 	QRect m_rect;
 	bool m_hidden = false;
 };
@@ -467,6 +715,12 @@ int main(int argc, char *argv[])
 	// The browser source passes these to CEF on macOS, as OBS does (helper processes read them).
 	obs_set_cmdline_args(argc, argv);
 #endif
+#ifdef Q_OS_WIN
+	// The preview drawn in the UI scene (PreviewItem) crashes Qt's threaded render loop now and
+	// then (in QRhi::beginFrame); on the GUI thread's loop it doesn't. Set before the app exists.
+	if (scenePreviewEnabled() && !qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
+		qputenv("QSG_RENDER_LOOP", "basic");
+#endif
 	QGuiApplication app(argc, argv);
 	app.setOrganizationName("LOBS");
 	app.setApplicationName("LOBS");
@@ -614,6 +868,7 @@ int main(int argc, char *argv[])
 		splash->step("Starting the video engine");
 	Engine engine;
 	qmlRegisterType<BrowserView>("LOBS.Web", 1, 0, "BrowserView");
+	qmlRegisterType<SourcePreview>("LOBS.Web", 1, 0, "SourcePreview");
 	qmlRegisterType<RowsModel>("LOBS.Models", 1, 0, "RowsModel");
 	engine.setSettings(AppSettings::load());
 	blog(LOG_INFO, "[lobs] OBS engine %s from %s", qPrintable(sel.version), qPrintable(sel.root));
@@ -622,6 +877,7 @@ int main(int argc, char *argv[])
 	else {
 		engine.resetVideo(); // apply saved output size and FPS
 		BrowserView::setEngineReady(true);
+		SourcePreview::setEngine(&engine);
 	}
 	blog(LOG_INFO, "[lobs] startup: engine up");
 	if (splash)

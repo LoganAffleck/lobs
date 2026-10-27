@@ -83,7 +83,8 @@ public:
 	Q_INVOKABLE void deleteScene(const QString &id);
 	Q_INVOKABLE void duplicateScene(const QString &id, bool linked);
 	// pool
-	Q_INVOKABLE void addSource(const QString &kind, const QString &name, const QString &extra, bool place);
+	// more: the Add dialog's other choices (a browser page's options; mono for audio).
+	Q_INVOKABLE void addSource(const QString &kind, const QString &name, const QString &extra, bool place, const QVariantMap &more = {});
 	Q_INVOKABLE void placeSource(const QString &id);
 	Q_INVOKABLE void renameSource(const QString &id, const QString &name);
 	// Audio Mixer arrangement (its own order, saved in the show; not live-locked).
@@ -97,7 +98,10 @@ public:
 	// Devices or windows a source can use. Asking Windows takes 100-500 ms, so the list is kept
 	// for a few seconds; fresh = true (opening the menu) always asks again.
 	Q_INVOKABLE QVariantList devices(const QString &sourceId, bool fresh = false);
-	Q_INVOKABLE QVariantList devicesForKind(const QString &kind) { return m_engine->listDevices({}, kind); } // before the source exists
+	// The source already capturing this device, if any: a camera opens in one place at a time, so
+	// the Add dialog shows that source's feed instead of opening the camera a second time.
+	Q_INVOKABLE QString sourceUsingDevice(const QString &kind, const QString &device) const;
+	Q_INVOKABLE QVariantList devicesForKind(const QString &kind); // before the source exists
 	Q_INVOKABLE void setSourceSetting(const QString &id, const QString &key, const QVariant &value);
 	// Audio effects on a pool source (mixer).
 	Q_INVOKABLE QVariantList audioFxTypes() const;
@@ -155,6 +159,13 @@ public:
 	Q_PROPERTY(bool cropMode READ cropMode WRITE setCropMode NOTIFY docChanged)
 	bool cropMode() const { return m_cropMode; }
 	void setCropMode(bool on);
+	// Esc in crop mode: puts the crop back as it was when crop mode started, and leaves it.
+	Q_INVOKABLE void cancelCrop();
+	// The aspect ratio crop handles keep for the selected layer (w/h on the canvas; 0 = free).
+	// Picking one crops to it; Shift while dragging keeps whatever ratio the crop has.
+	Q_PROPERTY(double cropAspect READ cropAspect NOTIFY docChanged)
+	double cropAspect() const;
+	Q_INVOKABLE void setCropAspect(double ratio);
 	Q_INVOKABLE void setSize(const QString &field, double value, bool keepAspect); // w or h, optionally locked
 	Q_INVOKABLE void setOpacity(double value, bool final);
 	Q_INVOKABLE void setVisibleFlag(bool visible);
@@ -235,9 +246,12 @@ public:
 	Q_PROPERTY(int freezeTick READ freezeTick NOTIFY previewHiddenChanged)
 	bool previewHidden() const { return m_previewHidden; }
 	int freezeTick() const { return m_freezeTick; }
+	// Drawn in the UI's scene (PreviewItem): popups draw over it, so it never steps aside.
+	void setPreviewInScene(bool on) { m_previewInScene = on; updatePreviewHidden(); }
+	bool previewInScene() const { return m_previewInScene; }
 	void updatePreviewHidden()
 	{
-		const bool hidden = m_dialogOpen || m_openPopups > 0 || !m_coverers.isEmpty();
+		const bool hidden = !m_previewInScene && (m_dialogOpen || m_openPopups > 0 || !m_coverers.isEmpty());
 		if (hidden != m_previewHidden) {
 			m_previewHidden = hidden;
 			if (hidden)
@@ -575,10 +589,15 @@ private:
 	QVariantMap m_levels;
 
 	// drag state
-	enum class Drag { None, Move, Resize, Create, Laser, Crop, Marquee } m_drag = Drag::None;
+	enum class Drag { None, Move, Resize, Create, Laser, Crop, CropPan, Marquee } m_drag = Drag::None;
 	QRectF m_marquee;           // canvas px, while dragging out a selection rectangle
 	QStringList m_marqueeBase;  // the selection it adds to (Shift), or empty
 	bool m_cropMode = false;
+	static bool pageFollowsLayer(const lobs::Doc &d, const QString &id);
+	static void sizePage(lobs::Doc &d, const QString &id, const lobs::Transform &t);
+	bool m_previewInScene = false;
+	lobs::Doc m_cropEntry; // the show when crop mode started (Esc goes back to it)
+	QHash<QString, double> m_cropAspects; // per layer, this session; else read from its crop
 	int m_perfMoves = 0;
 	qint64 m_perfTotalUs = 0, m_perfMaxUs = 0;
 	qint64 m_perfApplyUs = 0, m_perfEditUs = 0, m_perfHotkeyUs = 0, m_perfQmlUs = 0, m_perfInspectorUs = 0; // drag timing, logged on release

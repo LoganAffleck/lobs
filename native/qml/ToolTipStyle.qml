@@ -66,6 +66,7 @@ Item {
 
     function init() {
         tip = ts.ToolTip.toolTip // attached here: the shared instance every control uses
+        if (tip) tip.popupType = Popup.Item // in the scene, not an OS window (see FMenu)
         if (!tip) return Qt.callLater(init)
         tip.background = background.createObject(tip)
         tip.contentItem = content.createObject(tip)
