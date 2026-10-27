@@ -2279,9 +2279,11 @@ ApplicationWindow {
             if (retry && list.length && devices.length && device)
                 return // already showing a list (and a pick): keep it
             // One already open (in the show, or another app) says so, and a free one is picked first.
-            devices = list.map(d => d.inUse ? Object.assign({}, d, { name: d.name + " (in use)" }) : d)
+            const mine = d => onlyOnce && app.sourceUsingDevice(k, d.value) !== ""
+            devices = list.map(d => mine(d) ? Object.assign({}, d, { name: d.name + " (in your show)" })
+                                  : d.inUse ? Object.assign({}, d, { name: d.name + " (in use)" }) : d)
             const real = d => d.name.toLowerCase().indexOf("virtual") < 0
-            const first = list.find(d => real(d) && !d.inUse) || list.find(real) || list[0]
+            const first = list.find(d => real(d) && !d.inUse && !mine(d)) || list.find(d => real(d) && !mine(d)) || list.find(real) || list[0]
             device = k !== "window" && first ? first.value : ""
             deviceName = k !== "window" && first ? first.name : ""
         }
@@ -2295,16 +2297,23 @@ ApplicationWindow {
         onOpened: { adding = false; mono = false; browserSt = ({}); Qt.callLater(refreshDevices); nameField.forceActiveFocus() }
         readonly property bool ready: kind === "window" ? device !== ""
             : kind === "browser" ? !!(browserSt.local ? browserSt.file : browserSt.url) : true
-        // A camera already in the show isn't opened again (it would freeze there); its feed shows instead.
-        readonly property string inUseBy: kind === "camera" && visible ? app.sourceUsingDevice(kind, device) : ""
+        // A camera, mic or sound output is added once: one already in the show isn't opened again
+        // (a camera would freeze there). Its feed shows instead, and the button places that source.
+        readonly property bool onlyOnce: kind === "camera" || audioKind
+        readonly property string inUseBy: onlyOnce && visible ? app.sourceUsingDevice(kind, device) : ""
         readonly property bool busyElsewhere: kind === "camera" && !inUseBy && !!(devices.find(d => d.value === device) || {}).inUse
         readonly property var previewSettings: kind === "browser" ? browserSt : device ? ({ device: device }) : ({})
         function create() {
             if (!ready)
                 return
+            if (inUseBy) {
+                if (!audioKind && placeBox.checked) app.placeSource(inUseBy)
+                nameField.text = ""; close()
+                return
+            }
             adding = true
             // The preview's camera closes on its own thread; the new source opens it a moment later.
-            if (kind === "camera" && !inUseBy) {
+            if (kind === "camera") {
                 pendingCreate.restart()
                 return
             }
@@ -2509,8 +2518,14 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.topMargin: 4
                 Item { Layout.fillWidth: true }
+                Caption { visible: addDialog.inUseBy !== "" && addDialog.audioKind; text: "Already in your show" }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: addDialog.close() }
-                FButton { text: "Add source"; variant: "primary"; enabled: addDialog.ready; onClicked: addDialog.create() }
+                FButton {
+                    text: !addDialog.inUseBy ? "Add source" : addDialog.audioKind ? "Add source" : "Place on " + app.editSceneName
+                    variant: "primary"
+                    enabled: addDialog.ready && !(addDialog.inUseBy && (addDialog.audioKind || !placeBox.checked))
+                    onClicked: addDialog.create()
+                }
             }
         }
     }
