@@ -462,3 +462,21 @@ story("SL-01", "Background starts locked; dragging from empty canvas or a locked
 	app.selectLayer(bg, false);
 	eq("a locked layer can be selected in Layers", app.inspector.id, bg);
 });
+
+story("LY-09", "A layer shown again or faded under others keeps its place in the stack", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A); app.take();
+	// Bottom to top: a hidden background (parked), low, mid, top, all overlapping at (500, 400).
+	const bg = placeColor("Hidden bg", "#ff0000"); app.toggleVisible(bg);
+	const low = placeColor("Low", "#0000ff"); setT(low, "x", 300); setT(low, "y", 300); setT(low, "w", 400); setT(low, "h", 300);
+	const mid = placeColor("Mid", "#00ff00"); setT(mid, "x", 400); setT(mid, "y", 350); setT(mid, "w", 400); setT(mid, "h", 300);
+	const top = placeColor("Top", "#ff8800"); setT(top, "x", 450); setT(top, "y", 380); setT(top, "w", 400); setT(top, "h", 300);
+	t.waitFrames(4, 3000); t.wait(1500); // the park timer takes the hidden background out
+	const want = pixelAt(A, "ly09-before.png", 500, 400).hex;
+	app.toggleVisible(mid); t.waitFrames(3, 2000); t.wait(1500); // parked while hidden
+	app.toggleVisible(mid); t.waitFrames(4, 3000);
+	eq("a layer shown again stays under the one above it", pixelAt(A, "ly09-shown.png", 500, 400).hex, want);
+	sel(low); app.setOpacity(0.5, true); t.waitFrames(4, 3000);
+	eq("a faded lower layer stays under the others", pixelAt(A, "ly09-faded.png", 500, 400).hex, want);
+});

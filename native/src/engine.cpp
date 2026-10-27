@@ -507,7 +507,10 @@ void Engine::apply(const Doc &doc)
 			// else every edit re-adds a hidden layer's filters and the park timer drops them again.
 			if (it.hasApplied && (it.parked ? !sceneWanted(sceneId) || (!leaf.visible && canvasSame && it.applied == now)
 							: it.item && canvasSame && it.applied == now)) {
-				++order; // unchanged, or parked (applied in full when it shows)
+				// Unchanged, or parked (applied in full when it shows). A parked layer has no item in the
+				// scene, so it takes no place in the order: counting it put later layers too high.
+				if (it.item)
+					++order;
 				continue;
 			}
 			it.applied = now;
