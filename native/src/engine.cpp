@@ -503,8 +503,11 @@ void Engine::apply(const Doc &doc)
 			const Source &src = doc.sources[inst.sourceId];
 			const Item::Applied now{doc.transform(inst), c, Visibility{leaf.visible, leaf.opacity}, order, sceneId, src.kind,
 						src.kind == "text" || src.kind == "shape" ? src.settings : QVariantMap(), doc.filters(inst)};
-			if (it.hasApplied && (it.parked ? !sceneWanted(sceneId) : it.item && canvasSame && it.applied == now)) {
-				++order; // unchanged, or parked until its scene shows (applied in full then)
+			// A parked layer stays parked until its scene shows, or while it's hidden and unchanged:
+			// else every edit re-adds a hidden layer's filters and the park timer drops them again.
+			if (it.hasApplied && (it.parked ? !sceneWanted(sceneId) || (!leaf.visible && canvasSame && it.applied == now)
+							: it.item && canvasSame && it.applied == now)) {
+				++order; // unchanged, or parked (applied in full when it shows)
 				continue;
 			}
 			it.applied = now;
@@ -821,6 +824,11 @@ void Engine::parkHiddenFilters()
 			waiting = waiting || !sceneWanted(it.applied.sceneId);
 			continue;
 		}
+		// Plugin filters stay: OBS never destroys a filter because its source is hidden, and some
+		// keep working off-screen or hold GPU state (win-spout sends while hidden, and its teardown
+		// raced the graphics thread when parking dropped and re-made it: LOBS-042).
+		if (std::any_of(it.applied.filters.cbegin(), it.applied.filters.cend(), [](const Filter &f) { return f.type.startsWith("obs:"); }))
+			continue;
 		// Its scene item goes too: with a scale filter it holds a source-sized texture, and a
 		// hidden scene never ticks, so changing the filter wouldn't free it. apply() re-adds it.
 		if (it.item) {
