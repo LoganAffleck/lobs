@@ -1523,6 +1523,15 @@ int main(int argc, char *argv[])
 			obs_source_t *g = obs_get_source_by_name(game.toUtf8().constData());
 			check("game capture: no stand-in source on macOS", !g, g ? obs_source_get_id(g) : "none");
 			obs_source_release(g);
+#else
+			controller.addSource("game", "Game", "", true);
+			const QString game = controller.doc().sourceOrder.last();
+			controller.setSourceSetting(game, "transparent", true);
+			obs_source_t *g = obs_get_source_by_name(game.toUtf8().constData());
+			obs_data_t *gst = g ? obs_source_get_settings(g) : nullptr;
+			check("game capture: Allow transparency reaches OBS", gst && obs_data_get_bool(gst, "allow_transparency"), g ? "" : "no source");
+			obs_data_release(gst);
+			obs_source_release(g);
 #endif
 			bool all = true;
 			for (const QJsonValue c : checks)

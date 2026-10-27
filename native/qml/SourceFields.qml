@@ -35,6 +35,13 @@ ColumnLayout {
         currentValue: sf.st.device
         onPicked: (v) => app.setSourceSetting(sf.d.id, "device", v)
     }
+    // For apps that draw a see-through background, like VTuber avatar apps.
+    FCheckbox {
+        visible: sf.d.kind === "game"
+        text: "Allow transparency"
+        checked: sf.st.transparent === true
+        onToggled: app.setSourceSetting(sf.d.id, "transparent", checked)
+    }
     // A page's sound, right here: volume and mute without a trip to the mixer (once it's on a
     // scene, which is when it's in the mixer).
     RowLayout {

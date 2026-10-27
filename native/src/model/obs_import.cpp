@@ -47,6 +47,8 @@ QString convertInput(const QString &id, const QJsonObject &s, QVariantMap &out)
 	if (id == "coreaudio_output_capture" || id == "sck_audio_capture") return dev("device_id"), "desktop_audio";
 	if (id == "game_capture") {
 		out["mode"] = s["capture_mode"].toString("any_fullscreen");
+		if (s["allow_transparency"].toBool())
+			out["transparent"] = true;
 		dev("window");
 		return "game";
 	}
