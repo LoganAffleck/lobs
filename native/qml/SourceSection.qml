@@ -56,7 +56,7 @@ ColumnLayout {
                         spacing: 4
                         FIcon { name: "link-2"; size: 10; color: Pal.link; anchors.verticalCenter: parent.verticalCenter }
                         Text {
-                            text: (ss.src.sceneCount || 0) > 1 ? "Used in " + ss.src.sceneCount + " scenes" : "Shared input"
+                            text: (ss.src.sceneCount || 0) > 1 ? "Used in " + ss.src.sceneCount + " scenes" : "Shared source"
                             color: Pal.link; font.family: Pal.font; font.pixelSize: 10; font.weight: 600
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -64,7 +64,7 @@ ColumnLayout {
                     HoverHandler { id: sharedHover }
                     ToolTip.visible: sharedHover.hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Changes this input everywhere" + ((ss.src.scenes || []).length ? ": " + ss.src.scenes.join(", ") : "") + ". Size, crop and filters are per scene."
+                    ToolTip.text: "Changes apply in every scene" + ((ss.src.scenes || []).length ? ": " + ss.src.scenes.join(", ") : "") + ". Size, crop and filters are per layer."
                 }
             }
             // Closed: one line that usually answers the question (or the problem).
@@ -98,10 +98,10 @@ ColumnLayout {
             Text {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: (ss.src.sceneCount || 0) > 1 ? "Changes here apply in every scene that uses " + ss.src.name + "." : "Changes here apply wherever " + ss.src.name + " is used."
+                text: "Changes apply to " + ss.src.name + " in every scene."
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
             }
-            FButton { text: "Open in Sources"; variant: "ghost"; tip: "Show this input in the Sources panel"; onClicked: app.selectSource(ss.src.id) }
+            FButton { text: "Open in Sources"; variant: "ghost"; tip: "Select it in Sources"; onClicked: app.selectSource(ss.src.id) }
         }
     }
 }

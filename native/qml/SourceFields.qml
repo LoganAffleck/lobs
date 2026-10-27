@@ -47,7 +47,7 @@ ColumnLayout {
         FButton {
             iconName: pageAudio.mx && pageAudio.mx.muted ? "volume-x" : "volume-2"
             variant: "ghost"
-            tip: pageAudio.mx && pageAudio.mx.muted ? "Muted. Click to unmute." : "Mute"
+            tip: pageAudio.mx && pageAudio.mx.muted ? "Unmute" : "Mute"
             onClicked: app.setAudio(sf.d.id, "muted", !pageAudio.mx.muted, true)
         }
         Text {

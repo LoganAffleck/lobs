@@ -135,7 +135,7 @@ bool Engine::startReplay()
 		return false;
 	}
 	emit replayChanged();
-	setStatus(QString("Replay buffer on · keeps the last %1 s").arg(m_settings.record.replaySeconds));
+	setStatus(QString("Replay buffer on (last %1 s)").arg(m_settings.record.replaySeconds));
 	return true;
 }
 

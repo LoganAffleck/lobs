@@ -17,7 +17,7 @@ story("WC-01", "Top bar: New, Open, Import, Save and Window are there; Window op
 	const statsTabs = () => ui("Stats").filter(i => i.text === "Stats" && i.y > 60).length;
 	const before = statsTabs();
 	t.click("Window"); t.wait(300);
-	check("Window menu lists panels", has("Audio Mixer") && has("Stats"));
+	check("Window menu lists panels", has("Audio mixer") && has("Stats"));
 	t.grab("wc01-window-menu.png");
 	const items = ui("Stats").filter(i => i.text === "Stats");
 	t.clickItem("Stats", items.length - 1); t.wait(500);

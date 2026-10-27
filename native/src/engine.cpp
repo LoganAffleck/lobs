@@ -71,7 +71,7 @@ bool Engine::start(const QString &runtimeRoot)
 #endif
 	QDir().mkpath(cfg);
 	if (!obs_startup("en-US", cfg.toUtf8().constData(), nullptr)) {
-		setStatus("libobs failed to start");
+		setStatus("The OBS engine failed to start");
 		return false;
 	}
 	obs_video_info ovi = {};
@@ -95,12 +95,12 @@ bool Engine::start(const QString &runtimeRoot)
 	ovi.range = VIDEO_RANGE_PARTIAL;
 	ovi.scale_type = OBS_SCALE_BICUBIC;
 	if (int vr = obs_reset_video(&ovi); vr != OBS_VIDEO_SUCCESS) {
-		setStatus(QString("Video init failed (%1)").arg(vr));
+		setStatus(QString("Couldn't start video (%1)").arg(vr));
 		return false;
 	}
 	obs_audio_info ai = {48000, SPEAKERS_STEREO};
 	if (!obs_reset_audio(&ai)) {
-		setStatus("Audio init failed");
+		setStatus("Couldn't start audio");
 		return false;
 	}
 	// OBS 33 replaced module loading: obs_load_all_modules() became an empty stub, and its

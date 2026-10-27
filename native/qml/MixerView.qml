@@ -53,7 +53,7 @@ Item {
     }
     function src(i) { return mix[i] || ({ id: "", name: "", icon: "", color: "#555", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 }) }
     function monitorIcon(m) { return m === "off" ? "headphone-off" : "headphones" }
-    function monitorTip(m) { return m === "off" ? "Not monitored. Click to hear it in your headphones (and keep it in the output)." : m === "monitor_only" ? "Monitor only: you hear it, viewers don't. Click to turn monitoring off." : "Monitored: you hear it, and it's in the output. Click to turn monitoring off." }
+    function monitorTip(m) { return m === "off" ? "Not monitored" : m === "monitor_only" ? "Monitor only: you hear it, viewers don't" : "Monitored: you and viewers hear it" }
     function toggleMonitor(s) { app.setAudio(s.id, "monitor", s.monitor === "off" ? "monitor_and_output" : "off", true) }
 
     component IconToggle: AbstractButton {
@@ -109,7 +109,7 @@ Item {
             Text {
                 visible: !mv.searching
                 Layout.fillWidth: true
-                text: mv.count === 1 ? "1 input" : mv.count + " inputs"
+                text: mv.count === 1 ? "1 source" : mv.count + " sources"
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
             }
             FButton {
@@ -121,7 +121,7 @@ Item {
                 // Shows the layout in use: rows, or side-by-side strips (columns).
                 iconName: mv.strips ? "columns-3" : "rows-3"
                 variant: "ghost"
-                tip: mv.strips ? "Strips. Click for rows." : "Rows. Click for strips."
+                tip: mv.strips ? "Show as rows" : "Show as strips"
                 onClicked: mv.cycleLayout()
             }
         }
@@ -172,9 +172,9 @@ Item {
                             FIcon { visible: !!row.s.pinned; name: "pin"; size: 12; color: Pal.muted }
                             Badges { s: row.s }
                             Text { text: mv.toDb(row.s.volume) + " dB"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignRight }
-                            IconToggle { iconName: row.s.muted ? "volume-x" : "volume-2"; tint: row.s.muted ? Pal.danger : Pal.muted; tip: row.s.muted ? "Muted. Click to unmute." : "Mute"; onClicked: app.setAudio(row.s.id, "muted", !row.s.muted, true) }
+                            IconToggle { iconName: row.s.muted ? "volume-x" : "volume-2"; tint: row.s.muted ? Pal.danger : Pal.muted; tip: row.s.muted ? "Unmute" : "Mute"; onClicked: app.setAudio(row.s.id, "muted", !row.s.muted, true) }
                             IconToggle { iconName: mv.monitorIcon(row.s.monitor); tint: row.s.monitor === "off" ? Pal.muted : Pal.link; tip: mv.monitorTip(row.s.monitor); onClicked: mv.toggleMonitor(row.s) }
-                            IconToggle { id: rowMore; iconName: "ellipsis"; tip: "Monitoring, tracks and effects (in the Inspector)"; onClicked: mv.inspect(row.s.id) }
+                            IconToggle { id: rowMore; iconName: "ellipsis"; tip: "Audio settings"; onClicked: mv.inspect(row.s.id) }
                         }
                         MeterFader {
                             Layout.fillWidth: true
@@ -268,9 +268,9 @@ Item {
                         RowLayout {
                             Layout.alignment: Qt.AlignHCenter
                             spacing: 0
-                            IconToggle { iconName: strip.s.muted ? "volume-x" : "volume-2"; tint: strip.s.muted ? Pal.danger : Pal.muted; tip: strip.s.muted ? "Muted. Click to unmute." : "Mute"; onClicked: app.setAudio(strip.s.id, "muted", !strip.s.muted, true) }
+                            IconToggle { iconName: strip.s.muted ? "volume-x" : "volume-2"; tint: strip.s.muted ? Pal.danger : Pal.muted; tip: strip.s.muted ? "Unmute" : "Mute"; onClicked: app.setAudio(strip.s.id, "muted", !strip.s.muted, true) }
                             IconToggle { iconName: mv.monitorIcon(strip.s.monitor); tint: strip.s.monitor === "off" ? Pal.muted : Pal.link; tip: mv.monitorTip(strip.s.monitor); onClicked: mv.toggleMonitor(strip.s) }
-                            IconToggle { id: stripMore; iconName: "ellipsis"; tip: "Monitoring, tracks and effects (in the Inspector)"; onClicked: mv.inspect(strip.s.id) }
+                            IconToggle { id: stripMore; iconName: "ellipsis"; tip: "Audio settings"; onClicked: mv.inspect(strip.s.id) }
                         }
                     }
                 }
@@ -284,6 +284,6 @@ Item {
         width: parent.width - 48
         horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
         color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-        text: mv.count && !mv.shownCount ? "No audio inputs match \u201c" + searchField.text + "\u201d." : "No audio sources. Add a Mic or Desktop audio from Sources."
+        text: mv.count && !mv.shownCount ? "No audio sources match \u201c" + searchField.text + "\u201d." : "No audio sources. Add a mic or desktop audio in Sources."
     }
 }

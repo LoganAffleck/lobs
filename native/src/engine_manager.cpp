@@ -414,10 +414,10 @@ void EngineUpdater::check()
 				if (installed().contains(ver))
 					return set("ready", QString("OBS engine %1 is installed. Restart LOBS to use it.").arg(ver));
 				if (QSettings().value("engine/incompatible/" + ver).toBool())
-					return set("needsLobs", QString("OBS %1 didn't pass LOBS's compatibility check, so LOBS stays on %2 until a LOBS update supports it.").arg(ver, m_running.version));
+					return set("needsLobs", QString("OBS %1 failed the compatibility check. LOBS stays on %2 until an update supports it.").arg(ver, m_running.version));
 				Q_UNUSED(major);
 				if (ver == bad)
-					return set("upToDate", QString("OBS %1 didn't start on this PC earlier, so it isn't offered again.").arg(ver));
+					return set("upToDate", QString("OBS %1 failed to start on this PC before, so it's no longer offered.").arg(ver));
 				return set("available");
 			}
 		}
@@ -503,13 +503,13 @@ void EngineUpdater::verify(const QString &ver)
 	const auto reject = [this, ver](const QString &why) {
 		QDir(enginesDir() + "/" + ver).removeRecursively();
 		QSettings().setValue("engine/incompatible/" + ver, true);
-		set("needsLobs", QString("OBS %1 isn't compatible with this LOBS yet (%2), so LOBS stays on %3.").arg(ver, why, m_running.version));
+		set("needsLobs", QString("OBS %1 isn't compatible with this version of LOBS (%2). Staying on %3.").arg(ver, why, m_running.version));
 	};
 	const QStringList missing = missingExports(enginesDir() + "/" + ver + "/bin/64bit/obs.dll");
 	if (!missing.isEmpty())
-		return reject(QString("it no longer has %1 libobs function%2 LOBS uses: %3").arg(missing.size()).arg(missing.size() == 1 ? "" : "s").arg(missing.mid(0, 4).join(", ") + (missing.size() > 4 ? ", ..." : "")));
+		return reject(QString("it's missing %1 function%2 LOBS uses: %3").arg(missing.size()).arg(missing.size() == 1 ? "" : "s").arg(missing.mid(0, 4).join(", ") + (missing.size() > 4 ? ", ..." : "")));
 
-	set("testing", QString("Testing OBS %1 with LOBS...").arg(ver));
+	set("testing", QString("Testing OBS %1…").arg(ver));
 	const QString report = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/lobs-smoketest-" + ver + ".json";
 	QFile::remove(report);
 	m_smoke = new QProcess(this);

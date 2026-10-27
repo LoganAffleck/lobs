@@ -60,11 +60,11 @@ story("LA-04", "An audio source's mixer settings show in the Inspector", () => {
 	fresh();
 	const k = addKind("mic", "Desk mic", "", false);
 	t.wait(500);
-	t.click("Audio Mixer"); t.wait(400);
+	t.click("Audio mixer"); t.wait(400);
 	t.grab("la04-mixer.png");
-	const more = ui("tip=Monitoring, tracks and effects (in the Inspector)");
+	const more = ui("tip=Audio settings");
 	check("mixer has the ... button", more.length > 0);
-	t.clickItem("tip=Monitoring, tracks and effects (in the Inspector)", 0); t.wait(500);
+	t.clickItem("tip=Audio settings", 0); t.wait(500);
 	eq("the source is selected", app.inspector.mode, "source");
 	eq("it's the mic", app.inspector.id, k.source);
 	t.click("Inspector"); t.wait(300);

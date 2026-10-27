@@ -65,8 +65,8 @@ ColumnLayout {
         visible: (au.s.syncMs || 0) !== 0 || !!au.s.mono
         Layout.fillWidth: true; wrapMode: Text.WordWrap
         color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-        text: [(au.s.syncMs || 0) > 0 ? "Audio is delayed " + au.s.syncMs + " ms to line up with slower video." : (au.s.syncMs || 0) < 0 ? "Audio plays " + (-au.s.syncMs) + " ms early." : "",
-               au.s.mono ? "Mono: both channels carry the same mix (useful for a mic that only comes in on one side)." : ""].filter(t => t).join(" ")
+        text: [(au.s.syncMs || 0) > 0 ? "Audio is delayed " + au.s.syncMs + " ms to match slower video." : (au.s.syncMs || 0) < 0 ? "Audio plays " + (-au.s.syncMs) + " ms early." : "",
+               au.s.mono ? "Mono: the same mix on both sides. Fixes a mic heard on one side only." : ""].filter(t => t).join(" ")
     }
     RowLayout {
         Layout.fillWidth: true

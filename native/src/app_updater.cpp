@@ -48,7 +48,7 @@ QString verifyPublisher(const QString &path)
 	const LONG trust = WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &wd);
 	QString err;
 	if (trust != ERROR_SUCCESS) {
-		err = QString("the download isn't validly signed (0x%1)").arg(quint32(trust), 8, 16, QChar('0'));
+		err = QString("the download isn't signed correctly (0x%1)").arg(quint32(trust), 8, 16, QChar('0'));
 	} else {
 		// Trusted by Windows; now make sure it's LOBS's publisher and not just anyone's valid signature.
 		CRYPT_PROVIDER_DATA *pd = WTHelperProvDataFromStateData(wd.hWVTStateData);

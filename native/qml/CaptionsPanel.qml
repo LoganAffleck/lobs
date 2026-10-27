@@ -38,7 +38,7 @@ Item {
                     color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
                     text: captions.modelState === "downloading" ? "Downloading the speech model… " + Math.round(captions.downloadProgress * 100) + "%"
                         : captions.modelState === "error" ? captions.status
-                        : "Captions run on this PC, so your audio never leaves it. They need a one-time 142 MB download."
+                        : "Captions run on this PC, so your audio stays private. Needs a one-time 142 MB download."
                 }
                 FButton {
                     visible: captions.modelState !== "downloading"
@@ -114,7 +114,7 @@ Item {
                 width: parent.width - 32
                 horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-                text: captions.running ? "Listening. Text shows up a few seconds after speech." : "Pick a mic or desktop audio, then Start."
+                text: captions.running ? "Listening. Text appears a few seconds after speech." : "Pick a mic or desktop audio, then Start."
             }
         }
 
@@ -127,7 +127,7 @@ Item {
                 elide: Text.ElideRight
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
                 text: !captions.running ? (captions.status || "Captions are off")
-                    : "CC (" + cp.pickedName + ")" + (captions.toStream ? (app.streaming ? " for Stream" : " · sent once you go live") : " · not sent to the stream")
+                    : "CC (" + cp.pickedName + ")" + (captions.toStream ? (app.streaming ? ", sent to the stream" : ", sent when you go live") : ", not sent to the stream")
             }
             FButton { iconName: "trash-2"; variant: "ghost"; tip: "Clear the transcript"; onClicked: captions.clear() }
         }

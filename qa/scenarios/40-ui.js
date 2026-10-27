@@ -212,7 +212,7 @@ story("AU-04u", "Mixer: drag a strip by its name to reorder it", () => {
 	fresh();
 	["Mic A", "Mic B", "Mic C"].forEach(n => addKind("mic", n, "", false));
 	t.wait(500);
-	t.click("Audio Mixer"); t.wait(400); // by default the mixer is a tab behind Sources
+	t.click("Audio mixer"); t.wait(400); // by default the mixer is a tab behind Sources
 	const order = () => app.mixer.map(m => m.name).filter(n => /^Mic /.test(n));
 	// Mixer strips show the name in a small caption; the Sources rows use a larger Body text.
 	const strip = n => ui(n).filter(r => r.cls !== "Body")[0];

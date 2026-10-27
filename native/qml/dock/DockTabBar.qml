@@ -155,7 +155,7 @@ KDDW.TabBarBase {
                 function openHelp() { tabHelp.clicked() }
                 ToolTip.visible: tab.isHovered && !Singletons.helpers.isDragging && !(root.mainWin && root.mainWin.panelDrag && root.mainWin.panelDrag.active)
                 ToolTip.delay: 900
-                ToolTip.text: "Drag to move · double-click to float"
+                ToolTip.text: "Drag to move. Double-click to float."
             }
         }
         Connections {

@@ -347,7 +347,7 @@ ApplicationWindow {
                 }
             }
             // New, Open, Import, Save and Window are in the menu bar on macOS.
-            FButton { text: "New"; visible: !chrome.nativeMenuBar; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "Start a new project in its own folder" }
+            FButton { text: "New"; visible: !chrome.nativeMenuBar; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "New project in its own folder" }
             FButton { text: "Open"; visible: !chrome.nativeMenuBar; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
                 id: importButton
@@ -374,7 +374,7 @@ ApplicationWindow {
                     }
                     FMenuItem { text: "No OBS scene collections found"; enabled: false; visible: importMenu.collections.length === 0; height: visible ? implicitHeight : 0 }
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                    FMenuItem { text: "Choose a file..."; onTriggered: win.guardUnsaved(() => importDialog.open()) }
+                    FMenuItem { text: "Choose a file…"; onTriggered: win.guardUnsaved(() => importDialog.open()) }
                 }
             }
             FButton { text: "Save"; visible: !chrome.nativeMenuBar; variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
@@ -771,7 +771,7 @@ ApplicationWindow {
                                     iconName: modelData.muted ? "volume-x" : "volume-2"
                                     iconColor: modelData.muted ? Pal.danger : Pal.muted
                                     variant: "ghost"
-                                    tip: modelData.muted ? "Muted. Click to unmute." : "Mute"
+                                    tip: modelData.muted ? "Unmute" : "Mute"
                                     onClicked: app.setAudio(modelData.id, "muted", !modelData.muted, true)
                                 }
                                 // Video: is it in the scene you're editing? Hover to add or remove.
@@ -874,7 +874,7 @@ ApplicationWindow {
                                 FMenuItem {
                                     enabled: false
                                     text: !modelData.video ? "Plays in every scene"
-                                        : (modelData.scenes || []).length ? "Used in " + modelData.scenes.join(", ") : "Not used in any scene yet"
+                                        : (modelData.scenes || []).length ? "Used in " + modelData.scenes.join(", ") : "Not in any scene"
                                 }
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                                 FMenuItem { // LOBS-018: confirm when the source is in more than one scene
@@ -887,7 +887,7 @@ ApplicationWindow {
                             visible: poolList.count === 0
                             anchors.centerIn: parent
                             horizontalAlignment: Text.AlignHCenter
-                            text: poolSearch.query ? "No sources match \u201c" + poolSearch.text + "\u201d." : poolGuest.filter === 2 ? "No audio inputs yet." : poolGuest.filter === 1 ? "No video inputs yet." : "Add each camera, capture or mic once,\nthen drag it onto any scene."
+                            text: poolSearch.query ? "No sources match \u201c" + poolSearch.text + "\u201d." : poolGuest.filter === 2 ? "No audio sources yet." : poolGuest.filter === 1 ? "No video sources yet." : "Add each camera, capture or mic once,\nthen drag it onto any scene."
                         }
                     }
                 }
@@ -1097,13 +1097,13 @@ ApplicationWindow {
                                 wrapMode: Text.WordWrap
                                 color: "#fde68a"; font.family: Pal.font; font.pixelSize: Pal.caption
                                 text: app.missingAssets.length === 1
-                                      ? app.missingAssets[0].name + " is missing (moved or deleted outside LOBS)."
-                                      : app.missingAssets.length + " files are missing (moved or deleted outside LOBS)."
+                                      ? app.missingAssets[0].name + " was moved or deleted outside LOBS."
+                                      : app.missingAssets.length + " files were moved or deleted outside LOBS."
                             }
-                            FButton { text: "Find it"; variant: "secondary"; tip: "Search assets folders by file name"; onClicked: app.findMissingAssets() }
+                            FButton { text: "Find it"; variant: "secondary"; tip: "Search assets by file name"; onClicked: app.findMissingAssets() }
                             FButton {
                                 text: "Choose file…"; variant: "ghost"
-                                tip: "Point " + (app.missingAssets[0] ? app.missingAssets[0].name : "it") + " at a file"
+                                tip: "Choose a new file for " + (app.missingAssets[0] ? app.missingAssets[0].name : "it")
                                 onClicked: { relinkPicker.sourceId = app.missingAssets[0].sourceId; relinkPicker.open() }
                             }
                         }
@@ -1347,7 +1347,7 @@ ApplicationWindow {
                             horizontalAlignment: Text.AlignHCenter
                             text: assetSearch.query ? "Nothing in assets matches \u201c" + assetSearch.text + "\u201d."
                                 : assetsGuest.raw.length ? "No " + ["", "images", "videos", "audio files"][assetsGuest.typeFilter] + " here."
-                                : app.assetPath ? chrome.keys("This folder is empty. Drag files here, or paste with Ctrl+V.")
+                                : app.assetPath ? chrome.keys("Empty folder. Drop files here or paste with Ctrl+V.")
                                 : "Drop images, video or audio here."
                         }
                         // Drop from File Explorer: files are copied into the current folder.
@@ -1407,7 +1407,7 @@ ApplicationWindow {
                             MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                             FMenuItem { visible: !assetMenu.many; height: visible ? implicitHeight : 0; text: "Show in File Explorer"; onTriggered: app.revealAsset(String(assetMenu.asset.path || "")) }
                             FMenuItem {
-                                text: assetMenu.asset.uses && !assetMenu.many ? "In use: remove its layers first" : "Move to Recycle Bin  Del"
+                                text: assetMenu.asset.uses && !assetMenu.many ? "In use. Remove its layers first" : "Move to Recycle Bin  Del"
                                 enabled: !(assetMenu.asset.uses && !assetMenu.many)
                                 onTriggered: app.trashAssets(assetMenu.sel)
                             }
@@ -1695,7 +1695,7 @@ ApplicationWindow {
         KDDW.DockWidget {
             id: audioDock
             uniqueName: "audio"
-            title: "Audio Mixer"
+            title: "Audio mixer"
             MixerView { id: audioGuest; property size kddockwidgets_min_size: Qt.size(300, 150); anchors.fill: parent; onInspectRequested: win.showInspector() }
         }
 
@@ -1773,15 +1773,15 @@ ApplicationWindow {
         dockArea: dockArea
         panels: [
             { dock: videoDock, guest: videoGuest, icon: "monitor" },
-            { help: ["Click: edit a scene without showing it.", "Show or double-click: switch to the scene.", "Grid: shows live thumbnails of every scene.", "Right-click: rename, duplicate with linked or independent layers, or delete."], dock: scenesDock, guest: scenesGuest, icon: "clapperboard" },
-            { help: ["Inputs: added once, shared by every scene.", "Place it: drag onto the canvas or double-click.", "Per scene: size, crop and filters.", "Files are in Assets. Add text and color from Layers."], dock: poolDock, guest: poolGuest, icon: "folder" },
-            { help: ["Project files: this project's assets folder.", "Add files: drag in from File Explorer or use + Asset.", "Place it: drag onto the canvas or double-click.", "Right-click: show in File Explorer or move to Recycle Bin."], dock: assetsDock, guest: assetsGuest, icon: "image" },
-            { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", chrome.keys("Shortcuts: Ctrl+C / Ctrl+V copy and paste (Ctrl+Shift+V pastes linked), Ctrl+D duplicate, Ctrl+G group, Delete remove."), "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
-            { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.", "Source: select one in Sources to edit its input."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
-            { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 goes to the stream; recordings can use tracks 1-6.", "Monitor: hear it in headphones. Monitor only keeps it out of output.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
+            { help: ["Click: edit a scene without showing it.", "Show or double-click: switch to the scene.", "Grid: live thumbnails of every scene.", "Right-click: rename, duplicate or delete."], dock: scenesDock, guest: scenesGuest, icon: "clapperboard" },
+            { help: ["Sources: add once, use in any scene.", "Place it: drag onto the canvas or double-click.", "Per layer: size, crop and filters.", "Files are in Assets. Add text and color from Layers."], dock: poolDock, guest: poolGuest, icon: "folder" },
+            { help: ["Files: this project's assets folder.", "Add files: drag in from File Explorer or click Add.", "Place it: drag onto the canvas or double-click.", "Right-click: show in File Explorer or move to Recycle Bin."], dock: assetsDock, guest: assetsGuest, icon: "image" },
+            { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", chrome.keys("Keys: Ctrl+C copy, Ctrl+V paste, Ctrl+Shift+V paste linked, Ctrl+D duplicate, Ctrl+G group, Delete remove."), "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
+            { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: type math like 1920/2. Up and Down nudge, Shift for 10.", "Source: select it in Sources to edit it in every scene."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
+            { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 is the stream. Recordings can use tracks 1–6.", "Monitor: hear it yourself. Monitor only keeps it off the stream and recording.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
             { help: [chrome.keys("Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y."), "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },
-            { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: more than 1%, worth a look."], dock: statsDock, guest: statsGuest, icon: "gauge" },
-            { help: ["Speech to text from one audio source, on this PC.", "Send to stream: viewers turn on CC to see them.", "Language: pick it, or let LOBS detect it.", "Text shows up a few seconds after speech."], dock: captionsDock, guest: captionsGuest, icon: "captions" }
+            { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: over 1%."], dock: statsDock, guest: statsGuest, icon: "gauge" },
+            { help: ["Speech to text from one audio source, on this PC.", "Send to stream: viewers turn on CC to see them.", "Language: pick one or detect it automatically.", "Text appears a few seconds after speech."], dock: captionsDock, guest: captionsGuest, icon: "captions" }
         ]
     }
 
@@ -1833,8 +1833,8 @@ ApplicationWindow {
                     Caption {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         text: toolDefaults.t === "laser" ? "A fading trail. Nothing is added to the scene."
-                            : toolDefaults.t === "text" ? "Drag up or down on the canvas to set the size, then type. Esc or a click elsewhere finishes."
-                                                         : "Used for the next one you draw. Select a shape to change its own."
+                            : toolDefaults.t === "text" ? "Drag up or down to set the size, then type. Esc or click away to finish."
+                                                         : "Applies to the next shape. Select a shape to change it."
                     }
                     RowLayout {
                         visible: toolDefaults.t === "text"
@@ -1920,10 +1920,10 @@ ApplicationWindow {
                         RowLayout {
                             visible: tf.isLayer
                             spacing: 4; Layout.fillWidth: true
-                            RowLabel { text: "Layer Fit" }
+                            RowLabel { text: "Layer fit" }
                             FButton { iconName: "shrink"; text: "Fit"; variant: "ghost"; onClicked: app.fit("fit"); tip: "Fit inside the canvas, keeping proportions" }
                             FButton { iconName: "expand"; text: "Fill"; variant: "ghost"; onClicked: app.fit("fill"); tip: "Cover the whole canvas, keeping proportions" }
-                            FButton { iconName: "ratio"; text: "Original"; variant: "ghost"; onClicked: app.fit("aspect"); tip: "Restore the source's own proportions" }
+                            FButton { iconName: "ratio"; text: "Original"; variant: "ghost"; onClicked: app.fit("aspect"); tip: "Use the source's proportions" }
                             Item { Layout.fillWidth: true }
                         }
                         RowLayout {
@@ -1942,7 +1942,7 @@ ApplicationWindow {
                                 visible: tf.isLayer
                                 iconName: tf.lockAspect ? "link-2" : "unlink-2"
                                 variant: "ghost"; selected: tf.lockAspect
-                                tip: tf.lockAspect ? "W and H keep their proportions. Click to change them separately." : "W and H change separately. Click to keep proportions."
+                                tip: tf.lockAspect ? "Unlock proportions" : "Lock proportions"
                                 onClicked: { tf.lockAspect = !tf.lockAspect; app.setUiFlag("inspector/lockAspect", tf.lockAspect) }
                             }
                         }
@@ -1978,13 +1978,13 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             iconName: "crop"; text: app.cropMode ? "Done" : "Crop"
                             variant: app.cropMode ? "primary" : "secondary"
-                            tip: app.cropMode ? "Finish cropping (Enter). Esc puts it back." : "Drag the edges on the canvas to crop, or inside to move the crop. Double-click a layer to start."
+                            tip: app.cropMode ? "Finish cropping (Enter). Esc cancels." : "Drag an edge on the canvas to crop, or inside to move it. Shortcut: double-click a layer."
                             onClicked: app.cropMode = !app.cropMode
                         }
                         FButton {
                             variant: "ghost"
                             iconName: cropSec.open ? "chevron-up" : "chevron-down"
-                            tip: cropSec.open ? "Hide exact crop values" : "Exact crop values"
+                            tip: cropSec.open ? "Hide crop values" : "Show crop values"
                             onClicked: { cropSec.open = !cropSec.open; app.setUiFlag("inspector/cropOpen", cropSec.open) }
                         }
                     }
@@ -2183,7 +2183,7 @@ ApplicationWindow {
                     Row { spacing: 8
                         FIcon { size: 16; name: sv.d.icon || ""; anchors.verticalCenter: parent.verticalCenter }
                         Text { text: sv.d.name || ""; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; anchors.verticalCenter: parent.verticalCenter } }
-                    Caption { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: (sv.d.kindLabel || "") + " · input settings apply to every scene that uses it. Size, crop and filters are set per layer." }
+                    Caption { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: (sv.d.kindLabel || "Source") + " settings apply in every scene. Size, crop and filters are per layer." }
                     SourceFields { d: sv.d; active: sv.d.mode === "source" }
                     // Sources with sound: what the mixer's "..." used to open, here instead.
                     AudioSettings {
@@ -2197,7 +2197,7 @@ ApplicationWindow {
                         model: sv.d.usedIn || []
                         delegate: FButton { required property var modelData; text: modelData.scene; variant: "ghost"; onClicked: { app.editScene(modelData.sceneId); app.selectLayer(modelData.instId, false) } }
                     }
-                    Caption { visible: (sv.d.usedIn || []).length === 0; text: sv.d.video ? "Not on any scene yet — drag it onto the canvas." : "Audio source — always mixed in."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Caption { visible: (sv.d.usedIn || []).length === 0; text: sv.d.video ? "Not in any scene. Drag it onto the canvas." : "Audio source. Plays in every scene."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
                 Item { Layout.fillHeight: true }
             }
@@ -2268,7 +2268,7 @@ ApplicationWindow {
             if (retry && list.length && devices.length && device)
                 return // already showing a list (and a pick): keep it
             // One already open (in the show, or another app) says so, and a free one is picked first.
-            devices = list.map(d => d.inUse ? Object.assign({}, d, { name: d.name + "  ·  in use" }) : d)
+            devices = list.map(d => d.inUse ? Object.assign({}, d, { name: d.name + " (in use)" }) : d)
             const real = d => d.name.toLowerCase().indexOf("virtual") < 0
             const first = list.find(d => real(d) && !d.inUse) || list.find(real) || list[0]
             device = k !== "window" && first ? first.value : ""
@@ -2311,7 +2311,7 @@ ApplicationWindow {
         ColumnLayout {
             anchors.fill: parent
             spacing: 12
-            Caption { text: "Each input is added once and shared by every scene."; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Caption { text: "Add each source once and use it in any scene."; Layout.fillWidth: true; wrapMode: Text.WordWrap }
             GridLayout {
                 columns: 5; columnSpacing: 6; rowSpacing: 6
                 Repeater {
@@ -2373,19 +2373,19 @@ ApplicationWindow {
                         Caption {
                             visible: addDialog.busyElsewhere
                             anchors.centerIn: parent
-                            text: "Another app is using this camera. Close it there to use it here."
+                            text: "Another app is using this camera. Close that app first."
                         }
                         Caption {
                             visible: addDialog.inUseBy !== "" && addPreview.ready
                             anchors { left: parent.left; bottom: parent.bottom; margins: 8 }
-                            text: "Already in your show, so this is its feed. A camera opens in one place at a time."
+                            text: "Already in your show. A camera opens in one place at a time, so this is that feed."
                             color: Pal.fg
                             Rectangle { anchors.fill: parent; anchors.margins: -4; z: -1; radius: 4; color: "#b0000000" }
                         }
                         Caption {
                             visible: !addPreview.ready && !addDialog.busyElsewhere
                             anchors.centerIn: parent
-                            text: addDialog.kind === "browser" ? "Enter a URL or pick a file to see the page" : addDialog.device ? "Starting the preview…" : "Nothing to preview"
+                            text: addDialog.kind === "browser" ? "Enter a URL or choose a file" : addDialog.device ? "Starting the preview…" : "Nothing to preview"
                         }
                         FButton {
                             visible: addDialog.kind === "browser" && addPreview.ready
@@ -2432,7 +2432,7 @@ ApplicationWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             Caption { text: "Choose the window to capture"; Layout.fillWidth: true }
-                            FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "List the open windows again"; onClicked: addDialog.refreshDevices() }
+                            FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "Refresh window list"; onClicked: addDialog.refreshDevices() }
                         }
                         Rectangle {
                             Layout.fillWidth: true
@@ -2542,9 +2542,9 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
-                text: appUpdater.state === "downloading" ? "Downloading... " + Math.round(appUpdater.progress * 100) + "%"
-                    : appUpdater.state === "ready" ? "LOBS closes, installs the update and opens again in about a minute. Your shows and settings stay as they are."
-                    : appUpdater.message || ("You have " + appUpdater.current + ". The update downloads in the background while you keep working.")
+                text: appUpdater.state === "downloading" ? "Downloading… " + Math.round(appUpdater.progress * 100) + "%"
+                    : appUpdater.state === "ready" ? "LOBS will close, install the update and reopen in about a minute. Your shows and settings are kept."
+                    : appUpdater.message || ("You have " + appUpdater.current + ". The update downloads in the background.")
             }
             Rectangle {
                 visible: appUpdater.state === "downloading"
@@ -2557,7 +2557,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: "#fbbf24"; font.family: Pal.font; font.pixelSize: Pal.body
-                text: "Stop streaming, recording, the replay buffer and the virtual camera first. LOBS won't close while they're running."
+                text: "Stop streaming, recording, the replay buffer and the virtual camera first."
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -2589,7 +2589,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
-                text: "Sorry about that. LOBS saved a crash report on this PC. Reporting it on GitHub helps get it fixed. The issue asks for the log, which is safe to post. Keep the .dmp file private: it can hold what LOBS had in memory, like your stream key."
+                text: "LOBS saved a crash report on this PC. Report it on GitHub and attach the log. Don't post the .dmp file: it can contain your stream key."
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -2612,7 +2612,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
-                text: "This show has never been saved. If you don't save it, its changes are lost."
+                text: "This show hasn't been saved. Your changes will be lost if you don't save it."
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -2637,8 +2637,8 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
-                text: "It's used in " + (deleteSourceDialog.row.scenes || []).length + " scenes (" + (deleteSourceDialog.row.scenes || []).join(", ")
-                      + "). Deleting it removes it from all of them. You can undo this."
+                text: "It's in " + (deleteSourceDialog.row.scenes || []).length + " scenes (" + (deleteSourceDialog.row.scenes || []).join(", ")
+                      + ") and will be removed from all of them. You can undo this."
             }
             RowLayout {
                 Layout.fillWidth: true

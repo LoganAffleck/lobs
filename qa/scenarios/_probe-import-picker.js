@@ -6,7 +6,7 @@ function has(text) { return ui(text).length > 0; }
 function tryIt(label) {
 	t.click("Import"); t.wait(400);
 	check(label + ": Import menu open", has("Choose a file"));
-	t.click("Choose a file..."); t.wait(1500);
+	t.click("Choose a file…"); t.wait(1500);
 	const native = t.nativeDialogs();
 	const askSave = has("Save this show first?");
 	t.note(label + ": previewHidden=" + app.previewHidden + " visibleMenus=" + app.visibleMenus);

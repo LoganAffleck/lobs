@@ -53,7 +53,7 @@ ColumnLayout {
                 anchors { right: parent.right; verticalCenter: parent.verticalCenter; rightMargin: 2 }
                 implicitHeight: parent.height - 4; implicitWidth: implicitHeight
                 iconName: "refresh-cw"; variant: "ghost"
-                tip: "Reload the page, skipping the cache"
+                tip: "Reload, ignoring the cache"
                 onClicked: bo.refreshRequested()
             }
         }
@@ -98,8 +98,8 @@ ColumnLayout {
             iconName: bo.follows ? "link-2" : "unlink-2"
             text: bo.follows ? "Follows layer" : "Fixed"
             variant: "ghost"; selected: bo.follows
-            tip: bo.follows ? "Resizing the layer resizes the page, like a browser window. Click to set a fixed size."
-                            : "The page keeps this size and the layer scales it. Click to have the page follow the layer."
+            tip: bo.follows ? "The page resizes with the layer. Click to set a fixed size."
+                            : "The page keeps this size. Click to follow the layer."
             onClicked: bo.changed("responsive", !bo.follows)
         }
         Item { Layout.fillWidth: true }
@@ -193,7 +193,7 @@ ColumnLayout {
                     tip: "Edit the page's CSS"
                     onClicked: cssBox.visible = !cssBox.visible
                 }
-                FButton { visible: bo.customCss; text: "Reset"; variant: "ghost"; tip: "Back to the default: a transparent page"; onClicked: bo.changed("css", undefined) }
+                FButton { visible: bo.customCss; text: "Reset"; variant: "ghost"; tip: "Reset to default (transparent page)"; onClicked: bo.changed("css", undefined) }
                 Item { Layout.fillWidth: true }
             }
             Rectangle {

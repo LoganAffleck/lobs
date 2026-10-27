@@ -31,7 +31,7 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     color: "#fecaca"; font.family: Pal.font; font.pixelSize: Pal.body
-                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? chrome.keys(" · editing what's on air is locked. Hold Alt, or unlock to edit.") : " · live lock is off, edits go on air.")
+                    text: (app.streaming ? "Live" : "Recording") + (app.liveLocked ? chrome.keys(": on-air layers are locked. Hold Alt or click Unlock to edit.") : ": edits go on air.")
                 }
                 FButton { visible: app.settings.liveLock !== false; text: app.liveLocked ? "Unlock" : "Lock again"; variant: "ghost"; onClicked: app.setLiveUnlock(app.liveLocked) }
             }
@@ -53,7 +53,7 @@ Rectangle {
                             "Move: drag a layer. Snaps to edges and layers.",
                             "Resize: drag a corner. Shift: free resize.",
                             chrome.keys("Ctrl: drag without snapping."),
-                            "Groups: click selects the group. Each double-click goes one level deeper.",
+                            "Groups: click selects the group. Double-click to go one level deeper.",
                             "Nudge: arrow keys move 1 px, Shift+arrows 10 px.",
                             chrome.keys("Live lock: hold Alt to move layers while live."),
                             "Show: switch to this scene."
@@ -67,9 +67,9 @@ Rectangle {
                     variant: "ghost"
                     selected: app.pixelPerfect && exact
                     tip: app.pixelPerfect
-                         ? (exact ? "Pixel-perfect: each canvas pixel lands exactly on screen pixels, so text is crisp. Click to fit the panel exactly instead."
-                                  : "Pixel-perfect is on, but no exact ratio fits well at this panel size, so it fits the panel. Make the panel a little larger to snap.")
-                         : "Fits the panel exactly (may soften text). Click for pixel-perfect scaling."
+                         ? (exact ? "Pixel-perfect: sharpest text. Click to fit the panel."
+                                  : "Pixel-perfect can't fit this panel size. Make the panel larger.")
+                         : "Fit to panel. Text may look soft. Click for pixel-perfect."
                     onClicked: app.pixelPerfect = !app.pixelPerfect
                 }
                 // The show's transition for Show; the menu switches it or opens the editor.

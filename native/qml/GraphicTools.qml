@@ -19,7 +19,7 @@ Rectangle {
         { id: "ellipse", icon: "circle", key: "O", tip: "Ellipse: drag (Shift for a circle)" },
         { id: "arrow", icon: "arrow-up-right", key: "A", tip: "Arrow (Shift snaps to 45°)" },
         { id: "pencil", icon: "pencil", key: "P", tip: "Pencil" },
-        { id: "laser", icon: "siren", key: "L", tip: "Laser pointer, not added to the scene" }
+        { id: "laser", icon: "siren", key: "L", tip: "Laser pointer (not added to the scene)" }
     ]
     component ToolButton: AbstractButton {
         id: tb

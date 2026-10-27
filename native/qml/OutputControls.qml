@@ -68,8 +68,8 @@ RowLayout {
                 iconName: "history"
                 text: "Replay"
                 active: app.replayActive
-                tip: app.replayActive ? "Replay buffer is on (last " + (app.settings.replaySeconds || 30) + " s). Click to turn it off."
-                                      : "Keep the last " + (app.settings.replaySeconds || 30) + " s so you can save a highlight"
+                tip: app.replayActive ? "Replay buffer on (last " + (app.settings.replaySeconds || 30) + " s). Click to turn off."
+                                      : "Keep the last " + (app.settings.replaySeconds || 30) + " s to save as a clip"
                 onClicked: app.toggleReplay()
             }
             FButton { // appears only while the replay buffer runs
@@ -85,9 +85,9 @@ RowLayout {
                 iconName: "video"
                 text: "Virtual cam"
                 active: app.vcamActive
-                tip: app.vcamActive ? "Other apps see the program scene as \"OBS Virtual Camera\". Click to stop."
-                     : app.vcamAvailable ? "Send the program scene to Zoom, Meet, Discord and others as \"OBS Virtual Camera\""
-                     : "Set up the virtual camera (Windows asks for permission once)"
+                tip: app.vcamActive ? "On as \"OBS Virtual Camera\". Click to stop."
+                     : app.vcamAvailable ? "Send the on-air scene to other apps as \"OBS Virtual Camera\""
+                     : "Set up the virtual camera. Windows asks for permission once."
                 onClicked: app.toggleVirtualCam()
             }
             Rectangle { implicitWidth: 1; implicitHeight: 14; color: Pal.border }
@@ -96,7 +96,7 @@ RowLayout {
                 text: app.recording ? (oc.st.recTime || "00:00:00") : "Record"
                 active: app.recording
                 dot: Pal.live
-                tip: app.recording ? "Recording · " + (oc.st.recMb || 0).toFixed(0) + " MB. Click to stop." : "Record the program scene"
+                tip: app.recording ? "Stop recording (" + (oc.st.recMb || 0).toFixed(0) + " MB)" : "Record the on-air scene"
                 onClicked: app.toggleRecording()
             }
         }
@@ -145,7 +145,7 @@ RowLayout {
                 FIcon { visible: !app.streaming; name: "radio-tower"; size: 14; color: Pal.s1; anchors.verticalCenter: parent.verticalCenter }
                 Text {
                     text: !app.streaming ? "Go live"
-                        : live.confirming ? "Click again to end stream"
+                        : live.confirming ? "Click again to stop"
                         : "LIVE  " + (oc.ss.time || "00:00:00")
                     color: app.streaming ? "#fee2e2" : Pal.s1
                     font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 600
@@ -162,6 +162,6 @@ RowLayout {
         }
         ToolTip.visible: hovered
         ToolTip.delay: 600
-        ToolTip.text: app.streaming ? (oc.ss.dropped || 0) + " dropped frames · click twice to end" : "Start streaming with your saved settings"
+        ToolTip.text: app.streaming ? (oc.ss.dropped || 0) + " dropped frames. Click twice to stop." : "Start streaming"
     }
 }

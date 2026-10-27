@@ -20,7 +20,7 @@ QString obsOutputError(obs_output_t *out)
 		return {};
 	QString s = QString::fromUtf8(e);
 	static const QRegularExpression ransom(QStringLiteral("If Windows 10 Ransomware Protection is enabled it can also cause this error\\.[^\n]*"));
-	s.replace(ransom, QString("Windows Security %1 Controlled folder access can also block it: allow LOBS there, or choose another folder.").arg(QChar(0x2192)));
+	s.replace(ransom, QString("Controlled folder access in Windows Security may also block it. Allow LOBS there or choose another folder."));
 	return ": " + s.trimmed();
 }
 

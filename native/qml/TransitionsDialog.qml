@@ -130,7 +130,7 @@ FDialog {
                     text: dlg.sel && dlg.sel.id === app.currentTransition ? "In use" : "Use for Show"
                     variant: dlg.sel && dlg.sel.id === app.currentTransition ? "ghost" : "primary"
                     enabled: !!dlg.sel && dlg.sel.id !== app.currentTransition
-                    tip: "Show plays this transition when it switches scenes"
+                    tip: "Used when Show switches scenes"
                     onClicked: app.setCurrentTransition(dlg.sel.id)
                 }
                 FButton {

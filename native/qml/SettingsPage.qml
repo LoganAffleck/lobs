@@ -25,7 +25,7 @@ Rectangle {
         { title: "Video", icon: "monitor", desc: "Output size, frame rate and encoder." },
         { title: "Audio", icon: "audio-lines", desc: "Devices for your global mic and desktop audio." },
         { title: "Hotkeys", icon: "keyboard", desc: "Work even while a game has focus." },
-        { title: "Updates", icon: "refresh-cw", desc: "New versions of LOBS, with the OBS engine they were tested with." },
+        { title: "Updates", icon: "refresh-cw", desc: "New versions of LOBS and its OBS engine." },
         { title: "About", icon: "info", desc: "Versions, licenses and where LOBS keeps its files." }
     ]
 
@@ -184,7 +184,7 @@ Rectangle {
                             SettingRow {
                                 visible: page.s.service !== "Custom"
                                 title: "Server"
-                                description: "Auto picks the closest ingest."
+                                description: "Auto picks the closest server."
                                 FSelect {
                                     options: page.open && page.s.service !== "Custom" ? app.servers(page.s.service) : []
                                     currentValue: page.s.server
@@ -236,7 +236,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Live lock"
-                                description: chrome.keys("While streaming or recording, layers on air don't change by accident. Hold Alt, or click Unlock in the banner, to edit.")
+                                description: chrome.keys("Locks on-air layers while you stream or record. Hold Alt or click Unlock to edit.")
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.liveLock !== false; onClicked: page.save("liveLock", !(page.s.liveLock !== false)) }
                             }
                         }
@@ -268,7 +268,7 @@ Rectangle {
                                 title: "Recording quality"
                                 description: "Same as stream reuses the stream encoder."
                                 FSelect {
-                                    options: [{ name: "Same as stream", value: "stream" }, { name: "High, medium files", value: "high" }, { name: "Indistinguishable, large files", value: "indistinguishable" }]
+                                    options: [{ name: "Same as stream", value: "stream" }, { name: "High (medium files)", value: "high" }, { name: "Indistinguishable (large files)", value: "indistinguishable" }]
                                     currentValue: page.s.recordQuality
                                     onPicked: (v) => page.save("recordQuality", v)
                                 }
@@ -279,7 +279,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Keep the last"
-                                description: "Turn it on from the top bar. Save replay writes to your recordings folder."
+                                description: "Turn it on in the top bar. Saved replays go to your recordings folder."
                                 FTabs {
                                     property bool fillSlot: false
                                     model: ["15 s", "30 s", "1 min", "2 min"]
@@ -347,7 +347,7 @@ Rectangle {
                                     required property int index
                                     divider: index > 0
                                     title: modelData.name
-                                    description: "Always mixed in, in every scene."
+                                    description: "Plays in every scene."
                                     FSelect {
                                         options: page.open ? app.devices(modelData.id) : []
                                         currentValue: page.open ? (app.sourceSetting(modelData.id, "device") || "") : ""
@@ -357,7 +357,7 @@ Rectangle {
                                 }
                             }
                         }
-                        Text { Layout.topMargin: 10; text: "Levels, monitoring and tracks are in the Audio tab."; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
+                        Text { Layout.topMargin: 10; text: "Levels, monitoring and tracks are in the Audio mixer."; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
                     }
 
                     // ===== Hotkeys =====
@@ -383,7 +383,7 @@ Rectangle {
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
                                     color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body
-                                    text: "<b>Global hotkeys are blocked right now.</b> macOS's Secure Keyboard Entry is on, so no app gets keys typed elsewhere. Close password fields and password managers, or turn off Secure Keyboard Entry in Terminal's menu. Logging out clears it."
+                                    text: "<b>Global hotkeys are blocked.</b> Secure Keyboard Entry is on. Close password fields and password managers, or turn it off in Terminal's menu. Logging out clears it."
                                     textFormat: Text.StyledText
                                 }
                             }
@@ -454,16 +454,16 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "LOBS " + appUpdater.current
-                                description: appUpdater.state === "checking" ? "Checking for updates..."
+                                description: appUpdater.state === "checking" ? "Checking for updates…"
                                     : appUpdater.state === "available" ? "LOBS " + appUpdater.latest + " is available"
-                                    : appUpdater.state === "downloading" ? "Downloading LOBS " + appUpdater.latest + "... " + Math.round(appUpdater.progress * 100) + "%"
+                                    : appUpdater.state === "downloading" ? "Downloading LOBS " + appUpdater.latest + "… " + Math.round(appUpdater.progress * 100) + "%"
                                     : appUpdater.state === "ready" ? "LOBS " + appUpdater.latest + " is ready to install"
-                                    : appUpdater.state === "installing" ? "Installing..."
+                                    : appUpdater.state === "installing" ? "Installing…"
                                     : appUpdater.state === "upToDate" ? "Up to date" + (appUpdater.lastChecked ? " · checked " + appUpdater.lastChecked : "")
                                     : appUpdater.lastChecked ? "Last checked " + appUpdater.lastChecked : "Not checked yet"
                                 FButton {
                                     property bool fillSlot: false
-                                    text: appUpdater.state === "available" || appUpdater.state === "downloading" || appUpdater.state === "ready" ? "Update..." : "Check now"
+                                    text: appUpdater.state === "available" || appUpdater.state === "downloading" || appUpdater.state === "ready" ? "Update…" : "Check now"
                                     variant: appUpdater.state === "available" || appUpdater.state === "ready" ? "primary" : "secondary"
                                     enabled: ["checking", "installing"].indexOf(appUpdater.state) < 0
                                     onClicked: appUpdater.state === "available" || appUpdater.state === "downloading" || appUpdater.state === "ready" ? page.updateRequested() : appUpdater.check()
@@ -483,7 +483,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "OBS " + engineUpdater.installed
-                                description: "Comes with LOBS and updates with it, so every release runs the engine it was tested with."
+                                description: "Ships with LOBS. Each release uses the engine it was tested with."
                                 Item {}
                             }
                             Text {
@@ -505,7 +505,7 @@ Rectangle {
                             Layout.fillWidth: true; Layout.topMargin: 12
                             wrapMode: Text.WordWrap
                             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-                            text: "Checks LOBS's GitHub releases daily. Updates install only after the download matches its SHA-256 and is signed by LOBS's publisher. If LOBS fails to start twice on a new engine, it goes back to the previous one."
+                            text: "Checks GitHub daily. Updates install only if the checksum and signature match. If a new engine fails to start twice, LOBS goes back to the previous one."
                         }
                     }
 

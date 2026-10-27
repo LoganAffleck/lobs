@@ -29,7 +29,7 @@ Rectangle {
             Caption { text: tp.channel; Layout.fillWidth: true; elide: Text.ElideRight }
             FButton { visible: Math.abs(view.zoom - 1) > 0.01; text: Math.round(view.zoom * 100) + "%"; variant: "ghost"; tip: "Zoom (" + chrome.keys("Ctrl") + " + / " + chrome.keys("Ctrl") + " -). Click for 100%."; onClicked: view.zoom = 1 }
             FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "Reload"; onClicked: view.reload() }
-            FButton { iconName: "external-link"; variant: "ghost"; tip: "Open in your browser"; onClicked: Qt.openUrlExternally(tp.url.replace("?darkpopout", "")) }
+            FButton { iconName: "external-link"; variant: "ghost"; tip: "Open in browser"; onClicked: Qt.openUrlExternally(tp.url.replace("?darkpopout", "")) }
             FButton { iconName: "settings"; variant: "ghost"; tip: "Change channel"; onClicked: { chIn.text = tp.channel; tp.editing = true } }
         }
         BrowserView {

@@ -10,13 +10,13 @@ story("probe-dock2", "a row of four panels under the video", () => {
 	const status = t.items("Engine running")[0];
 	const video = at("Video");
 	const bottomY = status.y - 40;
-	// 1. Audio Mixer to the bottom of the Video panel.
-	let m = at("Audio Mixer");
+	// 1. Audio mixer to the bottom of the Video panel.
+	let m = at("Audio mixer");
 	t.dragAt(m.x, m.y, video.x + 300, bottomY, 30); t.wait(800);
 	t.grab("row-1.png");
 	// 2-4. Captions, Stats, History to the right of the last one in the row.
 	["Captions", "Stats", "History"].forEach((name, k) => {
-		const p = at(name), mix = at("Audio Mixer");
+		const p = at(name), mix = at("Audio mixer");
 		if (!p || !mix) return;
 		t.dragAt(p.x, p.y, mix.x + 140 + k * 180, mix.y + 120, 30); t.wait(800);
 		t.grab("row-" + (k + 2) + ".png");

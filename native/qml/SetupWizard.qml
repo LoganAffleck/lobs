@@ -169,10 +169,10 @@ FDialog {
         ColumnLayout {
             visible: wiz.step === "start"
             width: parent.width; spacing: 10
-            Body { text: "A few questions and a quick test to set up streaming and recording. You can change it all later in Settings." }
+            Body { text: "Set up streaming and recording in a few steps. You can change everything later in Settings." }
             Item { implicitHeight: 4 }
             Choice { icon: "radio-tower"; label: "Stream and record"; detail: "Twitch, YouTube or another service."; on: wiz.streaming; onPicked: wiz.streaming = true }
-            Choice { icon: "film"; label: "Just record"; detail: "No streaming."; on: !wiz.streaming; onPicked: wiz.streaming = false }
+            Choice { icon: "film"; label: "Record only"; detail: "No streaming."; on: !wiz.streaming; onPicked: wiz.streaming = false }
             ColumnLayout {
                 visible: wiz.streaming
                 Layout.fillWidth: true; spacing: 6; Layout.topMargin: 6
@@ -277,7 +277,7 @@ FDialog {
                     FButton {
                         visible: app.streamKeyUrl(wiz.service) !== ""
                         iconName: "external-link"; text: "Get my key"; variant: "secondary"
-                        tip: "Opens your dashboard in your browser"
+                        tip: "Opens your dashboard"
                         onClicked: Qt.openUrlExternally(app.streamKeyUrl(wiz.service))
                     }
                 }
@@ -320,7 +320,7 @@ FDialog {
             Body {
                 text: wiz.twitch
                       ? "A 10 second test stream. Nothing goes live."
-                      : "LOBS can't test " + wiz.service.replace(" - RTMPS", "") + " without going live, so tell it your upload speed. A speed test site shows it as \"Upload\"."
+                      : "LOBS can't test " + wiz.service.replace(" - RTMPS", "") + " without going live. Enter your upload speed from any speed test."
             }
             // Twitch: live gauge.
             ColumnLayout {
@@ -359,7 +359,7 @@ FDialog {
                         enabled: wiz.testing || wiz.hasKey
                         onClicked: wiz.testing ? (app.stopBandwidthTest(), wiz.testing = false) : wiz.runTest()
                     }
-                    Caption { visible: !wiz.hasKey; text: "Add your stream key first (previous step)." }
+                    Caption { visible: !wiz.hasKey; text: "Add your stream key in the previous step." }
                 }
             }
             // Others: manual upload speed.
@@ -381,12 +381,12 @@ FDialog {
             Body {
                 text: wiz.streaming
                       ? "Recommended for " + (wiz.measured / 1000).toFixed(1) + " Mbps upload" + (wiz.rec.encoderName ? ", encoding with " + wiz.rec.encoderName : "") + "."
-                      : "How recordings are sized and how smooth they are."
+                      : "Resolution and frame rate for recordings."
             }
             Caption {
                 visible: wiz.streaming && wiz.rec.slow === true
                 color: Pal.danger
-                text: "Your upload is too slow for a stable stream. A wired connection helps, or record instead."
+                text: "Your upload is too slow for a stable stream. Try a wired connection, or record only."
             }
             Caption {
                 visible: wiz.streaming && wiz.rec.hardware === false
@@ -442,7 +442,7 @@ FDialog {
                 Label { text: "Quality" }
                 FSelect {
                     Layout.fillWidth: true
-                    options: [{ name: "High (moderate files)", value: "high" }, { name: "Indistinguishable (very large files)", value: "indistinguishable" }, { name: "Same as stream (small files)", value: "stream" }]
+                    options: [{ name: "High (medium files)", value: "high" }, { name: "Indistinguishable (large files)", value: "indistinguishable" }, { name: "Same as stream (small files)", value: "stream" }]
                     currentValue: wiz.recQuality
                     onPicked: (v) => wiz.recQuality = v
                 }
@@ -463,7 +463,7 @@ FDialog {
         ColumnLayout {
             visible: wiz.step === "panels"
             width: parent.width; spacing: 10
-            Body { text: "Twitch panels next to your scenes." }
+            Body { text: "Add Twitch panels next to your scenes." }
             Choice { icon: "message-square"; label: "Chat"; detail: "Read and reply to chat."; on: wiz.chatPanel; onPicked: wiz.chatPanel = !wiz.chatPanel }
             Choice { icon: "info"; label: "Stream info"; detail: "Title, category and tags."; on: wiz.infoPanel; onPicked: wiz.infoPanel = !wiz.infoPanel }
             Caption { visible: !wiz.channel.trim(); text: "Needs your channel name from the Your channel step." }

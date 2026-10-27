@@ -638,7 +638,7 @@ void App::editScene(const QString &id)
 void App::take()
 {
 	m_engine->setProgramScene(m_editScene, true);
-	showToast("On program: " + editSceneName());
+	showToast("On air: " + editSceneName());
 	emit docChanged();
 }
 
@@ -1074,7 +1074,7 @@ bool App::nestsSceneInItself(const QString &sourceId, const QString &sceneId)
 	const Source &s = doc().sources[sourceId];
 	if (s.kind != "scene" || !doc().sceneReaches(s.settings.value("scene").toString(), sceneId))
 		return false;
-	showToast("A scene can't show itself, even through another scene");
+	showToast("A scene can't contain itself, even through another scene");
 	return true;
 }
 
@@ -1088,7 +1088,7 @@ void App::addSceneSource(const QString &sceneId)
 		if (doc().sources[id].kind == "scene" && doc().sources[id].settings.value("scene").toString() == sceneId)
 			sid = id;
 	if (doc().sceneReaches(sceneId, m_editScene))
-		return (void)showToast("A scene can't show itself, even through another scene");
+		return (void)showToast("A scene can't contain itself, even through another scene");
 	if (!liveSceneEditAllowed(m_editScene))
 		return;
 	if (sid.isEmpty())
@@ -1104,7 +1104,7 @@ void App::placeSource(const QString &id)
 	if (!doc().sources.contains(id) || !doc().scenes.contains(m_editScene))
 		return;
 	if (!kindInfo(doc().sources[id].kind).video)
-		return showToast("Audio sources aren't placed on the canvas");
+		return showToast("Audio sources can't go on the canvas");
 	if (nestsSceneInItself(id, m_editScene))
 		return;
 	QString iid;
@@ -1339,7 +1339,7 @@ void App::groupSelected()
 		const QStringList level = probe.siblings(ids.first());
 		for (const QString &id : ids)
 			if (!level.contains(id))
-				return showToast("To group layers, pick ones at the same level (all inside one group, or all outside)");
+				return showToast("To group layers, pick layers at the same level");
 	}
 	m_store.commit("Group layers", [&](Doc &d) { gid = d.groupLayers(ids); });
 	if (!gid.isEmpty())
@@ -2378,7 +2378,7 @@ bool App::liveSceneEditAllowed(const QString &sceneId)
 {
 	if (!liveLocked() || sceneId != m_engine->programScene() || (QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier))
 		return true;
-	showToast("Live lock is on. Hold Alt or unlock to change layers on air.");
+	showToast("On-air layers are locked. Hold Alt or click Unlock to edit.");
 	return false;
 }
 
@@ -2389,7 +2389,7 @@ bool App::liveSourceEditAllowed(const QString &sourceId)
 	const QString program = m_engine->programScene();
 	for (const Instance &i : doc().instances)
 		if (i.sourceId == sourceId && i.sceneId == program)
-			return showToast("Live lock is on. Hold Alt or unlock to change sources on air."), false;
+			return showToast("On-air sources are locked. Hold Alt or click Unlock to edit."), false;
 	return true;
 }
 
@@ -2400,7 +2400,7 @@ bool App::liveEditAllowed(const QStringList &ids)
 	const QString program = m_engine->programScene();
 	for (const QString &id : ids)
 		if (doc().instances.value(id).sceneId == program && !program.isEmpty()) {
-			showToast("Live lock is on. Hold Alt or unlock to change layers on air.");
+			showToast("On-air layers are locked. Hold Alt or click Unlock to edit.");
 			return false;
 		}
 	return true;
@@ -2455,7 +2455,7 @@ void App::poolDrop(const QString &sourceId, double x, double y)
 		return updateOverlay();
 	if (!kindInfo(doc().sources[sourceId].kind).video) {
 		updateOverlay();
-		return showToast("Audio sources aren't placed on the canvas");
+		return showToast("Audio sources can't go on the canvas");
 	}
 	if (nestsSceneInItself(sourceId, m_editScene))
 		return updateOverlay();
@@ -2504,7 +2504,7 @@ bool App::saveSettings(const QVariantMap &changes)
 		m_engine->setProgramScene(m_engine->programScene()); // rebuild with the new type, no cut
 	if (s.video.outWidth != w || s.video.outHeight != h || s.video.fps != fps) {
 		if (m_engine->live())
-			showToast("Resolution and FPS changes apply after you stop streaming and recording");
+			showToast("Resolution and frame rate changes apply after you stop streaming and recording");
 		else if (!m_engine->resetVideo())
 			showToast(m_engine->lastError());
 	}
@@ -2536,7 +2536,7 @@ void App::refreshSourceStatus()
 		QString detail, status, statusText;
 		if (!m_engine->kindAvailable(s.kind)) {
 			status = "missing", statusText = "Not on this OS";
-			detail = s.kind == "game" ? "Game Capture is Windows-only" : "Not available here";
+			detail = s.kind == "game" ? "Game capture is Windows-only" : "Not available here";
 		} else if (!Permissions::allows(s.kind)) {
 			const QString p = Permissions::forKind(s.kind);
 			status = "permission", statusText = "Needs access";
@@ -2745,7 +2745,7 @@ bool App::renameAsset(const QString &path, const QString &name)
 	if (QFileInfo::exists(dest) && dest.compare(fi.absoluteFilePath(), Qt::CaseInsensitive) != 0)
 		return showToast("Something named \"" + n + "\" is already here"), false;
 	if (!QDir().rename(fi.absoluteFilePath(), dest))
-		return showToast("Couldn't rename " + fi.fileName() + " (is it open in another app?)"), false;
+		return showToast("Couldn't rename " + fi.fileName() + ". Is it open in another app?"), false;
 	repointFiles(fi.absoluteFilePath(), dest);
 	emit assetsChanged();
 	return true;
@@ -2778,7 +2778,7 @@ void App::cutAssets(const QStringList &paths)
 	if (paths.isEmpty())
 		return;
 	putFilesOnClipboard(paths, true);
-	showToast(paths.size() == 1 ? "Cut " + QFileInfo(paths.first()).fileName() + ". Paste it into another folder." : QString("Cut %1 items").arg(paths.size()));
+	showToast(paths.size() == 1 ? "Cut " + QFileInfo(paths.first()).fileName() : QString("Cut %1 items").arg(paths.size()));
 }
 
 bool App::clipboardHasFiles() const
@@ -2839,7 +2839,7 @@ void App::pasteAssets()
 {
 	const QMimeData *m = QGuiApplication::clipboard()->mimeData();
 	if (!m || !m->hasUrls())
-		return showToast("Nothing to paste. Copy files here or in File Explorer first.");
+		return showToast("Nothing to paste");
 	QStringList paths;
 	for (const QUrl &u : m->urls())
 		if (u.isLocalFile() && QFileInfo::exists(u.toLocalFile()))
@@ -2879,7 +2879,7 @@ void App::trashAssets(const QStringList &paths)
 			++trashed;
 	}
 	if (blocked)
-		showToast(QString("%1 item%2 in use by layers, so kept. Remove those layers first.").arg(blocked).arg(blocked == 1 ? " is" : "s are"));
+		showToast(QString("Kept %1 item%2 that layers use. Remove those layers first.").arg(blocked).arg(blocked == 1 ? "" : "s"));
 	else if (trashed)
 		showToast(trashed == 1 ? "Moved 1 item to the Recycle Bin" : QString("Moved %1 items to the Recycle Bin").arg(trashed));
 	watchAssets();
@@ -3468,15 +3468,15 @@ QVariantList App::mixer() const
 			tracks << t;
 		QStringList warn;
 		if (s.kind == "desktop_audio" && s.audio.monitor == "monitor_and_output")
-			warn << "Echo risk: monitoring desktop audio plays it back into itself.";
+			warn << "Monitoring desktop audio causes an echo.";
 		if (s.kind == "mic" && s.audio.monitor == "monitor_and_output") // LOBS-029
-			warn << "Feedback risk: you hear your own mic. Use headphones, or speakers will feed back into it.";
+			warn << "You'll hear your own mic. Use headphones to avoid feedback.";
 		if (s.audio.monitor == "monitor_only")
-			warn << "Monitor only: you hear it, the stream and recording don't.";
+			warn << "Monitor only: not in the stream or recording.";
 		if (s.kind == "browser" && s.audio.monitor == "off")
-			warn << "Not monitored: viewers hear this page's sounds (alerts), you don't. Click the headphones to hear it.";
+			warn << "Viewers hear this page but you don't. Turn on monitoring to hear it.";
 		if (!s.audio.tracks.value(0))
-			warn << "Track 1 is off, so it isn't in the stream.";
+			warn << "Track 1 is off, so it's not in the stream.";
 		QVariantList fx;
 		for (const Filter &f : s.audio.filters) {
 			const FxType *t = audioFx(f.type);
@@ -3721,7 +3721,7 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 		if (!doc().scenes.contains(m_editScene))
 			return;
 		if (liveLocked() && !(mods & Qt::AltModifier) && m_editScene == m_engine->programScene())
-			return showToast("Live lock is on. Hold Alt to add graphics.");
+			return showToast("On-air layers are locked. Hold Alt to add graphics.");
 		m_drag = Drag::Create;
 		m_createPts = {c};
 		return;
@@ -3732,7 +3732,7 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 	const bool locked = liveLocked() && !(mods & Qt::AltModifier);
 	if (m_handle >= 0 && locked) {
 		m_drag = Drag::None;
-		return showToast("Live lock is on. Hold Alt to resize.");
+		return showToast("On-air layers are locked. Hold Alt to resize.");
 	}
 	if (m_handle >= 10) {
 		if (doc().instances[singleSelection()].locked)
@@ -3809,7 +3809,7 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 		showToast("Layer is locked");
 	else if (locked) {
 		m_drag = Drag::None; // selecting is fine while live; moving needs Alt
-		showToast("Live lock is on. Hold Alt to move layers.");
+		showToast("On-air layers are locked. Hold Alt to move.");
 	}
 	updateOverlay();
 	emit docChanged();
