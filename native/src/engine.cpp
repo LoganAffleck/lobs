@@ -308,6 +308,12 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 		return o;
 	}
 #endif
+#ifdef Q_OS_WIN
+	// Windows Graphics Capture (method 2): OBS's Automatic picks BitBlt for most apps, which gets
+	// a frozen frame or black from anything drawn on the GPU (OBS, LOBS, Unity apps like VNyan).
+	if (s.kind == "window")
+		return {{"method", st.value("method", 2).toInt()}, {"window", st.value("device").toString()}};
+#endif
 	if (const char *p = deviceProp(s.kind); p && !st.value("device").toString().isEmpty())
 		return {{p, st.value("device").toString()}};
 	return {};
