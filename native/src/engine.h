@@ -297,6 +297,8 @@ private:
 	void unparkScene(const QString &sceneId);
 	QTimer m_parkTimer;
 	QHash<QString, int> m_heldScenes; // scene -> number of projectors holding it
+	QSet<QString> m_pluginScenes;     // scenes plugins show on output channels (Downstream Keyer)
+	void setPluginScenes(const QSet<QString> &scenes);
 	QString m_unparkTarget; // the scene unparkScene() is preparing
 	bool m_applying = false; // apply() is running (it must not re-enter)
 	bool sceneWanted(const QString &sceneId) const; // shown, or inside one that is (engine.cpp)
@@ -323,6 +325,7 @@ private:
 	QHash<QString, obs_scene *> m_scenes; // scene id -> private scene
 	QHash<QString, Item> m_items;          // instance id -> lobs_instance + scene item
 	QString m_editId, m_programId;
+	void renderPluginChannels(); // graphics thread: plugins' output channels, over the live scene
 	obs_source *m_transition = nullptr;
 	QString m_transitionType;
 	obs_source *ensureTransition();

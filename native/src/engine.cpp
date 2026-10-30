@@ -482,12 +482,20 @@ void Engine::apply(const Doc &doc)
 			if (obs_source_get_sync_offset(in) != sync)
 				obs_source_set_sync_offset(in, sync);
 		}
-		// Audio-only sources are global: give each its own output channel (1..63).
+		// Audio-only sources are global: give each its own output channel. From 20 up, and never
+		// one a plugin uses: plugins draw on the low ones (Downstream Keyer's default is 7).
 		if (!kindInfo(s.kind).video && !m_audioChannel.contains(id)) {
-			int ch = 1;
-			while (std::find(m_audioChannel.begin(), m_audioChannel.end(), ch) != m_audioChannel.end())
+			auto taken = [this](int ch) {
+				if (std::find(m_audioChannel.begin(), m_audioChannel.end(), ch) != m_audioChannel.end())
+					return true;
+				obs_source_t *o = obs_get_output_source(uint32_t(ch));
+				obs_source_release(o);
+				return o != nullptr;
+			};
+			int ch = 20;
+			while (ch < MAX_CHANNELS - 1 && taken(ch)) // the last one is the laser pointer
 				ch++;
-			if (ch < MAX_CHANNELS) {
+			if (ch < MAX_CHANNELS - 1) {
 				m_audioChannel[id] = ch;
 				obs_set_output_source(uint32_t(ch), in);
 			}
@@ -880,13 +888,15 @@ void Engine::parkHiddenFilters()
 
 bool Engine::sceneWanted(const QString &sceneId) const
 {
-	if (sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId))
+	if (sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId) ||
+	    m_pluginScenes.contains(sceneId))
 		return true;
 	if (!m_hasSceneSources) // the usual show: no scene inside another, nothing to walk (this runs per layer)
 		return false;
 	QStringList roots{m_editId, m_programId, m_unparkTarget};
 	roots += QStringList(m_showingAll.begin(), m_showingAll.end());
 	roots += m_heldScenes.keys();
+	roots += QStringList(m_pluginScenes.begin(), m_pluginScenes.end());
 	for (const QString &r : roots)
 		if (!r.isEmpty() && (r == sceneId || m_lastDoc.sceneReaches(r, sceneId)))
 			return true;
@@ -1392,6 +1402,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 			gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
 			gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f);
 			obs_source_video_render(m_editSource);
+			renderPluginChannels();
 			gs_texrender_end(m_previewTex);
 			full = gs_texrender_get_texture(m_previewTex);
 		}
@@ -1418,6 +1429,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 		gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f); // overlays below are in canvas units
 	} else if (m_editSource) {
 		obs_source_video_render(m_editSource);
+		renderPluginChannels();
 	} else {
 		obs_render_main_texture();
 	}
@@ -1671,6 +1683,51 @@ void Engine::refreshBrowser(const QString &sourceId)
 	if (obs_property_t *p = obs_properties_get(props, "refreshnocache"))
 		obs_property_button_clicked(p, in);
 	obs_properties_destroy(props);
+}
+
+// What plugins put on output channels (Downstream Keyer's overlays, for one) draws over the
+// program, so the preview of the live scene draws it too. Channel 0 is the program itself, the
+// last one LOBS's laser pointer (drawn separately), and LOBS's audio channels draw nothing.
+void Engine::renderPluginChannels()
+{
+	// What's there is also watched: a LOBS scene a plugin shows (Downstream Keyer puts it straight
+	// on a channel) counts as showing, so its layers aren't parked and it draws.
+	static QString seen;
+	QString now;
+	QSet<QString> scenes;
+	for (int ch = 1; ch < MAX_CHANNELS - 1; ch++) {
+		obs_source_t *o = obs_get_output_source(uint32_t(ch));
+		if (o) {
+			now += QString("%1=%2 ").arg(ch).arg(obs_source_get_name(o));
+			if (obs_scene_from_source(o))
+				scenes.insert(obs_source_get_name(o));
+			else if (obs_source_get_type(o) == OBS_SOURCE_TYPE_TRANSITION)
+				if (obs_source_t *a = obs_transition_get_active_source(o)) {
+					if (obs_scene_from_source(a))
+						scenes.insert(obs_source_get_name(a)), now += QString("(%1) ").arg(obs_source_get_name(a));
+					obs_source_release(a);
+				}
+		}
+		if (o && m_editId == m_programId && (obs_source_get_output_flags(o) & OBS_SOURCE_VIDEO))
+			obs_source_video_render(o);
+		obs_source_release(o);
+	}
+	if (now != seen) {
+		blog(LOG_INFO, "[lobs] output channels: %s", qPrintable(now));
+		seen = now;
+		QMetaObject::invokeMethod(this, [this, scenes] { setPluginScenes(scenes); }, Qt::QueuedConnection);
+	}
+}
+
+void Engine::setPluginScenes(const QSet<QString> &scenes)
+{
+	if (scenes == m_pluginScenes)
+		return;
+	m_pluginScenes = scenes;
+	for (const QString &id : scenes)
+		unparkScene(id);
+	if (!m_parkTimer.isActive())
+		m_parkTimer.start(500); // parks what stopped showing
 }
 
 obs_source_t *Engine::sceneSource(const QString &sceneId) const
