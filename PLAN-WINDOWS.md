@@ -21,6 +21,10 @@ CPU were fine, and the connection is wired at 1 Gbit, so the cause is in LOBS.
 **Done when** a test stream holds its bitrate, Stream Manager doesn't warn, and LOBS's logged
 settings match OBS's.
 
+**Done 2026-10-30** (0e8f78a, 54ce94c): Inspector showed "Stable @ 5,803 Kbps" and Configuration
+Check "Excellent". Also found on the way: Twitch flags 6,000 of video plus audio as too high, so
+Twitch video stops at 5,800, and a bitrate change in Settings now applies while live.
+
 ### P1-2. I can see how my stream is doing, and look back at it
 *As a streamer, I can tell while live whether my stream is healthy, and find out afterwards what
 went wrong.*
@@ -109,6 +113,9 @@ The same design as OBS's "Connect Account":
 
 **Done when** someone streams to Twitch after only signing in, never seeing the stream key, and the
 token still works a month later.
+
+**Built 2026-10-30** (8652480): signing in worked and a test stream ran with the fetched key. Still
+to confirm: the token a month later. Setup's account step has the button but hasn't been tried.
 
 ## P2
 
