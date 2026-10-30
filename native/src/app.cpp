@@ -190,9 +190,7 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	connect(engine, &Engine::streamingChanged, this, &App::engineChanged);
 	connect(engine, &Engine::streamStatsChanged, this, &App::streamStatsChanged);
 	connect(engine, &Engine::streamError, this, [this](const QString &m) { showToast(m); });
-	connect(engine, &Engine::streamReconnected, this, [this](int tries) {
-		showToast(tries == 1 ? QString("Back on air: the stream reconnected.") : QString("Back on air: the stream reconnected after %1 tries.").arg(tries));
-	});
+	connect(engine, &Engine::streamReconnected, this, [this](int) { showToast("Reconnected"); });
 	connect(&m_levelTimer, &QTimer::timeout, this, [this]() { m_levels = m_engine->audioLevels(); emit levelsChanged(); });
 	m_levelTimer.start(50);
 	connect(&m_thumbTimer, &QTimer::timeout, this, [this]() { m_thumbTick++; emit thumbTickChanged(); });
@@ -3770,7 +3768,7 @@ void App::beginStream(bool test)
 		else {
 			m_liveUnlock = false;
 			if (test)
-				showToast("Test stream started. Viewers can't see it; check it in Twitch Inspector.");
+				showToast("Test stream started");
 		}
 		emit engineChanged();
 	};

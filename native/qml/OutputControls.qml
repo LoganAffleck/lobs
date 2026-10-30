@@ -154,7 +154,7 @@ RowLayout {
                 }
                 Text {
                     visible: app.streaming && !live.confirming
-                    text: oc.ss.stalledSec ? "connection lost?" : oc.ss.health === "reconnecting" ? "reconnecting" + (oc.ss.reconnectIn ? " in " + oc.ss.reconnectIn + " s" : "…") : Math.round(oc.ss.kbps || 0) + " kbps"
+                    text: oc.ss.stalledSec ? "no data" : oc.ss.health === "reconnecting" ? "reconnecting" + (oc.ss.reconnectIn ? " in " + oc.ss.reconnectIn + " s" : "…") : Math.round(oc.ss.kbps || 0) + " kbps"
                     color: oc.ss.health === "poor" || oc.ss.health === "reconnecting" ? "#fbbf24" : "#fca5a5"
                     font.family: Pal.font; font.pixelSize: Pal.caption
                     anchors.verticalCenter: parent.verticalCenter

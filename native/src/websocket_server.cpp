@@ -111,7 +111,7 @@ void ObsWebSocket::restart()
 		m_server = new QTcpServer(this);
 		// Every interface, as OBS: Stream Deck on a phone or another PC connects over the network.
 		if (!m_server->listen(QHostAddress::Any, quint16(m_port))) {
-			m_error = QString("Port %1 is in use (is OBS running with its WebSocket server on?)").arg(m_port);
+			m_error = QString("Port %1 is in use. Is OBS running?").arg(m_port);
 			m_server->deleteLater(), m_server = nullptr;
 		} else {
 			connect(m_server, &QTcpServer::newConnection, this, [this] {

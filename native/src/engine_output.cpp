@@ -197,7 +197,7 @@ static void onStreamStop(void *data, calldata_t *cd)
 		const int tries = self->reconnectAttempt();
 		self->stopStreaming();
 		if (tries > 0 && code != OBS_OUTPUT_SUCCESS) {
-			emit self->streamError(QString("Couldn't reconnect after %1 tries, so the stream ended. Check your connection, then go live again.").arg(tries));
+			emit self->streamError("Couldn't reconnect. The stream ended.");
 			return;
 		}
 		const QString why = code == OBS_OUTPUT_BAD_PATH ? "Bad server address"

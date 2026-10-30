@@ -29,7 +29,7 @@ Rectangle {
         { title: "Hotkeys", icon: "keyboard", desc: "Work even while a game has focus." },
         { title: "Updates", icon: "refresh-cw", desc: "New versions of LOBS and its OBS engine." },
         { title: "Plugins", icon: "puzzle", desc: "OBS plugins that add sources and filters." },
-        { title: "Remote control", icon: "radio", desc: "Stream Deck, Touch Portal and VTuber apps, over the obs-websocket protocol." },
+        { title: "Remote control", icon: "radio", desc: "Let Stream Deck and other OBS apps control LOBS." },
         { title: "About", icon: "info", desc: "Versions, licenses and where LOBS keeps its files." }
     ]
 
@@ -209,12 +209,12 @@ Rectangle {
                             SettingRow {
                                 visible: String(page.s.service).startsWith("Twitch")
                                 title: twitch.connected ? "Connected as " + twitch.displayName : "Twitch account"
-                                description: twitch.connected ? "LOBS got your stream key from Twitch." : "Connect, and LOBS fills in your stream key."
+                                description: twitch.connected ? "Stream key from Twitch." : "Fills in your stream key."
                                 Row {
                                     spacing: 6
                                     height: Pal.ctl
                                     FButton { visible: !twitch.connected; text: "Connect with Twitch"; variant: "primary"; onClicked: page.twitchConnectRequested() }
-                                    FButton { visible: twitch.connected; iconName: "refresh-cw"; variant: "ghost"; tip: "Get the stream key again (after you reset it on Twitch)"; enabled: !twitch.busy; onClicked: twitch.refreshStreamKey() }
+                                    FButton { visible: twitch.connected; iconName: "refresh-cw"; variant: "ghost"; tip: "Get the stream key again"; enabled: !twitch.busy; onClicked: twitch.refreshStreamKey() }
                                     FButton { visible: twitch.connected; text: "Disconnect"; variant: "secondary"; onClicked: twitch.disconnectAccount() }
                                 }
                             }
@@ -255,14 +255,14 @@ Rectangle {
                             // encodes them all, so viewers and VODs always get a choice.
                             SettingRow {
                                 title: "Enhanced Broadcasting"
-                                description: page.s.enhanced !== false ? "Twitch picks several qualities (1080p, 720p, 480p...) and this PC encodes them all. Uses more GPU and upload; the bitrate below doesn't apply. To plan them, LOBS sends Twitch this PC's GPU, CPU, memory and Windows version, as OBS does."
-                                                                      : "Off: one quality at the bitrate below, and Twitch makes lower ones only when it has room."
+                                description: page.s.enhanced !== false ? "Sends several qualities so viewers can pick one. Uses more GPU and upload, and shares your PC's specs with Twitch."
+                                                                      : "Sends one quality at the bitrate below."
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.enhanced !== false; onClicked: page.save("enhanced", !(page.s.enhanced !== false)) }
                             }
                             SettingRow {
                                 divider: false
                                 title: app.testStreaming ? "Test stream running" : "Test without going live"
-                                description: "Streams to Twitch, but viewers can't see it. Check it in Twitch Inspector."
+                                description: "Viewers can't see it. Check it in Twitch Inspector."
                                 Row {
                                     spacing: 6
                                     height: Pal.ctl
@@ -282,7 +282,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Video bitrate"
-                                description: "6000 kbps suits 1080p60, and is Twitch's limit. LOBS aims just under it, so Twitch's average stays within."
+                                description: "6000 kbps suits 1080p60 and is Twitch's limit."
                                 FNumField { label: ""; suffix: "kbps"; implicitWidth: 120; value: page.s.bitrate || 6000; onCommit: (v) => page.save("bitrate", Math.max(500, Math.round(v))) }
                             }
                             SettingRow {
@@ -698,40 +698,40 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Allow remote control"
-                                description: !websocket.enabled ? "Off. Turn it on for Stream Deck, Touch Portal, VNyan and other apps made for OBS."
+                                description: !websocket.enabled ? "For Stream Deck, Touch Portal, VNyan and other OBS apps."
                                            : websocket.error ? websocket.error
                                            : websocket.clients ? websocket.clients + (websocket.clients === 1 ? " app connected" : " apps connected")
-                                           : "On. Waiting for an app to connect."
+                                           : "Waiting for an app"
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: websocket.enabled; onClicked: websocket.setEnabled(!websocket.enabled) }
                             }
                             SettingRow {
                                 title: "Port"
-                                description: "Apps connect to this PC's address at this port. OBS's default is 4455."
+                                description: "OBS uses 4455."
                                 FNumField { label: ""; implicitWidth: 120; from: 1024; to: 65535; value: websocket.port; onCommit: (v) => websocket.setPort(Math.round(v)) }
                             }
                             SettingRow {
                                 title: "Require a password"
-                                description: websocket.authRequired ? "Apps need the password below." : "Any app on your network can control LOBS."
+                                description: websocket.authRequired ? "" : "Any app on your network can control LOBS."
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: websocket.authRequired; onClicked: websocket.setAuthRequired(!websocket.authRequired) }
                             }
                             SettingRow {
                                 visible: websocket.authRequired
                                 title: "Password"
-                                description: "Paste it into the app's OBS connection settings."
+                                description: "Enter it in the app."
                                 Row {
                                     spacing: 6
                                     height: Pal.ctl
                                     FInput { id: wsPass; width: 180; readOnly: true; text: websocket.password; echoMode: wsShow.revealed ? TextInput.Normal : TextInput.Password }
                                     FButton { id: wsShow; property bool revealed: false; iconName: revealed ? "eye-off" : "eye"; variant: "ghost"; tip: revealed ? "Hide" : "Show"; onClicked: revealed = !revealed }
                                     FButton { iconName: "copy"; variant: "ghost"; tip: "Copy"; onClicked: { app.copyText(websocket.password); app.notify("Password copied") } }
-                                    FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "New password (connected apps need the new one)"; onClicked: websocket.newPassword() }
+                                    FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "New password"; onClicked: websocket.newPassword() }
                                 }
                             }
                         }
                         Text {
                             Layout.fillWidth: true; Layout.topMargin: 10; Layout.leftMargin: 4
                             wrapMode: Text.WordWrap
-                            text: "Apps can switch scenes, show and hide layers, mute and set volume, and start or stop the stream, recording, replay buffer and virtual camera. Not yet: filters, transitions and source settings."
+                            text: "Not yet: filters, transitions and source settings."
                             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
                         }
                     }

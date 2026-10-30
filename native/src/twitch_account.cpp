@@ -83,7 +83,7 @@ QString TwitchAccount::beginSignIn()
 	m_error.clear();
 	m_server = new QTcpServer(this);
 	if (!m_server->listen(QHostAddress::LocalHost, kPort)) {
-		fail(QString("Another app is using port %1, which Twitch sign-in needs. Close it and try again.").arg(kPort));
+		fail(QString("Twitch sign-in needs port %1, which another app is using.").arg(kPort));
 		delete m_server, m_server = nullptr;
 		return {};
 	}

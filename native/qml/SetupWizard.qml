@@ -228,8 +228,8 @@ FDialog {
         ColumnLayout {
             visible: wiz.step === "obs"
             width: parent.width; spacing: 10
-            Body { text: wiz.imported ? "Brought over from OBS." : "LOBS found OBS on this PC. Bring over its settings, scenes and plugins in one go, or start fresh." }
-            Choice { visible: !wiz.imported; icon: "replace"; label: "Bring over my OBS setup"; detail: "OBS itself isn't changed."; on: wiz.fromObs; onPicked: wiz.fromObs = true }
+            Body { text: wiz.imported ? "Brought over from OBS." : "Bring over your OBS settings, scenes and plugins." }
+            Choice { visible: !wiz.imported; icon: "replace"; label: "Bring over my OBS setup"; detail: "OBS stays as it is."; on: wiz.fromObs; onPicked: wiz.fromObs = true }
             Choice { visible: !wiz.imported; icon: "plus"; label: "Start fresh"; detail: "Set up streaming and recording step by step."; on: !wiz.fromObs; onPicked: wiz.fromObs = false }
             GridLayout {
                 visible: wiz.fromObs && !wiz.imported
@@ -266,7 +266,6 @@ FDialog {
                     }
                 }
             }
-            Caption { visible: wiz.fromObs && !wiz.imported; text: "Profile: canvas, encoder, bitrate, stream service and key, recording. Plugins are copied into LOBS." }
         }
         // ---- access (macOS) ----
         ColumnLayout {
@@ -331,7 +330,7 @@ FDialog {
                 FButton { visible: !twitch.connected; text: "Connect with Twitch"; variant: "primary"; onClicked: wiz.twitchConnectRequested() }
                 Text {
                     Layout.fillWidth: true
-                    text: twitch.connected ? "Connected as " + twitch.displayName + ". Your stream key is set." : "Or type your channel and paste your key below."
+                    text: twitch.connected ? "Connected as " + twitch.displayName + ". Your stream key is set." : "Or enter your channel and key below."
                     color: twitch.connected ? Pal.fg : Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body; wrapMode: Text.WordWrap
                 }
             }

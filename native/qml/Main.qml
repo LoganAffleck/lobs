@@ -420,11 +420,11 @@ ApplicationWindow {
                     contentItem: ColumnLayout {
                         spacing: 8
                         Text { text: profileName.mode === "new" ? "New profile" : "Rename profile"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 600 }
-                        FInput { id: nameIn; Layout.fillWidth: true; placeholderText: "Name, like YouTube or Recording"; onAccepted: profileName.apply() }
+                        FInput { id: nameIn; Layout.fillWidth: true; placeholderText: "Name"; onAccepted: profileName.apply() }
                         Text {
+                            visible: profileName.mode === "new"
                             Layout.fillWidth: true; wrapMode: Text.WordWrap
-                            text: profileName.mode === "new" ? "Starts as a copy of " + (app.settings.profile || "Default") + " and switches to it. Its stream, video and recording settings are its own."
-                                                              : "Only the name changes."
+                            text: "Copies " + (app.settings.profile || "Default") + "'s stream, video and recording settings."
                             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
                         }
                         Text { id: err; visible: text !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Pal.danger; font.family: Pal.font; font.pixelSize: Pal.caption }
@@ -2680,7 +2680,7 @@ ApplicationWindow {
         onClosed: { twitch.cancelSignIn(); url = "" }
         Connections {
             target: twitch
-            function onSignedIn() { if (twitchSignIn.visible) { twitchSignIn.close(); app.notify("Connected to Twitch as " + twitch.displayName + ". Your stream key is set.") } }
+            function onSignedIn() { if (twitchSignIn.visible) { twitchSignIn.close(); app.notify("Connected as " + twitch.displayName) } }
             function onSignInFailed(why) { if (twitchSignIn.visible) twitchSignIn.close(); app.notify(why) }
         }
         ColumnLayout {
