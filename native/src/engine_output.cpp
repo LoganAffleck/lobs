@@ -90,9 +90,16 @@ obs_encoder *Engine::makeVideoEncoder(const QString &id, bool forRecording, cons
 		if (cbr) s["rate_control"] = "CBR", s["bitrate"] = m_settings.stream.bitrate;
 		else s["rate_control"] = "CRF", s["crf"] = q == "indistinguishable" ? 16 : 20;
 	} else if (id == "obs_nvenc_h264_tex") {
-		s["preset2"] = preset == "speed" ? "p2" : preset == "balanced" ? "p4" : "p5";
+		// OBS 32's NVENC reads "preset" (the old "preset2" is ignored). The rest is what Twitch's
+		// Enhanced Broadcasting asks OBS for on its top quality: two B-frames, lookahead, adaptive
+		// quantization, profile high.
+		s["preset"] = preset == "speed" ? "p2" : preset == "balanced" ? "p4" : "p6";
 		s["tune"] = "hq";
 		s["multipass"] = "qres";
+		s["profile"] = "high";
+		s["bf"] = 2;
+		s["lookahead"] = true;
+		s["adaptive_quantization"] = true;
 		if (cbr) s["rate_control"] = "CBR", s["bitrate"] = m_settings.stream.bitrate;
 		else s["rate_control"] = "CQP", s["cqp"] = q == "indistinguishable" ? 16 : 20;
 	} else if (id == "h264_texture_amf") {
@@ -249,6 +256,9 @@ bool Engine::startStreaming()
 	obs_service_apply_encoder_settings(m_service, vset, aset);
 	obs_encoder_update(m_streamVenc, vset);
 	obs_encoder_update(m_streamAenc, aset);
+	// What the stream really uses, after the service's limits, to compare against OBS's log.
+	blog(LOG_INFO, "[lobs] stream video: %s %s", obs_encoder_get_id(m_streamVenc), obs_data_get_json(vset));
+	blog(LOG_INFO, "[lobs] stream audio: %s %s", obs_encoder_get_id(m_streamAenc), obs_data_get_json(aset));
 	obs_data_release(vset);
 	obs_data_release(aset);
 
@@ -275,6 +285,7 @@ bool Engine::startStreaming()
 	m_streamClock.start();
 	m_lastBytes = 0;
 	m_lastBytesAt = 0;
+	m_byteHistory.clear();
 	pollStreamStats();
 	emit streamingChanged();
 	setStatus("Live on " + (st.service == "Custom" ? st.customUrl : st.service) + " · " + QString(obs_encoder_get_name(m_streamVenc)));
@@ -298,9 +309,15 @@ void Engine::pollStreamStats()
 		return;
 	const quint64 bytes = obs_output_get_total_bytes(m_streamOutput);
 	const qint64 now = m_streamClock.elapsed();
+	// Averaged over the last ~4 s: with a keyframe every 2 s, a 1 s window alternates between
+	// holding one and not, and the reading seesawed (3,000 / 6,000 around a steady 4,500).
 	double kbps = m_streamStats.value("kbps").toDouble();
 	if (now - m_lastBytesAt >= 900) {
-		kbps = m_lastBytesAt ? double(bytes - m_lastBytes) * 8.0 / double(now - m_lastBytesAt) : 0;
+		m_byteHistory.append({now, bytes});
+		while (m_byteHistory.size() > 1 && now - m_byteHistory.first().first > 4100)
+			m_byteHistory.removeFirst();
+		const auto &[t0, b0] = m_byteHistory.first();
+		kbps = now > t0 ? double(bytes - b0) * 8.0 / double(now - t0) : 0;
 		m_lastBytes = bytes;
 		m_lastBytesAt = now;
 	}

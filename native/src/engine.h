@@ -357,6 +357,7 @@ private:
 	QElapsedTimer m_streamClock;
 	quint64 m_lastBytes = 0;
 	qint64 m_lastBytesAt = 0;
+	QList<std::pair<qint64, quint64>> m_byteHistory; // (ms, total bytes) for the averaged bitrate
 	void pollStreamStats();
 	void releaseOutputs();
 	obs_encoder *makeVideoEncoder(const QString &id, bool forRecording, const char *name);
