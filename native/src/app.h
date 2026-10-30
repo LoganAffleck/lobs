@@ -226,6 +226,10 @@ public:
 	// OBS scene collections found in %APPDATA%/obs-studio/basic/scenes: [{name, path, modified}].
 	Q_INVOKABLE QVariantList obsCollections() const;
 	Q_INVOKABLE bool importObs(const QString &path);
+	// Switching from OBS in one step (setup's "Coming from OBS?"): what OBS has here, then the
+	// profile, scene collection and plugins at once. Returns {done: [...], notes: [...]}.
+	Q_INVOKABLE QVariantMap obsSetup(const QString &folder = {}) const; // folder: QA points it at one
+	Q_INVOKABLE QVariantMap importFromObs(const QString &profileDir, const QString &collectionPath, const QVariantList &plugins);
 	Q_INVOKABLE void toggleRecording();
 	Q_INVOKABLE void nudge(int dx, int dy);
 	// drag a source from Sources over the preview (coords relative to the preview item)

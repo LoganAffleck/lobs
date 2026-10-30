@@ -91,6 +91,12 @@ struggles.
 **Done when** someone with OBS set up streams from LOBS straight after setup, with no other
 settings to change.
 
+**Built 2026-10-30:** _probe-obs-switch passes against this PC's OBS (5 profiles, 2 collections,
+last used found; Twitch, key, 1920x1080@60, 6000, NVENC, Enhanced Broadcasting, recording folder
+and format, and the scenes came over). Still to try: the setup step itself, and a third-party
+plugin (none on this PC). Not done: checking a plugin's OBS version before copying it; Settings >
+Plugins shows the ones that don't load.
+
 ### P1-6. Nothing changes on air by accident
 *As a streamer, while I'm live, nothing I didn't mean to change changes what my viewers see.*
 - Close the remaining ways to change the on-air scene while live-locked (LOBS-006, reopened).

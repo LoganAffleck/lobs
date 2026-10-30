@@ -33,6 +33,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include "enhanced_broadcast.h"
+#include "obs_switch.h"
+#include <QTemporaryDir>
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QImageReader>
@@ -681,6 +683,56 @@ bool App::pluginsNeedRestart() const { return lobs::plugins::restartNeeded(); }
 QString App::pluginsFolder() const { return QDir::toNativeSeparators(lobs::plugins::folder()); }
 
 void App::openPluginsFolder() const { QDesktopServices::openUrl(QUrl::fromLocalFile(lobs::plugins::folder())); }
+
+QVariantMap App::obsSetup(const QString &folder) const { return obs_switch::scan(folder.isEmpty() ? obs_switch::obsFolder() : folder); }
+
+QVariantMap App::importFromObs(const QString &profileDir, const QString &collectionPath, const QVariantList &pluginList)
+{
+	QStringList done, notes;
+	if (!profileDir.isEmpty()) {
+		QVariantMap ch = obs_switch::readProfile(profileDir);
+		notes << ch.take("_notes").toStringList();
+		// A Twitch account connected in LOBS keeps its key.
+		if (ch.contains("key") && !m_engine->settings().stream.key.isEmpty() && QSettings().contains("twitch/access"))
+			ch.remove("key");
+		saveSettings(ch);
+		done << QString("Settings from the %1 profile: %2×%3 at %4 fps, %5%6").arg(QFileInfo(profileDir).fileName())
+				.arg(ch.value("outWidth").toInt()).arg(ch.value("outHeight").toInt()).arg(ch.value("fps").toInt())
+				.arg(ch.value("service").toString().isEmpty() ? QString("no stream service") : ch.value("service").toString())
+				.arg(ch.contains("key") ? ", stream key" : "");
+	}
+	int added = 0;
+	for (const QVariant &v : pluginList) {
+		const QVariantMap p = v.toMap();
+		QString path = p.value("path").toString();
+		// A plugin from OBS's install folder: its library and data, gathered into OBS's layout.
+		QTemporaryDir stage;
+		if (const QString inst = p.value("installed").toString(); !inst.isEmpty()) {
+			const QString name = p.value("name").toString();
+			QDir(stage.path()).mkpath("obs-plugins/64bit");
+			QFile::copy(path, stage.filePath("obs-plugins/64bit/" + name + ".dll"));
+			const QString data = inst + "/data/obs-plugins/" + name;
+			QDirIterator it(data, QDir::Files, QDirIterator::Subdirectories);
+			while (it.hasNext()) {
+				const QString f = it.next(), to = stage.filePath("data/obs-plugins/" + name + "/" + QDir(data).relativeFilePath(f));
+				QDir().mkpath(QFileInfo(to).absolutePath());
+				QFile::copy(f, to);
+			}
+			path = stage.path();
+		}
+		const QString err = addPlugin(path);
+		if (err.isEmpty())
+			++added;
+		else
+			notes << p.value("name").toString() + ": " + err;
+	}
+	if (added)
+		done << QString("%1 plugin%2 (they load when LOBS restarts)").arg(added).arg(added == 1 ? "" : "s");
+	if (!collectionPath.isEmpty() && importObs(collectionPath))
+		done << "Scenes from " + QFileInfo(collectionPath).completeBaseName();
+	qInfo("[lobs] switched from OBS: %s. Notes: %s", qPrintable(done.join("; ")), qPrintable(notes.join("; ")));
+	return {{"done", done}, {"notes", notes}};
+}
 
 QString App::addPlugin(const QString &pathOrUrl)
 {

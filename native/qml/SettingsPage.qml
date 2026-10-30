@@ -239,7 +239,7 @@ Rectangle {
                             // encodes them all, so viewers and VODs always get a choice.
                             SettingRow {
                                 title: "Enhanced Broadcasting"
-                                description: page.s.enhanced !== false ? "Twitch picks several qualities (1080p, 720p, 480p...) and this PC encodes them all. Uses more GPU and upload; the video bitrate below then doesn't apply."
+                                description: page.s.enhanced !== false ? "Twitch picks several qualities (1080p, 720p, 480p...) and this PC encodes them all. Uses more GPU and upload; the bitrate below doesn't apply. To plan them, LOBS sends Twitch this PC's GPU, CPU, memory and Windows version, as OBS does."
                                                                       : "Off: one quality at the bitrate below, and Twitch makes lower ones only when it has room."
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.enhanced !== false; onClicked: page.save("enhanced", !(page.s.enhanced !== false)) }
                             }

@@ -41,23 +41,36 @@ FDialog {
     property string recQuality: "high"
     property bool chatPanel: true
     property bool infoPanel: true
+    // Coming from OBS: what OBS has here, what to bring, and what came over.
+    property var obs: ({ found: false })
+    property bool fromObs: true
+    property string obsProfile: ""
+    property string obsCollection: ""
+    property var obsPlugins: []      // the plugins ticked to bring over
+    property bool imported: false
+    property var importResult: null
 
     readonly property bool twitch: streaming && service === "Twitch"
     readonly property bool hasKey: keyText.trim() !== "" || !!app.settings.hasKey
     // Steps shown for this path. On macOS, capture permissions come right after the welcome.
     readonly property bool asksAccess: permissions.all.length > 0
     readonly property var steps: {
+        // Brought over from OBS: the rest of the settings came with it.
+        if (imported)
+            return ["start", "obs"].concat(twitch ? ["panels", "done"] : ["done"])
         const list = streaming
             ? (twitch ? ["start", "account", "server", "test", "video", "record", "panels", "done"]
                       : ["start", "account", "test", "video", "record", "done"])
             : ["start", "video", "record", "done"]
         if (asksAccess)
             list.splice(1, 0, "access") // QML's JavaScript has no flatMap
+        if (obs.found)
+            list.splice(1, 0, "obs")
         return list
     }
     property int index: 0
     readonly property string step: steps[Math.min(index, steps.length - 1)]
-    readonly property var stepTitles: ({ start: "Welcome to LOBS", access: "Camera, mic and screen", account: "Your channel", server: "Closest server", test: "Test your connection",
+    readonly property var stepTitles: ({ start: "Welcome to LOBS", access: "Camera, mic and screen", obs: "Coming from OBS?", account: "Your channel", server: "Closest server", test: "Test your connection",
                                          video: "Video and bitrate", record: "Recording", panels: "Twitch panels", done: "You're set" })
     readonly property int measured: testResult && testResult.ok ? testResult.kbps : manualMbps * 1000
 
@@ -66,6 +79,13 @@ FDialog {
         if (streaming) { outW = rec.outWidth; outH = rec.outHeight; fps = rec.fps; bitrate = rec.bitrate }
     }
     function next() {
+        if (step === "obs" && fromObs && !imported) {
+            importResult = app.importFromObs(obsProfile, obsCollection, obsPlugins)
+            loadChoices() // what came over, so Finish saves it as it is
+            imported = true
+            index = 2 // panels or done
+            return
+        }
         if (step === "account" && keyText.trim()) app.saveSettings({ service: service, customUrl: customUrl, key: keyText.trim() })
         if (step === "test" || (step === "start" && !streaming)) recompute()
         if (index < steps.length - 1) index++
@@ -92,13 +112,25 @@ FDialog {
         if (twitch) addPanels(chatPanel, infoPanel)
         close()
     }
-    onOpened: {
-        index = 0; testResult = null; keyText = ""; serverPicked = false; pings = []
+    function loadChoices() {
         const st = app.settings
         service = st.service || "Twitch"; customUrl = st.customUrl || ""; server = st.server || "auto"
         recFolder = st.recordFolder || ""; recFormat = st.recordFormat || "mp4"; recQuality = st.recordQuality || "high"
         outW = st.outWidth || 1920; outH = st.outHeight || 1080; fps = st.fps || 60; bitrate = st.bitrate || 6000
         channel = app.uiValue("twitch/channel", "")
+        streaming = true
+    }
+    onOpened: {
+        index = 0; testResult = null; keyText = ""; serverPicked = false; pings = []
+        imported = false; importResult = null
+        obs = app.obsSetup()
+        if (obs.found) {
+            obsProfile = obs.lastProfile || (obs.profiles.length ? obs.profiles[0].dir : "")
+            obsCollection = obs.lastCollection || (obs.collections.length ? obs.collections[0].path : "")
+            obsPlugins = obs.plugins
+            fromObs = true
+        }
+        loadChoices()
     }
     onClosed: if (testing) { app.stopBandwidthTest(); testing = false }
     Connections {
@@ -191,6 +223,50 @@ FDialog {
                     }
                 }
             }
+        }
+        // ---- coming from OBS ----
+        ColumnLayout {
+            visible: wiz.step === "obs"
+            width: parent.width; spacing: 10
+            Body { text: wiz.imported ? "Brought over from OBS." : "LOBS found OBS on this PC. Bring over its settings, scenes and plugins in one go, or start fresh." }
+            Choice { visible: !wiz.imported; icon: "replace"; label: "Bring over my OBS setup"; detail: "OBS itself isn't changed."; on: wiz.fromObs; onPicked: wiz.fromObs = true }
+            Choice { visible: !wiz.imported; icon: "plus"; label: "Start fresh"; detail: "Set up streaming and recording step by step."; on: !wiz.fromObs; onPicked: wiz.fromObs = false }
+            GridLayout {
+                visible: wiz.fromObs && !wiz.imported
+                Layout.fillWidth: true; Layout.topMargin: 4
+                columns: 2; columnSpacing: 12; rowSpacing: 8
+                Label { text: "Profile" }
+                FSelect {
+                    Layout.fillWidth: true
+                    placeholder: "No profiles"
+                    options: (wiz.obs.profiles || []).map(p => ({ name: p.name + (p.dir === wiz.obs.lastProfile ? " (last used)" : ""), value: p.dir }))
+                    currentValue: wiz.obsProfile
+                    onPicked: (v) => wiz.obsProfile = v
+                }
+                Label { text: "Scenes" }
+                FSelect {
+                    Layout.fillWidth: true
+                    placeholder: "No scene collections"
+                    options: (wiz.obs.collections || []).map(c => ({ name: c.name + (c.path === wiz.obs.lastCollection ? " (last used)" : ""), value: c.path }))
+                    currentValue: wiz.obsCollection
+                    onPicked: (v) => wiz.obsCollection = v
+                }
+                Label { text: "Plugins"; Layout.alignment: Qt.AlignTop; Layout.topMargin: 4 }
+                ColumnLayout {
+                    Layout.fillWidth: true; spacing: 4
+                    Caption { visible: !(wiz.obs.plugins || []).length; text: "None found." }
+                    Repeater {
+                        model: wiz.obs.plugins || []
+                        delegate: FCheckbox {
+                            required property var modelData
+                            text: modelData.name
+                            checked: wiz.obsPlugins.some(p => p.path === modelData.path)
+                            onClicked: wiz.obsPlugins = checked ? wiz.obsPlugins.concat([modelData]) : wiz.obsPlugins.filter(p => p.path !== modelData.path)
+                        }
+                    }
+                }
+            }
+            Caption { visible: wiz.fromObs && !wiz.imported; text: "Profile: canvas, encoder, bitrate, stream service and key, recording. Plugins are copied into LOBS." }
         }
         // ---- access (macOS) ----
         ColumnLayout {
@@ -487,6 +563,12 @@ FDialog {
             visible: wiz.step === "done"
             width: parent.width; spacing: 8
             Body { text: "Finish to save." }
+            ColumnLayout {
+                visible: !!wiz.importResult
+                Layout.fillWidth: true; spacing: 4; Layout.topMargin: 4
+                Repeater { model: wiz.importResult ? wiz.importResult.done : []; delegate: Body { required property string modelData; text: "✓ " + modelData } }
+                Repeater { model: wiz.importResult ? wiz.importResult.notes : []; delegate: Caption { required property string modelData; text: modelData } }
+            }
             GridLayout {
                 columns: 2; columnSpacing: 16; rowSpacing: 6; Layout.topMargin: 6
                 Label { text: "Platform"; visible: wiz.streaming }
