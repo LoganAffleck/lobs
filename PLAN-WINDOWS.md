@@ -35,12 +35,18 @@ went wrong.*
 **Done when** a dropped connection or an overloaded encoder shows in the stats while live, and the
 log from that stream is still there after LOBS restarts.
 
+**Built 2026-10-30** (e881fec): logs carry over (checked). Health and congestion in Stats haven't
+yet been seen with a bad connection.
+
 ### P1-3. I can test my stream without going live
 *As a streamer, I can check my stream on Twitch before my viewers see it.*
 - A Twitch test stream viewers can't see (a bandwidth test), started from Settings, with the P1-2
   stats showing.
 
 **Done when** a test stream runs to Twitch and doesn't show on the channel.
+
+**Done 2026-10-30** (2420f9d): Inspector showed "Stable @ 5,803 Kbps" while Stream Manager stayed
+Offline.
 
 ### P1-4. My viewers can choose a quality (Enhanced Broadcasting)
 *As a streamer, my viewers and VOD always get quality options, as they do with OBS's Enhanced
