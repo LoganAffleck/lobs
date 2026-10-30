@@ -623,6 +623,8 @@ private:
 	int m_placeTries = 0;
 	void resolvePlacements(bool last);
 	QSizeF m_previewSize;
+	QString m_penGroup; // this pencil session's strokes go in one group (a new one each time the pencil is picked)
+	PreviewLayout previewLayout() const; // where the edited canvas (and the other layout) sit
 	double m_previewDpr = 1;
 	bool m_pixelPerfect = true;
 	bool m_clickToShow = true;

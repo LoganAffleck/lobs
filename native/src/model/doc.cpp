@@ -441,58 +441,84 @@ void Doc::syncVertical()
 		if (v.verticalOf.isEmpty() || !scenes.contains(v.verticalOf))
 			continue;
 		const Scene &main = scenes[v.verticalOf];
-		// Who follows whom.
-		QHash<QString, QString> follower; // main layer -> its follower here
-		for (const QString &l : QStringList(v.layers)) {
-			const Instance &in = instances[l];
-			if (in.follows.isEmpty())
-				continue;
-			if (!instances.contains(in.follows) || instances[in.follows].sceneId != main.id)
-				deleteInstance(l), v.layers.removeAll(l); // its layer is gone
-			else
-				follower[in.follows] = l;
-		}
-		// New layers in the scene get a follower; groups stay out (their layers follow instead).
-		QStringList order;
-		for (const QString &m : main.layers) {
-			const Instance &src = instances[m];
-			if (src.kind == "group")
-				continue;
-			// A layout made before layers followed (0.7 previews) has plain copies: one of the same
-			// source is adopted, so the layer isn't there twice.
-			if (!follower.contains(m))
-				for (const QString &l : v.layers)
-					if (Instance &c = instances[l]; c.follows.isEmpty() && c.sourceId == src.sourceId && c.kind == src.kind &&
-									  !std::any_of(follower.cbegin(), follower.cend(), [&](const QString &f) { return f == l; })) {
-						c.follows = m;
-						follower[m] = l;
-						break;
-					}
-			if (!follower.contains(m)) {
-				Instance in;
-				in.id = uid("ins_");
-				in.sceneId = v.id;
-				in.kind = src.kind;
-				in.sourceId = src.sourceId;
-				in.name = src.name;
-				in.follows = m;
-				instances[in.id] = in;
-				follower[m] = in.id;
+		// Who follows whom, anywhere in the layout; the followers are taken out of it, to be put
+		// back in the scene's shape (its groups included). The layout's own layers stay where they are.
+		QHash<QString, QString> follower; // the scene's layer -> its follower here
+		std::function<void(QStringList &)> detach = [&](QStringList &ids) {
+			for (const QString &l : QStringList(ids)) {
+				Instance &in = instances[l];
+				if (!in.follows.isEmpty()) {
+					ids.removeAll(l);
+					if (in.kind == "group")
+						detach(in.children);
+					follower[in.follows] = l;
+				} else if (in.kind == "group") {
+					detach(in.children);
+				}
 			}
-			order << follower[m];
-		}
+		};
+		detach(v.layers);
+		// The scene's layers, mirrored: a follower for each, groups as groups.
+		QSet<QString> mirrored;
+		std::function<QStringList(const QStringList &)> mirror = [&](const QStringList &ids) {
+			QStringList out;
+			for (const QString &m : ids) {
+				const Instance src = instances[m]; // a copy: adding followers below can move the hash's storage
+				// A layout made before layers followed (0.7 previews) has plain copies: one of the same
+				// source is adopted, so the layer isn't there twice.
+				if (!follower.contains(m) && src.kind != "group")
+					for (const QString &l : v.layers)
+						if (Instance &c = instances[l]; c.follows.isEmpty() && c.kind == src.kind && c.sourceId == src.sourceId) {
+							c.follows = m;
+							follower[m] = l;
+							v.layers.removeAll(l);
+							break;
+						}
+				if (!follower.contains(m)) {
+					Instance in;
+					in.id = uid("ins_");
+					in.sceneId = v.id;
+					in.kind = src.kind;
+					in.sourceId = src.sourceId;
+					in.name = src.name;
+					in.locked = src.locked; // a locked background starts locked here too
+					in.follows = m;
+					instances[in.id] = in;
+					follower[m] = in.id;
+				}
+				const QString f = follower[m];
+				mirrored.insert(m);
+				if (src.kind == "group") {
+					const QStringList kids = mirror(src.children);
+					instances[f].children = kids;
+				}
+				out << f;
+			}
+			return out;
+		};
+		const QStringList order = mirror(main.layers);
+		// Followers whose layer is gone go too (a group's children were re-homed above, or are stale too).
+		for (auto it = follower.begin(); it != follower.end();)
+			if (!mirrored.contains(it.key())) {
+				instances[it.value()].children.clear();
+				instances.remove(it.value());
+				it = follower.erase(it);
+			} else {
+				++it;
+			}
 		// Order: the scene's, with the layout's own layers (not following any) kept on top.
-		QStringList ownLayers;
-		for (const QString &l : v.layers)
-			if (instances[l].follows.isEmpty())
-				ownLayers << l;
-		v.layers = ownLayers + order;
+		v.layers = v.layers + order;
 		// Settings: each follows the scene's layer unless it was changed here.
 		for (auto it = follower.cbegin(); it != follower.cend(); ++it) {
 			Instance &in = instances[it.value()];
 			const Instance &src = instances[it.key()];
 			in.name = src.name;
 			in.links.clear();
+			if (in.kind == "group") { // a group only shows, hides and fades its layers
+				if (!in.own.contains(Group::Visibility))
+					in.props.visibility = visibility(src);
+				continue;
+			}
 			if (!in.own.contains(Group::Transform))
 				in.props.transform = toVertical(transform(src));
 			// A color covering the whole canvas (the background) covers the tall one; colors stretch cleanly.

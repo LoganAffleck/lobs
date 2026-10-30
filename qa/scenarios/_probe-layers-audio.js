@@ -48,12 +48,39 @@ story("LA-03", "Pencil strokes aren't selected, and the pencil keeps drawing", (
 	app.tool = "pencil"; t.wait(200);
 	const n = Object.keys(t.doc().instances).length;
 	t.canvasDrag(400, 400, 700, 600, 12); t.wait(300);
-	eq("a stroke was drawn", Object.keys(t.doc().instances).length, n + 1);
+	eq("a stroke was drawn, in a group", Object.keys(t.doc().instances).length, n + 2);
 	eq("nothing is selected", app.inspector.mode, "none");
 	eq("still the pencil", app.tool, "pencil");
 	t.canvasDrag(800, 300, 900, 500, 12); t.wait(300);
-	eq("a second stroke", Object.keys(t.doc().instances).length, n + 2);
+	eq("a second stroke, in the same group", Object.keys(t.doc().instances).length, n + 3);
 	app.tool = "select";
+});
+
+story("LA-03b", "One pencil session is one group; picking the pencil again starts another", () => {
+	fresh();
+	const A = app.editSceneId;
+	const groups = () => { const d = t.doc(); return d.scenes[A].layers.filter(id => d.instances[id].kind === "group").map(id => d.instances[id]); };
+	app.tool = "pencil"; t.wait(200);
+	t.canvasDrag(400, 400, 700, 600, 12); t.canvasDrag(800, 300, 900, 500, 12); t.wait(300);
+	let g = groups();
+	eq("one group", g.length, 1);
+	eq("with both strokes", g[0] && g[0].children.length, 2);
+	check("named Drawing", g[0] && g[0].name.indexOf("Drawing") === 0, g[0] && g[0].name);
+	app.tool = "rect"; app.tool = "pencil"; t.wait(200);
+	t.canvasDrag(300, 700, 500, 800, 12); t.wait(300);
+	g = groups();
+	eq("a second group", g.length, 2);
+	app.tool = "select";
+	// Strokes in a group show in the vertical layout too.
+	app.setVerticalOn(true);
+	const d = t.doc(), v = Object.keys(d.scenes).find(id => d.scenes[id].verticalOf === A);
+	const vg = d.scenes[v].layers.map(id => d.instances[id]).filter(i => i.kind === "group");
+	eq("vertical has both groups", vg.length, 2);
+	check("each following its group, with its strokes", vg.every(g => g.follows && d.instances[g.follows].kind === "group" && g.children.length === d.instances[g.follows].children.length), vg.map(g => g.children.length));
+	// Hiding a group on desktop hides it in vertical.
+	app.toggleVisible(vg[0].follows);
+	eq("group visibility follows", eff(vg[0].id, "visibility").visible, false);
+	app.setVerticalOn(false);
 });
 
 story("LA-04", "An audio source's mixer settings show in the Inspector", () => {

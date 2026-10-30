@@ -328,7 +328,7 @@ ApplicationWindow {
                 Layout.rightMargin: 8
                 implicitHeight: Pal.ctl + 4
                 implicitWidth: brandRow.implicitWidth + 16
-                onClicked: settingsPage.show()
+                onClicked: settingsPage.open ? settingsPage.open = false : settingsPage.show() // clicked again: back to the show
                 ToolTip.visible: hovered && !settingsPage.open // Settings is already showing
                 ToolTip.delay: 600
                 ToolTip.text: chrome.keys("Settings  Ctrl ,")
@@ -1702,7 +1702,10 @@ ApplicationWindow {
                             required property int index
                             width: ListView.view.width
                             height: Pal.ctl + 2
-                            readonly property bool showTools: layerList.hoverIndex === index || modelData.selected
+                            // A recycled row's index is -1 for a moment, the same as "no row hovered": checking
+                            // hoverIndex >= 0 keeps every row's buttons from flashing on a scene or layout switch.
+                            readonly property bool ready: !!modelData && modelData.id !== undefined
+                            readonly property bool showTools: ready && ((layerList.hoverIndex >= 0 && layerList.hoverIndex === index) || modelData.selected === true)
                             // A recycled row waiting in the pool is hidden and gives up focus.
                             ListView.onPooled: { visible = false; focus = false }
                             ListView.onReused: visible = true
@@ -1769,14 +1772,18 @@ ApplicationWindow {
                                 FIcon { visible: modelData.linked; name: "link-2"; color: Pal.link; ToolTip.text: "Linked with another scene" }
                                 FBadge { visible: modelData.fx > 0; text: modelData.fx + " fx" }
                                 Row {
+                                    id: rowTools
                                     spacing: 0
                                     opacity: showTools ? 1 : 0
-                                    Behavior on opacity { NumberAnimation { duration: Pal.fast } }
-                                    FButton { visible: !modelData.background; iconName: "chevron-up"; variant: "ghost"; onClicked: app.moveLayer(modelData.id, -1); tip: "Move up" }
-                                    FButton { visible: !modelData.background; iconName: "chevron-down"; variant: "ghost"; onClicked: app.moveLayer(modelData.id, 1); tip: "Move down" }
+                                    // Fades on hover only: a list rebuilt for another scene or layout doesn't flash them.
+                                    property bool settled: false
+                                    Component.onCompleted: Qt.callLater(() => settled = true)
+                                    Behavior on opacity { enabled: rowTools.settled; NumberAnimation { duration: Pal.fast } }
+                                    FButton { visible: ready && !modelData.background; iconName: "chevron-up"; variant: "ghost"; onClicked: app.moveLayer(modelData.id, -1); tip: "Move up" }
+                                    FButton { visible: ready && !modelData.background; iconName: "chevron-down"; variant: "ghost"; onClicked: app.moveLayer(modelData.id, 1); tip: "Move down" }
                                     FButton { iconName: modelData.locked ? "lock" : "lock-open"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: modelData.locked ? "Unlock" : "Lock" }
                                 }
-                                FButton { visible: modelData.locked && !showTools; iconName: "lock"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: "Unlock" }
+                                FButton { visible: ready && modelData.locked === true && !showTools; iconName: "lock"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: "Unlock" }
                                 FButton { iconName: modelData.visible ? "eye" : "eye-off"; variant: "ghost"; onClicked: app.toggleVisible(modelData.id); tip: modelData.visible ? "Hide" : "Show" }
                             }
                         }

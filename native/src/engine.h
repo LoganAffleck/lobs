@@ -61,6 +61,40 @@ inline double previewScaleFor(double availW, double availH, int canvasW, int can
 	return fit;
 }
 
+// The preview's layout: the edited canvas, and with vertical on, the other layout beside it at the
+// same height, with a gap; horizontal is always on the left. The pair is dropped (the edited canvas
+// alone) when showing both would shrink the edited one below 60% of its size alone. Units are
+// whatever availW/H and gap are in (Engine: pixels; App: pixels, divided back to points).
+struct PreviewLayout {
+	double scale = 1, ox = 0, oy = 0; // the edited canvas: scale and top-left
+	QRectF other;                     // empty when it isn't shown
+};
+inline PreviewLayout previewLayoutFor(double availW, double availH, int CW, int CH, int OW, int OH, bool otherLeft, double gap, bool pixelPerfect)
+{
+	PreviewLayout l;
+	l.scale = previewScaleFor(availW, availH, CW, CH, pixelPerfect);
+	if (OW > 0 && OH > 0 && CH > 0) {
+		// Fitted on the horizontal (left) canvas whichever is edited, so switching layouts doesn't
+		// change the picture's size: the same snap, the same rounding.
+		const int HW = otherLeft ? OW : CW, HH = otherLeft ? OH : CH, VW = otherLeft ? CW : OW, VH = otherLeft ? CH : OH;
+		const double r = double(VW) / VH * HH; // the vertical's width, in horizontal-canvas units
+		const double solo = previewScaleFor(availW, availH, HW, HH, pixelPerfect);
+		const double pair = previewScaleFor(availW - gap, availH, HW + int(std::lround(r)), HH, pixelPerfect);
+		if (pair >= solo * 0.6) {
+			const double hw = HW * pair, vw = r * pair, h = HH * pair;
+			const double x0 = (availW - (hw + gap + vw)) / 2, y0 = (availH - h) / 2;
+			const QRectF hr(x0, y0, hw, h), vr(x0 + hw + gap, y0, vw, h);
+			const QRectF edited = otherLeft ? vr : hr;
+			l.scale = edited.height() / CH;
+			l.ox = edited.x(), l.oy = edited.y();
+			l.other = otherLeft ? hr : vr;
+			return l;
+		}
+	}
+	l.ox = (availW - CW * l.scale) / 2, l.oy = (availH - CH * l.scale) / 2;
+	return l;
+}
+
 struct OverlayBox {
 	QRectF rect; // canvas px
 	double rot = 0;
@@ -349,6 +383,12 @@ public:
 
 private:
 	obs_source *m_editSource = nullptr; // showing-ref held while edited
+	// The other layout (vertical, or the scene a vertical layout belongs to), drawn in a corner of
+	// the preview, and its canvas size. Shown while vertical is on.
+	obs_source *m_otherSource = nullptr;
+	std::atomic<int> m_otherW{0}, m_otherH{0};
+	std::atomic<bool> m_otherLeft{false}; // editing vertical: the horizontal layout is on its left
+	void drawOtherLayout(const QRectF &r);
 	QSet<QString> m_showingAll;         // scenes held showing for thumbnails
 
 	obs_display *m_display = nullptr;

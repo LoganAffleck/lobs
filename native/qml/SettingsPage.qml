@@ -452,6 +452,21 @@ Rectangle {
                                     }
                                 }
                             }
+                            // Mic or desktop audio missing (deleted, or from an OBS setup without them): add it here.
+                            SettingRow {
+                                id: missingAudio
+                                readonly property bool hasMic: app.mixer.some(m => m.global && m.kind === "mic")
+                                readonly property bool hasDesktop: app.mixer.some(m => m.global && m.kind === "desktop_audio")
+                                visible: !hasMic || !hasDesktop
+                                divider: app.mixer.some(m => m.global)
+                                title: !hasMic && !hasDesktop ? "No mic or desktop audio" : !hasMic ? "No mic" : "No desktop audio"
+                                description: "Add it to hear it in every scene."
+                                RowLayout {
+                                    spacing: 6
+                                    FButton { visible: !missingAudio.hasMic; text: "Add mic"; iconName: "plus"; variant: "ghost"; onClicked: app.addSource("mic", "Mic", "", false) }
+                                    FButton { visible: !missingAudio.hasDesktop; text: "Add desktop audio"; iconName: "plus"; variant: "ghost"; onClicked: app.addSource("desktop_audio", "Desktop Audio", "", false) }
+                                }
+                            }
                         }
                         Text { Layout.topMargin: 10; text: "Levels, monitoring and tracks are in the Audio mixer."; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
                     }

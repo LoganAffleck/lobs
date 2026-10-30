@@ -3938,7 +3938,7 @@ QVariantList App::mixer() const
 					  {"obs", !plugin.isEmpty()}};
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
-				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"global", global}, {"warnings", warn}, {"fx", fx},
+				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
 				   {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"pinned", doc().mixerPinned.contains(id)}};
 	}
 	return out;
@@ -4030,8 +4030,20 @@ void App::setAudio(const QString &sourceId, const QString &field, const QVariant
 
 double App::canvasScale() const
 {
-	// Same rule as the engine's drawing, on physical pixels, back in logical units.
-	return previewScaleFor(m_previewSize.width() * m_previewDpr, m_previewSize.height() * m_previewDpr, editCanvas().width(), editCanvas().height(), m_pixelPerfect) / m_previewDpr;
+	return previewLayout().scale;
+}
+
+// Same rule as the engine's drawing, on physical pixels, back in logical units.
+PreviewLayout App::previewLayout() const
+{
+	const double d = m_previewDpr;
+	const QString other = verticalOn() ? otherLayoutId() : QString();
+	const QSize oc = other.isEmpty() ? QSize() : doc().canvasOf(other);
+	PreviewLayout l = previewLayoutFor(m_previewSize.width() * d, m_previewSize.height() * d, editCanvas().width(), editCanvas().height(),
+					   oc.width(), oc.height(), editingVertical(), 16 * d, m_pixelPerfect);
+	l.scale /= d, l.ox = std::round(l.ox) / d, l.oy = std::round(l.oy) / d;
+	l.other = QRectF(l.other.x() / d, l.other.y() / d, l.other.width() / d, l.other.height() / d);
+	return l;
 }
 
 void App::setClickToShow(bool on)
@@ -4061,16 +4073,14 @@ void App::setPixelPerfect(bool on)
 
 QPointF App::toCanvas(QPointF p) const
 {
-	const double s = canvasScale();
-	const double ox = (m_previewSize.width() - editCanvas().width() * s) / 2, oy = (m_previewSize.height() - editCanvas().height() * s) / 2;
-	return {(p.x() - ox) / s, (p.y() - oy) / s};
+	const PreviewLayout l = previewLayout();
+	return {(p.x() - l.ox) / l.scale, (p.y() - l.oy) / l.scale};
 }
 
 QPointF App::fromCanvas(QPointF c) const
 {
-	const double s = canvasScale();
-	const double ox = (m_previewSize.width() - editCanvas().width() * s) / 2, oy = (m_previewSize.height() - editCanvas().height() * s) / 2;
-	return {c.x() * s + ox, c.y() * s + oy};
+	const PreviewLayout l = previewLayout();
+	return {c.x() * l.scale + l.ox, c.y() * l.scale + l.oy};
 }
 
 QString App::topAncestor(const QString &id) const
@@ -4182,6 +4192,9 @@ Qt::CursorShape App::cursorAt(QPointF p) const
 void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 {
 	endTextEdit(); // clicking anywhere finishes typing
+	// A press on the other layout switches to it and carries on there: select, drag, draw.
+	if (verticalOn() && !otherLayoutId().isEmpty() && previewLayout().other.contains(p))
+		setEditingVertical(!editingVertical());
 	const QPointF c = toCanvas(p);
 	if (m_tool == "laser") { // works while live, never touches the show
 		m_drag = Drag::Laser;
@@ -4572,6 +4585,7 @@ void App::setTool(const QString &t)
 	if (!tools.contains(t) || t == m_tool)
 		return;
 	m_tool = t;
+	m_penGroup.clear(); // picking the pencil again starts a new drawing
 	if (t != "select")
 		m_selection.clear(), updateOverlay(), emit docChanged();
 	emit toolChanged();
@@ -4647,10 +4661,25 @@ void App::finishCreate()
 		return updateOverlay();
 	}
 	QString iid;
+	const bool pen = m_tool == "pencil";
 	m_store.commit("Add " + label.toLower(), [&](Doc &d) {
 		const QString sid = d.addSource(kind, label, st).id;
 		iid = d.placeSource(m_editScene, sid).id;
 		d.setTransform(iid, t);
+		if (!pen)
+			return;
+		// One pencil session, one group: the first stroke makes it, the rest go in on top.
+		if (const Instance g = d.instances.value(m_penGroup); g.kind == "group" && g.sceneId == m_editScene) {
+			d.scenes[m_editScene].layers.removeAll(iid);
+			d.instances[m_penGroup].children.prepend(iid);
+		} else {
+			m_penGroup = d.groupLayers({iid});
+			QStringList taken;
+			for (const auto &i : d.instances)
+				if (i.id != iid && i.id != m_penGroup)
+					taken << i.name;
+			d.instances[m_penGroup].name = uniqueName("Drawing", taken);
+		}
 	});
 	// The pencil keeps drawing, so its strokes aren't selected: handles on each stroke got in the
 	// way of the next one. Other shapes and text are selected, ready to adjust.

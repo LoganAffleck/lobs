@@ -116,3 +116,14 @@ story("VT-04", "A full-canvas background covers the vertical canvas", () => {
 	const tr = eff(f, "transform");
 	check("covers 1080 × 1920", tr.x <= 0 && tr.y <= 0 && tr.x + tr.w >= 1080 && tr.y + tr.h >= 1920, tr);
 });
+
+story("VT-05", "A locked layer (the background) starts locked in the vertical layout", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	const d0 = t.doc(), bg = d0.scenes[A].layers.find(id => d0.instances[id].locked);
+	check("the scene has a locked background", !!bg);
+	app.setVerticalOn(true);
+	const d = t.doc(), v = Object.keys(d.scenes).find(id => d.scenes[id].verticalOf === A);
+	const f = d.scenes[v].layers.find(id => d.instances[id].follows === bg);
+	check("its vertical copy is locked", f && d.instances[f].locked);
+});

@@ -161,34 +161,7 @@ Rectangle {
             source: app.previewHidden && app.editSceneId ? "image://thumbs/" + app.editSceneId + "?freeze" + app.freezeTick : ""
         }
     }
-    // The other layout, live (5 frames a second), in a corner: both are in view while one is
-    // edited. Click it to edit that one.
-    Rectangle {
-        id: otherView
-        parent: preview
-        visible: app.verticalOn && app.otherLayoutId !== "" && app.previewInScene
-        readonly property bool tall: !app.editingVertical // the other one is the vertical layout
-        width: tall ? 120 : 214; height: tall ? 214 : 120
-        anchors { right: parent.right; bottom: parent.bottom; margins: 12 }
-        radius: Pal.radius; color: "#000000"
-        border.width: 1; border.color: otherMouse.containsMouse ? Pal.focus : Pal.border
-        property int frame: 0
-        Timer { interval: 200; repeat: true; running: otherView.visible; onTriggered: otherView.frame++ }
-        Image {
-            anchors.fill: parent; anchors.margins: 1
-            fillMode: Image.PreserveAspectFit
-            cache: false
-            sourceSize.width: Math.round(width * Screen.devicePixelRatio)
-            source: otherView.visible ? "image://thumbs/" + app.otherLayoutId + "?" + otherView.frame : ""
-        }
-        Text {
-            anchors { left: parent.left; top: parent.top; margins: 6 }
-            text: app.editingVertical ? "Horizontal" : "Vertical"
-            color: "#ffffff"; style: Text.Outline; styleColor: "#000000"
-            font.family: Pal.font; font.pixelSize: Pal.caption
-        }
-        MouseArea { id: otherMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: app.setEditingVertical(!app.editingVertical) }
-    }
+    // The other layout sits in a corner of the preview: Engine::drawOtherLayout draws it.
     // Right-click on the canvas.
     Connections {
         target: app

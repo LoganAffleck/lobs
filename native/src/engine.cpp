@@ -1399,9 +1399,12 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 {
 	const int CW = m_editCanvasW.load(), CH = m_editCanvasH.load(); // the edited scene's canvas
 	const float W = float(CW), H = float(CH);
-	const float scale = float(previewScaleFor(cx, cy, CW, CH, m_pixelPerfect));
-	const int vw = int(W * scale), vh = int(H * scale);
-	const int vx = (int(cx) - vw) / 2, vy = (int(cy) - vh) / 2;
+	const bool other = m_otherSource != nullptr;
+	const PreviewLayout lay = previewLayoutFor(cx, cy, CW, CH, other ? m_otherW.load() : 0, other ? m_otherH.load() : 0, m_otherLeft.load(), 16 * m_previewDpr.load(), m_pixelPerfect);
+	const float scale = float(lay.scale);
+	// Rounded the same way as the other layout's box, so a layout is the same size in either spot.
+	const int vx = int(std::lround(lay.ox)), vy = int(std::lround(lay.oy));
+	const int vw = int(std::lround(lay.ox + W * scale)) - vx, vh = int(std::lround(lay.oy + H * scale)) - vy;
 
 	gs_viewport_push();
 	gs_projection_push();
@@ -1631,6 +1634,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 			}
 		}
 	}
+	drawOtherLayout(lay.other); // drawn here: the preview is a native window, so nothing in QML can sit on it
 	gs_projection_pop();
 	gs_viewport_pop();
 }
@@ -1786,6 +1790,53 @@ void Engine::updateEditCanvas()
 	const QSize c = m_lastDoc.canvasOf(m_editId);
 	m_editCanvasW = c.width() > 0 ? c.width() : m_canvasW;
 	m_editCanvasH = c.height() > 0 ? c.height() : m_canvasH;
+	// The other layout, for the corner of the preview.
+	const Doc &d = m_lastDoc;
+	const QString vOf = d.scenes.value(m_editId).verticalOf;
+	const QString other = !d.verticalOn ? QString() : !vOf.isEmpty() ? vOf : d.verticalLayout(m_editId);
+	obs_scene_t *os = m_scenes.value(other);
+	obs_source_t *src = os ? obs_scene_get_source(os) : nullptr;
+	if (src != m_otherSource) {
+		if (src)
+			obs_source_inc_showing(src);
+		if (m_otherSource)
+			obs_source_dec_showing(m_otherSource);
+		m_otherSource = src;
+	}
+	const QSize oc = d.canvasOf(other);
+	m_otherW = oc.width() > 0 ? oc.width() : m_canvasW;
+	m_otherH = oc.height() > 0 ? oc.height() : m_canvasH;
+	m_otherLeft = !vOf.isEmpty();
+}
+
+void Engine::drawOtherLayout(const QRectF &r)
+{
+	obs_source_t *src = m_otherSource;
+	const int OW = m_otherW.load(), OH = m_otherH.load();
+	if (!src || OW <= 0 || OH <= 0 || r.isEmpty())
+		return;
+	// A hairline frame just outside, as around the edited canvas.
+	const int x = int(std::lround(r.x())) - 1, y = int(std::lround(r.y())) - 1;
+	const int w = int(std::lround(r.right())) + 1 - x, h = int(std::lround(r.bottom())) + 1 - y;
+	gs_set_viewport(x, y, w, h);
+	gs_ortho(0.0f, float(w), 0.0f, float(h), -100.0f, 100.0f);
+	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+	gs_eparam_t *color = gs_effect_get_param_by_name(solid, "color");
+	while (gs_effect_loop(solid, "Solid")) {
+		vec4 c;
+		vec4_set(&c, 0.30f, 0.30f, 0.30f, 1.0f);
+		gs_effect_set_vec4(color, &c);
+		fillRect(0, 0, float(w), float(h));
+		vec4_set(&c, 0.0f, 0.0f, 0.0f, 1.0f);
+		gs_effect_set_vec4(color, &c);
+		fillRect(1, 1, float(w - 2), float(h - 2));
+	}
+	// The layout, fitted inside the frame.
+	const float s = std::min(float(w - 2) / OW, float(h - 2) / OH);
+	const int iw = int(OW * s), ih = int(OH * s);
+	gs_set_viewport(x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
+	gs_ortho(0.0f, float(OW), 0.0f, float(OH), -100.0f, 100.0f);
+	obs_source_video_render(src);
 }
 
 void Engine::syncVerticalProgram()
