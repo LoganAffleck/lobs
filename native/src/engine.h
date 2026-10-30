@@ -191,6 +191,8 @@ public:
 	bool resetVideo();                            // apply output size/FPS (only while nothing is live)
 	bool startStreaming();
 	void stopStreaming();
+	void applyStreamBitrate(); // the saved bitrate, on the running stream
+	int streamBitrate(int kbps) const; // the service's cap (Twitch: 5800)
 	Q_INVOKABLE void recordClip(int seconds);
 	void refreshBrowser(const QString &sourceId);
 	QJsonObject inputFilters() const; // source id -> [libobs filter ids], for self-tests

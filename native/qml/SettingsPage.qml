@@ -235,7 +235,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Video bitrate"
-                                description: "6000 kbps suits 1080p60 on Twitch. Services may cap it."
+                                description: "6000 kbps suits 1080p60. Twitch streams stop at 5800 (Twitch's limit is 6000 with audio)."
                                 FNumField { label: ""; suffix: "kbps"; implicitWidth: 120; value: page.s.bitrate || 6000; onCommit: (v) => page.save("bitrate", Math.max(500, Math.round(v))) }
                             }
                             SettingRow {

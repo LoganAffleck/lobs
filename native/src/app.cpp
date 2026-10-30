@@ -2248,7 +2248,7 @@ void App::stopBandwidthTest() { m_engine->stopBandwidthTest(); }
 QVariantMap App::recommendSettings(int measured, const QString &service) const
 {
 	// Leave a quarter of the measured upload free for the rest of your connection.
-	const int cap = service == "Twitch" ? 6000 : service.startsWith("YouTube") ? 9000 : 8000;
+	const int cap = service == "Twitch" ? 5800 : service.startsWith("YouTube") ? 9000 : 8000;
 	// LOBS-028: never recommend more than that, even on a slow connection (the wizard warns below 2 Mbps).
 	const int bitrate = std::clamp(int(measured * 0.75 / 100) * 100, 100, cap);
 	const bool slow = measured < 2000;
@@ -2695,6 +2695,8 @@ bool App::saveSettings(const QVariantMap &changes)
 		else if (!m_engine->resetVideo())
 			showToast(m_engine->lastError());
 	}
+	if (changes.contains("bitrate") && m_engine->streaming())
+		m_engine->applyStreamBitrate(); // takes effect on the running stream, as OBS's dynamic bitrate does
 	emit settingsChanged();
 	return true;
 }

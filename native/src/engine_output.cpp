@@ -254,6 +254,7 @@ bool Engine::startStreaming()
 	// Let the service clamp bitrates / keyframes to what the platform allows.
 	obs_data_t *vset = obs_encoder_get_settings(m_streamVenc), *aset = obs_encoder_get_settings(m_streamAenc);
 	obs_service_apply_encoder_settings(m_service, vset, aset);
+	obs_data_set_int(vset, "bitrate", streamBitrate(int(obs_data_get_int(vset, "bitrate"))));
 	obs_encoder_update(m_streamVenc, vset);
 	obs_encoder_update(m_streamAenc, aset);
 	// What the stream really uses, after the service's limits, to compare against OBS's log.
@@ -301,6 +302,27 @@ void Engine::stopStreaming()
 		obs_output_stop(m_streamOutput);
 	emit streamingChanged();
 	setStatus("Stream ended after " + m_streamStats.value("time").toString());
+}
+
+// Twitch's guideline is 6,000 kbps for a whole single-quality stream, and its Inspector flags
+// "bitrate too high" above it: 6,000 of video plus audio measured 6,092. Video stops at 5,800.
+int Engine::streamBitrate(int kbps) const
+{
+	return m_settings.stream.service.startsWith("Twitch") ? std::min(kbps, 5800) : kbps;
+}
+
+// A new bitrate while live: the encoders (NVENC, x264, AMF, Quick Sync) take it without restarting.
+void Engine::applyStreamBitrate()
+{
+	if (!m_streamVenc)
+		return;
+	obs_data_t *v = obs_encoder_get_settings(m_streamVenc);
+	obs_data_set_int(v, "bitrate", streamBitrate(m_settings.stream.bitrate));
+	obs_service_apply_encoder_settings(m_service, v, nullptr); // the service's own cap still applies
+	obs_data_set_int(v, "bitrate", streamBitrate(int(obs_data_get_int(v, "bitrate"))));
+	obs_encoder_update(m_streamVenc, v);
+	blog(LOG_INFO, "[lobs] stream bitrate now %lld kbps", obs_data_get_int(v, "bitrate"));
+	obs_data_release(v);
 }
 
 void Engine::pollStreamStats()
