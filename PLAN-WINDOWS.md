@@ -203,8 +203,8 @@ editor.
 **Built 2026-10-30:** a pause button beside the recording timer (not with "Same as stream"
 quality, which OBS can't pause either); the timer leaves pauses out. With MKV, "Also save as MP4"
 (on by default) makes an MP4 copy when it stops, through libobs's remux; the MKV stays.
-_probe-record-pause and 50-output pass. Still to check: playing a paused recording, and the MP4
-in an editor.
+_probe-record-pause and 50-output pass; a paused recording played back fine and its MP4 opened
+(2026-10-30).
 
 ### P2-6. My plugins' panels show up
 *As a plugin user, the panels (docks) my OBS plugins add appear in LOBS.*

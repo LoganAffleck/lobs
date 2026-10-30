@@ -327,7 +327,7 @@ ApplicationWindow {
                 implicitHeight: Pal.ctl + 4
                 implicitWidth: brandRow.implicitWidth + 16
                 onClicked: settingsPage.show()
-                ToolTip.visible: hovered
+                ToolTip.visible: hovered && !settingsPage.open // Settings is already showing
                 ToolTip.delay: 600
                 ToolTip.text: chrome.keys("Settings  Ctrl ,")
                 background: Rectangle {
