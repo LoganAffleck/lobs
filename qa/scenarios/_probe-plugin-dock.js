@@ -21,13 +21,11 @@ story("PD-01", "It loads and its panel appears in Plugin panels", () => {
 	t.metric("plugin", p);
 	check("loaded", p.status === "loaded", p.status + ": " + p.reason);
 	t.wait(1500); // FINISHED_LOADING has gone out
-	check("it added a panel", app.hasPluginPanels());
+	check("it added a panel", app.pluginDocks().length > 0, app.pluginDocks());
 	t.metric("tools", app.pluginTools());
-	app.showPluginPanels();
 	t.wait(800);
-	t.grab("pd01-panels.png");
 	// Scene changes reach it: switch scenes while it listens.
 	const B = mkScene("Second");
 	app.editScene(B); app.take(); t.wait(500);
-	check("still running after a scene change", app.hasPluginPanels());
+	check("still running after a scene change", app.pluginDocks().length > 0);
 });

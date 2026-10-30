@@ -688,8 +688,7 @@ QString App::pluginsFolder() const { return QDir::toNativeSeparators(lobs::plugi
 void App::openPluginsFolder() const { QDesktopServices::openUrl(QUrl::fromLocalFile(lobs::plugins::folder())); }
 
 void App::copyText(const QString &text) const { QGuiApplication::clipboard()->setText(text); }
-bool App::hasPluginPanels() const { return lobs::frontend::hasPanels(); }
-void App::showPluginPanels() const { lobs::frontend::showPanels(); }
+QVariantList App::pluginDocks() const { return lobs::frontend::docks(); }
 QStringList App::pluginTools() const { return lobs::frontend::toolsItems(); }
 void App::triggerPluginTool(const QString &name) const { lobs::frontend::triggerTool(name); }
 

@@ -209,6 +209,8 @@ ApplicationWindow {
         if (d.isOpen) d.close()
         else if (d === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
         else if (d === captionsDock && audioDock.isOpen) dockArea.addDockWidget(captionsDock, KDDW.KDDockWidgets.Location_OnRight, audioDock, Qt.size(380, 0)) // beside the mixer
+        // Others dock in the right column, under Layers (floating only with Layers closed).
+        else if (layersDock.isOpen && d !== layersDock) dockArea.addDockWidget(d, KDDW.KDDockWidgets.Location_OnBottom, layersDock, Qt.size(0, 360))
         else d.show()
     }
     TransitionsDialog { id: trDialog }
@@ -500,8 +502,7 @@ ApplicationWindow {
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                     FMenuItem { text: "Show all panels"; onTriggered: win.panels.forEach(d => { if (!d.isOpen) d.show() }) }
                     // Plugins that add panels or Tools items through OBS's interface.
-                    MenuSeparator { visible: windowMenu.populated && (app.hasPluginPanels() || app.pluginTools().length > 0); height: visible ? implicitHeight : 0; contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                    FMenuItem { visible: windowMenu.populated && app.hasPluginPanels(); height: visible ? implicitHeight : 0; text: "Plugin panels"; onTriggered: app.showPluginPanels() }
+                    MenuSeparator { visible: windowMenu.populated && app.pluginTools().length > 0; height: visible ? implicitHeight : 0; contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                     Instantiator {
                         active: windowMenu.populated
                         model: windowMenu.populated ? app.pluginTools() : []
@@ -1825,6 +1826,22 @@ ApplicationWindow {
                 sourceComponent: TwitchPanel { kind: "info"; live: infoDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c) }
             }
         }
+        // Plugin docks (OBS's frontend API), one panel each; PluginPanel embeds the plugin's widget.
+        Instantiator {
+            model: app.pluginDocks()
+            delegate: KDDW.DockWidget {
+                required property var modelData
+                uniqueName: "plugin_" + modelData.id
+                title: modelData.title
+                PluginPanel {
+                    property size kddockwidgets_min_size: Qt.size(240, 160)
+                    anchors.fill: parent
+                    dockId: modelData.id
+                }
+            }
+            onObjectAdded: (i, o) => win.pluginPanels = win.pluginPanels.concat([o])
+            onObjectRemoved: (i, o) => win.pluginPanels = win.pluginPanels.filter(d => d !== o)
+        }
         KDDW.DockWidget {
             id: feedDock
             uniqueName: "twitchFeed"
@@ -1907,7 +1924,8 @@ ApplicationWindow {
     property bool layoutReady: false
     Timer { interval: 3000; repeat: true; running: win.layoutReady; onTriggered: layoutSaver.saveToFile(win.layoutFile) }
     onClosing: { layoutReady = false; app.closeProjectors() }
-    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, captionsDock, chatDock, infoDock, feedDock]
+    property var pluginPanels: [] // plugin docks' panels (see the Instantiator by feedDock)
+    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, captionsDock, chatDock, infoDock, feedDock].concat(pluginPanels)
     property Item previewItem: null
 
     // Docked panels are moved with LOBS's own drag (keeps their slot until the drop).

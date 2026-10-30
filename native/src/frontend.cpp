@@ -12,6 +12,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMainWindow>
+#include <QPointer>
+#include <QVariantMap>
 #include <QStandardPaths>
 #include <QTimer>
 
@@ -57,7 +59,8 @@ public:
 	std::vector<EventCb> events;
 	std::vector<SaveCb> saves, preloads;
 	std::vector<Tool> tools;
-	QHash<QString, QDockWidget *> docks;
+	struct Dock { QString id, title; QPointer<QWidget> widget; };
+	std::vector<Dock> docks; // in the order plugins added them
 	config_t *profileConfig = nullptr, *appConfig = nullptr, *userConfig = nullptr;
 
 	PanelsWindow *window()
@@ -185,31 +188,29 @@ public:
 	{
 		tools.push_back({QString::fromUtf8(name), callback, private_data, nullptr});
 	}
+	// A dock becomes a LOBS panel (PluginPanel shows the widget in it), listed in the Window menu.
+	bool has(const QString &id) const { return std::any_of(docks.begin(), docks.end(), [&](const Dock &d) { return d.id == id; }); }
 	bool obs_frontend_add_dock_by_id(const char *id, const char *title, void *widget) override
 	{
-		if (!window() || docks.contains(id) || !widget)
+		if (!window() || has(id) || !widget)
 			return false;
-		auto *d = new QDockWidget(QString::fromUtf8(title), panels);
-		d->setObjectName(QString::fromUtf8(id));
-		d->setWidget(static_cast<QWidget *>(widget));
-		panels->addDockWidget(Qt::LeftDockWidgetArea, d);
-		docks.insert(id, d);
+		auto *w = static_cast<QWidget *>(widget);
+		w->hide();
+		docks.push_back({QString::fromUtf8(id), QString::fromUtf8(title), w});
 		blog(LOG_INFO, "[lobs] plugin panel: %s (%s)", title, id);
 		return true;
 	}
 	void obs_frontend_remove_dock(const char *id) override
 	{
-		if (QDockWidget *d = docks.take(id))
-			d->deleteLater();
+		std::erase_if(docks, [&](const Dock &d) { if (d.id != id) return false; if (d.widget) d.widget->hide(); return true; });
 	}
 	bool obs_frontend_add_custom_qdock(const char *id, void *dock) override
 	{
-		if (!window() || docks.contains(id) || !dock)
+		if (!window() || has(id) || !dock)
 			return false;
 		auto *d = static_cast<QDockWidget *>(dock);
-		d->setParent(panels);
-		panels->addDockWidget(Qt::LeftDockWidgetArea, d);
-		docks.insert(id, d);
+		d->hide();
+		docks.push_back({QString::fromUtf8(id), d->windowTitle(), d->widget() ? d->widget() : d});
 		return true;
 	}
 
@@ -365,19 +366,28 @@ void exiting()
 	g->send(OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN);
 	g->send(OBS_FRONTEND_EVENT_EXIT);
 	// Hidden, not deleted: plugins delete their own widgets when they unload.
-	if (g->panels)
-		g->panels->hide();
+	for (const auto &d : g->docks)
+		if (d.widget)
+			d.widget->hide();
 }
 
-bool hasPanels() { return g && !g->docks.isEmpty(); }
-
-void showPanels()
+QVariantList docks()
 {
-	if (g && g->panels) {
-		g->panels->show();
-		g->panels->raise();
-		g->panels->activateWindow();
-	}
+	QVariantList out;
+	if (g)
+		for (const auto &d : g->docks)
+			if (d.widget)
+				out << QVariantMap{{"id", d.id}, {"title", d.title}};
+	return out;
+}
+
+QWidget *dockWidget(const QString &id)
+{
+	if (g)
+		for (const auto &d : g->docks)
+			if (d.id == id)
+				return d.widget;
+	return nullptr;
 }
 
 QStringList toolsItems()

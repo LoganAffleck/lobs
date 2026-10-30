@@ -4,6 +4,7 @@
 #include "captions.h"
 #include "twitch_account.h"
 #include "frontend.h"
+#include "plugin_panel.h"
 #include <QApplication>
 #include "websocket_server.h"
 #include "crash_report.h"
@@ -905,6 +906,7 @@ int main(int argc, char *argv[])
 	Engine engine;
 	qmlRegisterType<BrowserView>("LOBS.Web", 1, 0, "BrowserView");
 	qmlRegisterType<SourcePreview>("LOBS.Web", 1, 0, "SourcePreview");
+	qmlRegisterType<PluginPanel>("LOBS.Web", 1, 0, "PluginPanel");
 	qmlRegisterType<RowsModel>("LOBS.Models", 1, 0, "RowsModel");
 	engine.setSettings(AppSettings::load());
 	blog(LOG_INFO, "[lobs] OBS engine %s from %s", qPrintable(sel.version), qPrintable(sel.root));

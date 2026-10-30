@@ -53,6 +53,7 @@ qt_add_executable(LOBS WIN32 MACOSX_BUNDLE
     src/obs_switch.cpp src/obs_switch.h
     src/websocket_server.cpp src/websocket_server.h
     src/frontend.cpp src/frontend.h
+    src/plugin_panel.cpp src/plugin_panel.h
     src/plugins.cpp src/plugins.h
     src/crash_report.cpp src/crash_report.h
     src/app_updater.cpp src/app_updater.h
