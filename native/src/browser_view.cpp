@@ -1,5 +1,7 @@
 #include "browser_view.h"
 
+#include <QSet>
+
 #include <obs.h>
 #include <obs-interaction.h>
 
@@ -12,7 +14,17 @@
 #include <cmath>
 
 static bool g_engineReady = false;
+static QSet<BrowserView *> g_views; // for releaseAll
 void BrowserView::setEngineReady(bool ready) { g_engineReady = ready; }
+
+// The QML views outlive the engine (they go with the QML engine, after Engine::shutdown), and a
+// web page still open when CEF unloads fails CEF's shutdown checks (a crash on exit).
+void BrowserView::releaseAll()
+{
+	g_engineReady = false; // and none starts again
+	for (BrowserView *v : std::as_const(g_views))
+		v->releaseSource();
+}
 
 static obs_data_t *toObsData(const QJsonObject &o)
 {
@@ -34,6 +46,7 @@ static uint32_t modifiersOf(Qt::KeyboardModifiers m, Qt::MouseButtons b = {})
 
 BrowserView::BrowserView(QQuickItem *parent) : QQuickPaintedItem(parent)
 {
+	g_views.insert(this);
 	setAcceptedMouseButtons(Qt::AllButtons);
 	setAcceptHoverEvents(true);
 	setFlag(ItemAcceptsInputMethod, true);
@@ -56,7 +69,7 @@ BrowserView::BrowserView(QQuickItem *parent) : QQuickPaintedItem(parent)
 	});
 }
 
-BrowserView::~BrowserView() { releaseSource(); }
+BrowserView::~BrowserView() { g_views.remove(this); releaseSource(); }
 
 QSize BrowserView::pageSize() const
 {

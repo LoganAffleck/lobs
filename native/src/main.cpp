@@ -1826,6 +1826,8 @@ int main(int argc, char *argv[])
 
 	const int rc = app.exec();
 	lobs::frontend::exiting(); // plugins save their state while the engine still runs
+	BrowserView::releaseAll(); // the QML views go after the engine: their pages go first, or CEF's
+	SourcePreview::releaseAll(); // shutdown checks fail (an intermittent crash on exit)
 	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
 	captions.stop(); // its audio tap is on an engine input
 	engine.shutdown();

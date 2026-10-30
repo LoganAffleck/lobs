@@ -1,4 +1,6 @@
 #include "source_preview.h"
+
+#include <QSet>
 #include "engine.h"
 
 #include <obs.h>
@@ -9,7 +11,16 @@
 #include <cmath>
 
 static Engine *g_engine = nullptr;
+static QSet<SourcePreview *> g_previews; // for releaseAll
 void SourcePreview::setEngine(Engine *e) { g_engine = e; }
+
+// As BrowserView::releaseAll: nothing of the engine's outlives its shutdown.
+void SourcePreview::releaseAll()
+{
+	g_engine = nullptr;
+	for (SourcePreview *p : std::as_const(g_previews))
+		p->release();
+}
 
 static bool isAudio(const QString &kind) { return kind == "mic" || kind == "desktop_audio"; }
 
@@ -24,6 +35,7 @@ static void onPeak(void *data, const float *, const float peak[MAX_AUDIO_CHANNEL
 
 SourcePreview::SourcePreview(QQuickItem *parent) : QQuickPaintedItem(parent)
 {
+	g_previews.insert(this);
 	setOpaquePainting(true);
 	m_timer.setInterval(66); // ~15 fps: enough to see it's the right camera or page
 	connect(&m_timer, &QTimer::timeout, this, &SourcePreview::tick);
@@ -32,7 +44,8 @@ SourcePreview::SourcePreview(QQuickItem *parent) : QQuickPaintedItem(parent)
 	connect(&m_restart, &QTimer::timeout, this, &SourcePreview::restart);
 }
 
-SourcePreview::~SourcePreview() { release(); }
+SourcePreview::~SourcePreview() {
+	g_previews.remove(this); release(); }
 
 void SourcePreview::setKind(const QString &k)
 {

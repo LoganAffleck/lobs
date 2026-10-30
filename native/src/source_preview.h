@@ -26,6 +26,7 @@ public:
 	explicit SourcePreview(QQuickItem *parent = nullptr);
 	~SourcePreview() override;
 	static void setEngine(Engine *e); // once the engine has started
+	static void releaseAll(); // before the engine shuts down
 
 	QString kind() const { return m_kind; }
 	void setKind(const QString &k);

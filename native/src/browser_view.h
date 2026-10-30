@@ -21,6 +21,7 @@ public:
 	explicit BrowserView(QQuickItem *parent = nullptr);
 	~BrowserView() override;
 	static void setEngineReady(bool ready); // set once the engine has started
+	static void releaseAll(); // before the engine shuts down: no page outlives CEF
 
 	QString url() const { return m_url; }
 	void setUrl(const QString &u);
