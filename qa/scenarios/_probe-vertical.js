@@ -6,7 +6,7 @@ story("VT-01", "Each scene gets a vertical layout, edited with the switch, saved
 	fresh();
 	const A = t.doc().sceneOrder[0];
 	app.editScene(A); app.take();
-	const red = placeColor("Red", "#ff0000"); setT(red, "x", 0); setT(red, "y", 0); setT(red, "w", 1920); setT(red, "h", 1080);
+	const red = placeColor("Red", "#ff0000"); setT(red, "x", 0); setT(red, "y", 0); setT(red, "w", 1920); setT(red, "h", 1079); // not quite full: fitted, not stretched
 	const listed = t.doc().sceneOrder.length;
 	app.setVerticalOn(true);
 	t.waitFrames(3, 3000);
@@ -20,7 +20,7 @@ story("VT-01", "Each scene gets a vertical layout, edited with the switch, saved
 	if (layer) {
 		const tr = eff(layer, "transform");
 		t.metric("fitted", tr);
-		check("fitted to the 1080-wide canvas", Math.abs(tr.w - 1080) < 2 && Math.abs(tr.h - 608) < 3, tr);
+		check("fitted to the 1080-wide canvas", Math.abs(tr.w - 1080) < 2 && Math.abs(tr.h - 607) < 3, tr);
 		check("centered vertically", Math.abs(tr.y - (1920 - 608) / 2) < 3, tr);
 	}
 	app.setEditingVertical(true);
@@ -77,4 +77,42 @@ story("VT-02", "The vertical layout follows the scene one way, until a setting i
 	const d = t.doc(), fi = d.instances[f];
 	check("follows is saved", fi && fi.follows === cam, fi);
 	check("its own settings are saved", fi && (fi.own || []).indexOf("transform") >= 0, fi && fi.own);
+});
+
+story("VT-03", "An older layout's copies are adopted, and picking a scene keeps Vertical", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A); app.take();
+	const cam = placeColor("Cam", "#00ff00");
+	app.setVerticalOn(true);
+	// A show saved before layers followed: the vertical copy has no "follows".
+	const path = t.out("legacy.lobs.json"); t.saveDocTo(path);
+	const j = JSON.parse(t.readFile(path));
+	for (const id in j.instances) { delete j.instances[id].follows; delete j.instances[id].own; }
+	t.writeFile(path, JSON.stringify(j));
+	app.open(t.url(path)); t.waitFrames(2, 3000);
+	app.editScene(A); setT(cam, "x", 500); // any edit syncs
+	const d = t.doc(), v = Object.keys(d.scenes).find(id => d.scenes[id].verticalOf === A);
+	const same = d.scenes[v].layers.filter(id => d.instances[id].sourceId === d.instances[cam].sourceId);
+	eq("the layer is there once", same.length, 1);
+	check("and follows the scene's layer", same.length && d.instances[same[0]].follows === cam);
+	// Vertical, then another scene: still Vertical.
+	app.addScene();
+	const B = t.doc().sceneOrder.find(id => id !== A);
+	app.editScene(A); app.setEditingVertical(true);
+	app.editScene(B);
+	check("still editing Vertical", app.editingVertical, app.editSceneId);
+	eq("of the scene picked", t.doc().scenes[app.editSceneId].verticalOf, B);
+});
+
+story("VT-04", "A full-canvas background covers the vertical canvas", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0];
+	app.editScene(A);
+	const bg = placeColor("Bg", "#2563eb"); setT(bg, "x", 0); setT(bg, "y", 0); setT(bg, "w", 1920); setT(bg, "h", 1080);
+	app.setVerticalOn(true);
+	const d = t.doc(), v = Object.keys(d.scenes).find(id => d.scenes[id].verticalOf === A);
+	const f = d.scenes[v].layers.find(id => d.instances[id].follows === bg);
+	const tr = eff(f, "transform");
+	check("covers 1080 × 1920", tr.x <= 0 && tr.y <= 0 && tr.x + tr.w >= 1080 && tr.y + tr.h >= 1920, tr);
 });

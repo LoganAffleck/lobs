@@ -874,6 +874,13 @@ void App::editScene(const QString &id)
 {
 	if (!doc().scenes.contains(id))
 		return;
+	// Picking another scene while in Vertical keeps Vertical: that scene's vertical layout.
+	if (editingVertical() && doc().scenes[id].verticalOf.isEmpty() && doc().mainScene(m_editScene) != id) {
+		QString v = doc().verticalLayout(id);
+		if (v.isEmpty()) // a scene made since vertical went on
+			m_store.commit("Vertical layout", [&](Doc &d) { v = d.addVerticalLayout(id); });
+		return editScene(v);
+	}
 	m_editScene = id;
 	m_selection.clear();
 	m_engine->setEditScene(id);

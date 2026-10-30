@@ -423,8 +423,8 @@ QString Doc::addVerticalLayout(const QString &sceneId)
 // in the vertical layout until it's moved there.
 Transform Doc::toVertical(const Transform &t) const
 {
-	const double s = double(verticalW) / canvasW, dy = (verticalH - canvasH * s) / 2;
 	Transform v = t;
+	const double s = double(verticalW) / canvasW, dy = (verticalH - canvasH * s) / 2;
 	v.x = std::round(t.x * s), v.y = std::round(t.y * s + dy), v.w = std::round(t.w * s), v.h = std::round(t.h * s);
 	return v;
 }
@@ -458,6 +458,16 @@ void Doc::syncVertical()
 			const Instance &src = instances[m];
 			if (src.kind == "group")
 				continue;
+			// A layout made before layers followed (0.7 previews) has plain copies: one of the same
+			// source is adopted, so the layer isn't there twice.
+			if (!follower.contains(m))
+				for (const QString &l : v.layers)
+					if (Instance &c = instances[l]; c.follows.isEmpty() && c.sourceId == src.sourceId && c.kind == src.kind &&
+									  !std::any_of(follower.cbegin(), follower.cend(), [&](const QString &f) { return f == l; })) {
+						c.follows = m;
+						follower[m] = l;
+						break;
+					}
 			if (!follower.contains(m)) {
 				Instance in;
 				in.id = uid("ins_");
@@ -485,6 +495,10 @@ void Doc::syncVertical()
 			in.links.clear();
 			if (!in.own.contains(Group::Transform))
 				in.props.transform = toVertical(transform(src));
+			// A color covering the whole canvas (the background) covers the tall one; colors stretch cleanly.
+			if (const Transform t = transform(src); !in.own.contains(Group::Transform) && sources.value(src.sourceId).kind == "color" &&
+								     t.x <= 0 && t.y <= 0 && t.x + t.w >= canvasW && t.y + t.h >= canvasH)
+				in.props.transform.x = 0, in.props.transform.y = 0, in.props.transform.w = verticalW, in.props.transform.h = verticalH;
 			if (!in.own.contains(Group::Crop))
 				in.props.crop = crop(src);
 			if (!in.own.contains(Group::Filters))
