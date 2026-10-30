@@ -35,6 +35,7 @@ class App : public QObject {
 	Q_PROPERTY(bool verticalOn READ verticalOn NOTIFY docChanged)
 	Q_PROPERTY(bool editingVertical READ editingVertical NOTIFY docChanged)
 	Q_PROPERTY(bool editingProgram READ editingProgram NOTIFY docChanged) // the scene on air (either layout)
+	Q_PROPERTY(QString otherLayoutId READ otherLayoutId NOTIFY docChanged) // the layout not being edited
 	Q_PROPERTY(QString programSceneId READ programSceneId NOTIFY docChanged)
 	Q_PROPERTY(bool canUndo READ canUndo NOTIFY docChanged)
 	Q_PROPERTY(bool canRedo READ canRedo NOTIFY docChanged)
@@ -74,6 +75,7 @@ public:
 	QString editSceneName() const;
 	bool verticalOn() const { return doc().verticalOn; }
 	bool editingProgram() const { return doc().mainScene(m_editScene) == programSceneId(); }
+	QString otherLayoutId() const { return editingVertical() ? doc().mainScene(m_editScene) : doc().verticalLayout(m_editScene); }
 	bool editingVertical() const { return !doc().scenes.value(m_editScene).verticalOf.isEmpty(); }
 	Q_INVOKABLE void setVerticalOn(bool on);
 	Q_INVOKABLE void setEditingVertical(bool vertical);

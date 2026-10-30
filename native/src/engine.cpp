@@ -1044,7 +1044,9 @@ QImage Engine::renderThumbnail(const QString &sceneId, int width)
 	unparkScene(sceneId);
 	if (!m_parkTimer.isActive())
 		m_parkTimer.start(500);
-	const uint32_t w = uint32_t(width), h = uint32_t(width * m_canvasH / m_canvasW);
+	const QSize c = m_lastDoc.canvasOf(sceneId); // a vertical layout is tall
+	const int CW = c.width() > 0 ? c.width() : m_canvasW, CH = c.height() > 0 ? c.height() : m_canvasH;
+	const uint32_t w = uint32_t(width), h = uint32_t(width * CH / CW);
 	QImage img;
 	obs_enter_graphics();
 	gs_texrender_t *tr = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
@@ -1052,7 +1054,7 @@ QImage Engine::renderThumbnail(const QString &sceneId, int width)
 		vec4 clear;
 		vec4_set(&clear, 0, 0, 0, 1);
 		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
-		gs_ortho(0.0f, float(m_canvasW), 0.0f, float(m_canvasH), -100.0f, 100.0f);
+		gs_ortho(0.0f, float(CW), 0.0f, float(CH), -100.0f, 100.0f);
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
 		obs_source_video_render(obs_scene_get_source(scene));

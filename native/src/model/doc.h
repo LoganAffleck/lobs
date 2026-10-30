@@ -104,6 +104,10 @@ struct Instance {
 	bool locked = false;
 	PropMap props;
 	QHash<Group, QString> links; // group -> link id
+	// In a vertical layout: the scene's layer this one follows, and the settings changed here,
+	// which stop following (the rest copy the layer's, the box fitted into the tall canvas).
+	QString follows;
+	QSet<Group> own;
 	bool operator==(const Instance &) const = default;
 };
 
@@ -142,6 +146,8 @@ struct Doc {
 	QString mainScene(const QString &sceneId) const;      // a vertical layout's scene, or the scene itself
 	QSize canvasOf(const QString &sceneId) const;         // the canvas a scene's layers are placed on
 	QString addVerticalLayout(const QString &sceneId);    // the same layers, fitted into the vertical canvas
+	void syncVertical(); // after every edit: vertical layouts follow their scenes (see Instance::follows)
+	Transform toVertical(const Transform &t) const;      // a main-canvas box, fitted into the vertical canvas
 	QHash<QString, Source> sources;
 	QStringList sourceOrder;
 	QHash<QString, Scene> scenes;

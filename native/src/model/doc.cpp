@@ -193,10 +193,16 @@ Transform Doc::transform(const Instance &i) const { return propsFor(i, Group::Tr
 Crop Doc::crop(const Instance &i) const { return propsFor(i, Group::Crop).crop; }
 QVector<Filter> Doc::filters(const Instance &i) const { return propsFor(i, Group::Filters).filters; }
 Visibility Doc::visibility(const Instance &i) const { return propsFor(i, Group::Visibility).visibility; }
-void Doc::setTransform(const QString &id, const Transform &v) { propsFor(id, Group::Transform)->transform = v; }
-void Doc::setCrop(const QString &id, const Crop &v) { propsFor(id, Group::Crop)->crop = v; }
-void Doc::setFilters(const QString &id, const QVector<Filter> &v) { propsFor(id, Group::Filters)->filters = v; }
-void Doc::setVisibility(const QString &id, const Visibility &v) { propsFor(id, Group::Visibility)->visibility = v; }
+// A vertical layer changed here stops following that setting (Instance::own).
+static void ownIt(Doc &d, const QString &id, Group g)
+{
+	if (Instance &i = d.instances[id]; !i.follows.isEmpty())
+		i.own.insert(g);
+}
+void Doc::setTransform(const QString &id, const Transform &v) { ownIt(*this, id, Group::Transform); propsFor(id, Group::Transform)->transform = v; }
+void Doc::setCrop(const QString &id, const Crop &v) { ownIt(*this, id, Group::Crop); propsFor(id, Group::Crop)->crop = v; }
+void Doc::setFilters(const QString &id, const QVector<Filter> &v) { ownIt(*this, id, Group::Filters); propsFor(id, Group::Filters)->filters = v; }
+void Doc::setVisibility(const QString &id, const Visibility &v) { ownIt(*this, id, Group::Visibility); propsFor(id, Group::Visibility)->visibility = v; }
 
 static void copyGroup(PropMap &dst, const PropMap &src, Group g)
 {
@@ -408,24 +414,85 @@ QString Doc::addVerticalLayout(const QString &sceneId)
 	v.id = uid("scn_");
 	v.name = main.name + " (Vertical)";
 	v.verticalOf = sceneId;
-	// The horizontal picture scaled to the vertical canvas's width and centered: a start to adjust.
-	const double s = double(verticalW) / canvasW, dy = (verticalH - canvasH * s) / 2;
-	for (const QString &l : main.layers) {
-		const Instance &src = instances[l];
-		if (src.kind == "group")
-			continue; // groups come back as their layers when edited; v1 copies plain layers
-		Instance in = src;
-		in.id = uid("ins_");
-		in.sceneId = v.id;
-		in.links.clear(); // its own layout
-		Transform t = transform(src);
-		t.x = std::round(t.x * s), t.y = std::round(t.y * s + dy), t.w = std::round(t.w * s), t.h = std::round(t.h * s);
-		in.props = {t, crop(src), filters(src), visibility(src)}; // what it shows now (links resolved)
-		instances[in.id] = in;
-		v.layers << in.id;
-	}
 	scenes[v.id] = v; // not in sceneOrder: it isn't listed
+	syncVertical(); // its layers: one following each of the scene's
 	return v.id;
+}
+
+// The horizontal picture scaled to the vertical canvas's width and centered: where a layer sits
+// in the vertical layout until it's moved there.
+Transform Doc::toVertical(const Transform &t) const
+{
+	const double s = double(verticalW) / canvasW, dy = (verticalH - canvasH * s) / 2;
+	Transform v = t;
+	v.x = std::round(t.x * s), v.y = std::round(t.y * s + dy), v.w = std::round(t.w * s), v.h = std::round(t.h * s);
+	return v;
+}
+
+// Vertical layouts follow their scenes one way: a layer added to the scene appears in its
+// vertical layout, one removed goes, the order follows, and each setting follows until it's
+// changed in the vertical layout (Instance::own). Nothing in a vertical layout changes the scene.
+void Doc::syncVertical()
+{
+	if (!verticalOn)
+		return;
+	for (auto sc = scenes.begin(); sc != scenes.end(); ++sc) {
+		Scene &v = sc.value();
+		if (v.verticalOf.isEmpty() || !scenes.contains(v.verticalOf))
+			continue;
+		const Scene &main = scenes[v.verticalOf];
+		// Who follows whom.
+		QHash<QString, QString> follower; // main layer -> its follower here
+		for (const QString &l : QStringList(v.layers)) {
+			const Instance &in = instances[l];
+			if (in.follows.isEmpty())
+				continue;
+			if (!instances.contains(in.follows) || instances[in.follows].sceneId != main.id)
+				deleteInstance(l), v.layers.removeAll(l); // its layer is gone
+			else
+				follower[in.follows] = l;
+		}
+		// New layers in the scene get a follower; groups stay out (their layers follow instead).
+		QStringList order;
+		for (const QString &m : main.layers) {
+			const Instance &src = instances[m];
+			if (src.kind == "group")
+				continue;
+			if (!follower.contains(m)) {
+				Instance in;
+				in.id = uid("ins_");
+				in.sceneId = v.id;
+				in.kind = src.kind;
+				in.sourceId = src.sourceId;
+				in.name = src.name;
+				in.follows = m;
+				instances[in.id] = in;
+				follower[m] = in.id;
+			}
+			order << follower[m];
+		}
+		// Order: the scene's, with the layout's own layers (not following any) kept on top.
+		QStringList ownLayers;
+		for (const QString &l : v.layers)
+			if (instances[l].follows.isEmpty())
+				ownLayers << l;
+		v.layers = ownLayers + order;
+		// Settings: each follows the scene's layer unless it was changed here.
+		for (auto it = follower.cbegin(); it != follower.cend(); ++it) {
+			Instance &in = instances[it.value()];
+			const Instance &src = instances[it.key()];
+			in.name = src.name;
+			in.links.clear();
+			if (!in.own.contains(Group::Transform))
+				in.props.transform = toVertical(transform(src));
+			if (!in.own.contains(Group::Crop))
+				in.props.crop = crop(src);
+			if (!in.own.contains(Group::Filters))
+				in.props.filters = filters(src);
+			if (!in.own.contains(Group::Visibility))
+				in.props.visibility = visibility(src);
+		}
+	}
 }
 
 void Doc::deleteScene(const QString &id)
@@ -609,6 +676,14 @@ QJsonObject Doc::toJson() const
 		for (auto it = i.links.begin(); it != i.links.end(); ++it)
 			l[groupKey(it.key())] = *it;
 		QJsonObject o{{"id", i.id}, {"sceneId", i.sceneId}, {"kind", i.kind}, {"name", i.name}, {"locked", i.locked}, {"props", propsJson(i.props)}, {"links", l}};
+		if (!i.follows.isEmpty()) {
+			o["follows"] = i.follows;
+			QJsonArray own;
+			for (Group g : kGroups)
+				if (i.own.contains(g))
+					own.append(groupKey(g));
+			o["own"] = own;
+		}
 		if (i.kind == "group")
 			o["children"] = QJsonArray::fromStringList(i.children);
 		else
@@ -692,6 +767,11 @@ Doc Doc::fromJson(const QJsonObject &o)
 		i.sourceId = s["sourceId"].toString();
 		i.name = s["name"].toString();
 		i.locked = s["locked"].toBool();
+		i.follows = s["follows"].toString();
+		for (const QJsonValue &g : s["own"].toArray())
+			for (Group k : kGroups)
+				if (groupKey(k) == g.toString())
+					i.own.insert(k);
 		i.children = strings(s["children"]);
 		i.props = propsFrom(s["props"].toObject());
 		const QJsonObject l = s["links"].toObject();

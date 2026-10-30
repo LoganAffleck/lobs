@@ -54,6 +54,13 @@ Rectangle {
                     currentIndex: app.editingVertical ? 1 : 0
                     onActivated: (i) => app.setEditingVertical(i === 1)
                 }
+                FButton {
+                    visible: !app.verticalOn
+                    iconName: "plus"; text: "Vertical"; variant: "ghost"
+                    tip: "Add a vertical layout to each scene, for Twitch's vertical stream"
+                    enabled: !app.live
+                    onClicked: { app.setVerticalOn(true); app.setEditingVertical(true) }
+                }
                 FHelp {
                         title: "Canvas"
                         points: [
@@ -105,7 +112,7 @@ Rectangle {
                         FMenuItem { text: "Edit transitions…"; onTriggered: canvasArea.Window.window.openTransitions() }
                     }
                 }
-                FButton { text: "Show"; variant: "primary"; visible: app.editSceneId !== app.programSceneId; onClicked: app.take(); tip: "Switch to this scene" }
+                FButton { text: "Show"; variant: "primary"; visible: !app.editingProgram; onClicked: app.take(); tip: "Switch to this scene" } // either layout of the live scene is showing
             }
         }
         // The canvas, with the graphic tools pinned right under the picture (not the panel's
@@ -153,6 +160,34 @@ Rectangle {
             sourceSize.width: Math.round(preview.width * Screen.devicePixelRatio)
             source: app.previewHidden && app.editSceneId ? "image://thumbs/" + app.editSceneId + "?freeze" + app.freezeTick : ""
         }
+    }
+    // The other layout, live (5 frames a second), in a corner: both are in view while one is
+    // edited. Click it to edit that one.
+    Rectangle {
+        id: otherView
+        parent: preview
+        visible: app.verticalOn && app.otherLayoutId !== "" && app.previewInScene
+        readonly property bool tall: !app.editingVertical // the other one is the vertical layout
+        width: tall ? 120 : 214; height: tall ? 214 : 120
+        anchors { right: parent.right; bottom: parent.bottom; margins: 12 }
+        radius: Pal.radius; color: "#000000"
+        border.width: 1; border.color: otherMouse.containsMouse ? Pal.focus : Pal.border
+        property int frame: 0
+        Timer { interval: 200; repeat: true; running: otherView.visible; onTriggered: otherView.frame++ }
+        Image {
+            anchors.fill: parent; anchors.margins: 1
+            fillMode: Image.PreserveAspectFit
+            cache: false
+            sourceSize.width: Math.round(width * Screen.devicePixelRatio)
+            source: otherView.visible ? "image://thumbs/" + app.otherLayoutId + "?" + otherView.frame : ""
+        }
+        Text {
+            anchors { left: parent.left; top: parent.top; margins: 6 }
+            text: app.editingVertical ? "Horizontal" : "Vertical"
+            color: "#ffffff"; style: Text.Outline; styleColor: "#000000"
+            font.family: Pal.font; font.pixelSize: Pal.caption
+        }
+        MouseArea { id: otherMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: app.setEditingVertical(!app.editingVertical) }
     }
     // Right-click on the canvas.
     Connections {
