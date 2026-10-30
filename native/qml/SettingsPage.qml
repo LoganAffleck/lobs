@@ -212,6 +212,7 @@ Rectangle {
                                 title: twitch.connected ? "Connected as " + twitch.displayName : "Twitch account"
                                 description: twitch.connected ? "Stream key from Twitch." : "Fills in your stream key."
                                 Row {
+                                    property bool fillSlot: false // right-aligned, like the other rows' controls
                                     spacing: 6
                                     height: Pal.ctl
                                     FButton { visible: !twitch.connected; text: "Connect with Twitch"; variant: "primary"; onClicked: page.twitchConnectRequested() }

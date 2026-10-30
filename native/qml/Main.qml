@@ -354,11 +354,11 @@ ApplicationWindow {
                 }
             }
             // New, Open, Import, Save and Window are in the menu bar on macOS.
-            FButton { text: "New"; visible: !chrome.nativeMenuBar; variant: "ghost"; onClicked: newProjectDialog.open(); tip: "New project in its own folder" }
-            FButton { text: "Open"; visible: !chrome.nativeMenuBar; variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
+            FButton { text: "New"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; onClicked: newProjectDialog.open(); tip: "New project in its own folder" }
+            FButton { text: "Open"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
                 id: importButton
-                visible: !chrome.nativeMenuBar
+                visible: !settingsPage.open && (!chrome.nativeMenuBar)
                 text: "Import"
                 variant: "ghost"
                 enabled: !app.live
@@ -384,10 +384,11 @@ ApplicationWindow {
                     FMenuItem { text: "Choose a file…"; onTriggered: win.guardUnsaved(() => importDialog.open()) }
                 }
             }
-            FButton { text: "Save"; visible: !chrome.nativeMenuBar; variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
+            FButton { text: "Save"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
             // The profile (stream, video and recording settings for one place you stream), next to Save.
             // New and Rename open a small popover under the button to name it.
             Item {
+                visible: !settingsPage.open // Settings shows only the name and window buttons
                 id: profileBox
                 readonly property var list: { app.settings; return app.profiles() }
                 implicitWidth: profileButton.implicitWidth
@@ -466,7 +467,7 @@ ApplicationWindow {
                 }
             }
             FButton {
-                visible: ["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0
+                visible: !settingsPage.open && (["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0)
                 iconName: "refresh-cw"
                 text: appUpdater.state === "downloading" ? "LOBS " + appUpdater.latest + " " + Math.round(appUpdater.progress * 100) + "%"
                     : appUpdater.state === "ready" ? "Install LOBS " + appUpdater.latest
@@ -475,9 +476,9 @@ ApplicationWindow {
                 tip: "A new version of LOBS"
                 onClicked: updateDialog.open()
             }
-            Rectangle { visible: !chrome.nativeMenuBar; width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+            Rectangle { visible: !settingsPage.open && (!chrome.nativeMenuBar); width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
             FButton {
-                visible: !chrome.nativeMenuBar
+                visible: !settingsPage.open && (!chrome.nativeMenuBar)
                 text: "Window"
                 variant: "ghost"
                 onClicked: windowMenu.popup(this, 0, height + 4)
@@ -501,11 +502,11 @@ ApplicationWindow {
                     FMenuItem { text: "Reset layout"; onTriggered: layoutSaver.restoreFromFile(win.defaultLayoutFile) }
                 }
             }
-            Rectangle { width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
-            FButton { iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + chrome.keys("  Ctrl Z") }
-            FButton { iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: chrome.keys("Redo  Ctrl Shift Z") }
+            Rectangle { visible: !settingsPage.open; width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+            FButton { visible: !settingsPage.open; iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + chrome.keys("  Ctrl Z") }
+            FButton { visible: !settingsPage.open; iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: chrome.keys("Redo  Ctrl Shift Z") }
             Item { Layout.fillWidth: true }
-            OutputControls {}
+            OutputControls { visible: !settingsPage.open;}
             // Window buttons, in Windows' order.
             Row {
                 visible: !chrome.nativeControls
