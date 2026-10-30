@@ -542,9 +542,12 @@ void Engine::releaseOutputs()
 		obs_output_release(o);
 	}
 	m_streamOutput = m_recOutput = m_replayOutput = m_vcamOutput = nullptr;
-	for (obs_encoder_t *e : {m_streamVenc, m_streamAenc, m_recVenc, m_recAenc, m_replayVenc, m_replayAenc})
+	// The stream's, Enhanced Broadcasting's extra qualities and their group included: left to
+	// obs_shutdown, the grouped encoders hung LOBS on exit (it kept running after its window closed).
+	releaseStreamEncoders();
+	for (obs_encoder_t *e : {m_recVenc, m_recAenc, m_replayVenc, m_replayAenc})
 		obs_encoder_release(e);
-	m_streamVenc = m_streamAenc = m_recVenc = m_recAenc = m_replayVenc = m_replayAenc = nullptr;
+	m_recVenc = m_recAenc = m_replayVenc = m_replayAenc = nullptr;
 	obs_service_release(m_service);
 	m_service = nullptr;
 	m_streaming = m_recording = false;
