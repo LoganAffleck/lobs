@@ -2,7 +2,9 @@
 #include "app.h"
 #include "platform.h"
 
+#include <QBuffer>
 #include <QCryptographicHash>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRandomGenerator>
@@ -21,7 +23,8 @@ namespace {
 // obs-websocket's opcodes, event subscription bits and request status codes.
 enum Op { Hello = 0, Identify = 1, Identified = 2, Reidentify = 3, Event = 5, Request = 6, RequestResponse = 7, RequestBatch = 8, RequestBatchResponse = 9 };
 enum Sub : quint32 { General = 1 << 0, Config = 1 << 1, Scenes = 1 << 2, Inputs = 1 << 3, Transitions = 1 << 4, Filters = 1 << 5,
-		     Outputs = 1 << 6, SceneItems = 1 << 7, MediaInputs = 1 << 8, Vendors = 1 << 9, Ui = 1 << 10, All = 0x7ff };
+		     Outputs = 1 << 6, SceneItems = 1 << 7, MediaInputs = 1 << 8, Vendors = 1 << 9, Ui = 1 << 10, All = 0x7ff,
+		     InputVolumeMeters = 1 << 16 }; // high volume: only when asked for
 enum Status { Success = 100, MissingRequestType = 203, UnknownRequestType = 204, MissingRequestField = 300, InvalidRequestField = 400,
 	      OutputRunning = 500, OutputNotRunning = 501, ResourceNotFound = 600, RequestProcessingFailed = 702 };
 
@@ -56,6 +59,28 @@ ObsWebSocket::ObsWebSocket(App *app, QObject *parent) : QObject(parent), m_app(a
 	}
 	connect(app, &App::docChanged, this, &ObsWebSocket::watch);
 	connect(app, &App::engineChanged, this, &ObsWebSocket::watch);
+	// Audio meters, 20 times a second as OBS's: remote mixers list the inputs that have levels.
+	connect(app, &App::levelsChanged, this, [this] {
+		bool wanted = false;
+		for (QTcpSocket *s : m_identified)
+			wanted |= bool(m_clients.value(s).events & InputVolumeMeters);
+		if (!wanted)
+			return;
+		const Doc &doc = m_app->doc();
+		const QVariantMap levels = m_app->levels();
+		QJsonArray inputs;
+		for (auto it = levels.cbegin(); it != levels.cend(); ++it) {
+			if (!doc.sources.contains(it.key()))
+				continue;
+			QJsonArray channels;
+			for (const QVariant &db : it.value().toList()) {
+				const double mul = db.toDouble() <= -60 ? 0 : std::pow(10.0, db.toDouble() / 20.0);
+				channels.append(QJsonArray{mul, mul, mul}); // magnitude, peak, input peak (LOBS meters peak)
+			}
+			inputs.append(QJsonObject{{"inputName", doc.sources[it.key()].name}, {"inputUuid", it.key()}, {"inputLevelsMul", channels}});
+		}
+		emitEvent("InputVolumeMeters", InputVolumeMeters, {{"inputs", inputs}});
+	});
 	restart();
 }
 
@@ -162,18 +187,29 @@ void ObsWebSocket::handshake(QTcpSocket *s, Client &c)
 	const int end = c.buf.indexOf("\r\n\r\n");
 	if (end < 0)
 		return;
-	QByteArray key;
-	for (const QByteArray &line : c.buf.left(end).split('\n'))
+	QByteArray key, protocols;
+	for (const QByteArray &line : c.buf.left(end).split('\n')) {
 		if (line.toLower().startsWith("sec-websocket-key:"))
 			key = line.mid(18).trimmed();
+		else if (line.toLower().startsWith("sec-websocket-protocol:"))
+			protocols = line.mid(23).trimmed();
+	}
 	c.buf.remove(0, end + 4);
 	if (key.isEmpty()) {
 		s->write("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
 		return s->disconnectFromHost();
 	}
 	const QByteArray accept = QCryptographicHash::hash(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", QCryptographicHash::Sha1).toBase64();
+	// The subprotocol only if the client offered it: browsers drop a connection whose answer names
+	// one they didn't ask for. (MessagePack, obs-websocket's other encoding, isn't spoken here.)
+	const bool json = protocols.contains("obswebsocket.json");
+	blog(LOG_INFO, "[lobs] obs-websocket client from %s, protocols '%s'", qPrintable(s->peerAddress().toString()), protocols.constData());
+	if (!protocols.isEmpty() && !json) {
+		s->write("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
+		return s->disconnectFromHost();
+	}
 	s->write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " + accept +
-		 "\r\nSec-WebSocket-Protocol: obswebsocket.json\r\n\r\n");
+		 (json ? "\r\nSec-WebSocket-Protocol: obswebsocket.json" : "") + "\r\n\r\n");
 	c.upgraded = true;
 	// Hello, with a challenge when a password is set.
 	QJsonObject d{{"obsWebSocketVersion", "5.6.2"}, {"rpcVersion", 1}};
@@ -328,7 +364,8 @@ QJsonObject ObsWebSocket::request(const QString &type, const QJsonObject &d, int
 				      "SetInputVolume", "GetSceneItemList", "GetSceneItemId", "GetSceneItemEnabled", "SetSceneItemEnabled", "GetStreamStatus",
 				      "StartStream", "StopStream", "ToggleStream", "GetRecordStatus", "StartRecord", "StopRecord", "ToggleRecord",
 				      "GetReplayBufferStatus", "StartReplayBuffer", "StopReplayBuffer", "ToggleReplayBuffer", "SaveReplayBuffer",
-				      "GetVirtualCamStatus", "StartVirtualCam", "StopVirtualCam", "ToggleVirtualCam", "GetStudioModeEnabled"})
+				      "GetVirtualCamStatus", "StartVirtualCam", "StopVirtualCam", "ToggleVirtualCam", "GetStudioModeEnabled",
+				      "GetSourceScreenshot", "GetSpecialInputs", "GetInputAudioMonitorType", "SetInputAudioMonitorType"})
 			reqs.append(r);
 		return {{"obsVersion", obs_get_version_string()}, {"obsWebSocketVersion", "5.6.2"}, {"rpcVersion", 1}, {"availableRequests", reqs},
 			{"supportedImageFormats", QJsonArray()}, {"platform", "windows"}, {"platformDescription", "LOBS"}};
@@ -370,6 +407,41 @@ QJsonObject ObsWebSocket::request(const QString &type, const QJsonObject &d, int
 	if (type == "GetStudioModeEnabled")
 		return {{"studioModeEnabled", false}};
 
+	// A picture of a scene or source, as remote controls show the program (PNG or JPEG, base64).
+	if (type == "GetSourceScreenshot") {
+		QString scene = sceneId(QJsonObject{{"sceneName", d.value("sourceName")}, {"sceneUuid", d.value("sourceUuid")}});
+		const QString src = scene.isEmpty() ? sourceId(QJsonObject{{"inputName", d.value("sourceName")}, {"inputUuid", d.value("sourceUuid")}}) : QString();
+		if (scene.isEmpty() && src.isEmpty())
+			return fail(ResourceNotFound, "No scene or source by that name");
+		const int w = std::clamp(d.value("imageWidth").toInt(640), 8, 4096);
+		QImage img = !scene.isEmpty() ? m_app->engine()->renderThumbnail(scene, w) : m_app->engine()->renderSourceThumbnail(src, w);
+		if (img.isNull())
+			return fail(RequestProcessingFailed, "Couldn't draw it");
+		if (const int h = d.value("imageHeight").toInt(); h > 0 && h != img.height())
+			img = img.scaled(img.width(), h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+		const QString fmt = d.value("imageFormat").toString("png").toLower();
+		const int quality = d.value("imageCompressionQuality").toInt(-1);
+		QByteArray bytes;
+		QBuffer buf(&bytes);
+		buf.open(QIODevice::WriteOnly);
+		const bool jpg = fmt == "jpg" || fmt == "jpeg";
+		img.save(&buf, jpg ? "JPG" : fmt == "webp" ? "WEBP" : "PNG", quality);
+		return {{"imageData", QString("data:image/%1;base64,").arg(jpg ? "jpeg" : fmt == "webp" ? "webp" : "png") + QString::fromLatin1(bytes.toBase64())}};
+	}
+
+	// The global audio devices, as OBS's Desktop Audio and Mic/Aux slots.
+	if (type == "GetSpecialInputs") {
+		QStringList desk, mics;
+		for (const Source &s : doc.sources) {
+			if (s.kind == "desktop_audio")
+				desk << s.name;
+			else if (s.kind == "mic")
+				mics << s.name;
+		}
+		auto slot = [](const QStringList &l, int i) { return i < l.size() ? QJsonValue(l[i]) : QJsonValue(QJsonValue::Null); };
+		return {{"desktop1", slot(desk, 0)}, {"desktop2", slot(desk, 1)}, {"mic1", slot(mics, 0)}, {"mic2", slot(mics, 1)}, {"mic3", slot(mics, 2)}, {"mic4", slot(mics, 3)}};
+	}
+
 	// Inputs: LOBS's sources.
 	if (type == "GetInputList") {
 		QJsonArray inputs;
@@ -400,6 +472,17 @@ QJsonObject ObsWebSocket::request(const QString &type, const QJsonObject &d, int
 		if (type == "ToggleInputMute") {
 			m_app->setAudio(id, "muted", !s.audio.muted, true);
 			return {{"inputMuted", !s.audio.muted}};
+		}
+		// Monitoring, in OBS's names for LOBS's off / monitor only / monitor and output.
+		if (type == "GetInputAudioMonitorType")
+			return {{"monitorType", s.audio.monitor == "monitor_only" ? "OBS_MONITORING_TYPE_MONITOR_ONLY"
+					      : s.audio.monitor == "monitor_and_output" ? "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT" : "OBS_MONITORING_TYPE_NONE"}};
+		if (type == "SetInputAudioMonitorType") {
+			const QString t = d.value("monitorType").toString();
+			if (t.isEmpty())
+				return fail(MissingRequestField, "monitorType");
+			m_app->setAudio(id, "monitor", t == "OBS_MONITORING_TYPE_MONITOR_ONLY" ? "monitor_only" : t == "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT" ? "monitor_and_output" : "off", true);
+			return {};
 		}
 		if (type == "GetInputVolume")
 			return {{"inputVolumeMul", s.audio.volume}, {"inputVolumeDb", mulToDb(s.audio.volume)}};
@@ -500,6 +583,7 @@ QJsonObject ObsWebSocket::request(const QString &type, const QJsonObject &d, int
 			return {{"outputActive", m_app->vcamActive()}};
 		return output("VirtualCam", m_app->vcamActive(), [this] { m_app->toggleVirtualCam(); });
 	}
+	blog(LOG_INFO, "[lobs] obs-websocket: %s isn't supported yet", qPrintable(type)); // what clients ask for that's missing
 	return fail(UnknownRequestType, "LOBS doesn't support " + type + " yet");
 }
 

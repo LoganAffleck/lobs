@@ -165,6 +165,11 @@ scenes, inputs (mute, volume), scene items (visibility), stream, record, replay 
 camera, and their events. _probe-websocket with qa/tools/ws_client.py passes (password, scenes,
 layers, events, batches). Still to check: mute and volume (no audio source in the probe), and
 real apps (Stream Deck, VNyan). Not yet: filters, transitions, source settings, studio mode.
+OBS Web (obs-web.niek.tv) works against it in Chrome (2026-10-30): scenes, program picture
+(GetSourceScreenshot), audio mixer with meters (InputVolumeMeters, GetSpecialInputs, monitor
+type). It also asks for GetProfileList, GetSceneCollectionList and GetSceneTransitionList, which
+LOBS doesn't answer yet; unsupported requests are logged as "[lobs] obs-websocket: X isn't
+supported yet".
 
 ### P2-3. My stream comes back on its own
 *As a streamer, if my connection drops, LOBS reconnects without me, and tells me it did.*
