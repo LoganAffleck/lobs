@@ -99,10 +99,14 @@ QJsonObject system() { return {{"name", "macOS"}}; }
 
 } // namespace
 
-QJsonObject request(const QString &streamKey, int width, int height, int fps, const QString &engineVersion)
+QJsonObject request(const QString &streamKey, int width, int height, int fps, const QString &engineVersion, QSize vertical)
 {
-	const QJsonObject canvas{{"width", width}, {"height", height}, {"canvas_width", width}, {"canvas_height", height},
-				 {"framerate", QJsonObject{{"numerator", fps}, {"denominator", 1}}}};
+	auto canvasJson = [fps](int w, int h) {
+		return QJsonObject{{"width", w}, {"height", h}, {"canvas_width", w}, {"canvas_height", h}, {"framerate", QJsonObject{{"numerator", fps}, {"denominator", 1}}}};
+	};
+	QJsonArray canvases{canvasJson(width, height)};
+	if (!vertical.isEmpty()) // Twitch plans qualities for it too (canvas_index 1)
+		canvases.append(canvasJson(vertical.width(), vertical.height()));
 	// The client is LOBS's encoding stack: OBS's own libobs, encoders and outputs (Inspector reports
 	// it as "obs-output module"), so Twitch's plan for OBS of this version is what LOBS can run.
 	return {
@@ -112,7 +116,7 @@ QJsonObject request(const QString &streamKey, int width, int height, int fps, co
 		{"client", QJsonObject{{"name", "obs-studio"}, {"version", engineVersion}, {"supported_codecs", QJsonArray{"h264"}}}},
 		{"capabilities", QJsonObject{{"cpu", cpu()}, {"memory", memory()}, {"gpu", gpus()}, {"system", system()},
 					     {"gaming_features", QJsonObject{}}}},
-		{"preferences", QJsonObject{{"canvases", QJsonArray{canvas}},
+		{"preferences", QJsonObject{{"canvases", canvases},
 					    {"composition_gpu_index", 0},
 					    {"audio_samples_per_sec", 48000},
 					    {"audio_channels", 2},

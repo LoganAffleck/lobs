@@ -2,6 +2,8 @@
 // The JSON format matches the web prototype's .lobs.json.
 #pragma once
 
+#include <QSize>
+
 #include <QHash>
 #include <QSet>
 #include <QJsonObject>
@@ -116,6 +118,9 @@ struct Scene {
 	QString id, name, folder;
 	bool favorite = false;
 	QStringList layers; // top-level instance ids, top-first
+	// Set on a scene's vertical layout: the scene it belongs to. Vertical layouts aren't in
+	// sceneOrder (not listed); they're the same scene, laid out on the vertical canvas.
+	QString verticalOf;
 	bool operator==(const Scene &) const = default;
 };
 
@@ -130,6 +135,13 @@ QStringList allKinds();
 
 struct Doc {
 	int canvasW = 1920, canvasH = 1080;
+	// The vertical canvas (Twitch's vertical stream): each scene can have a vertical layout.
+	bool verticalOn = false;
+	int verticalW = 1080, verticalH = 1920;
+	QString verticalLayout(const QString &sceneId) const; // the scene's vertical layout ("" if none)
+	QString mainScene(const QString &sceneId) const;      // a vertical layout's scene, or the scene itself
+	QSize canvasOf(const QString &sceneId) const;         // the canvas a scene's layers are placed on
+	QString addVerticalLayout(const QString &sceneId);    // the same layers, fitted into the vertical canvas
 	QHash<QString, Source> sources;
 	QStringList sourceOrder;
 	QHash<QString, Scene> scenes;

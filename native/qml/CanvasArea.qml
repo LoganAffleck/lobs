@@ -45,8 +45,15 @@ Rectangle {
                 anchors.rightMargin: 10
                 spacing: 8
                 Text { text: app.editSceneName || "No scene"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550 }
-                FBadge { visible: app.editSceneId === app.programSceneId; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
+                FBadge { visible: app.editingProgram; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
                 Item { Layout.fillWidth: true }
+                // Twitch's vertical stream: the same scene, laid out for a tall screen.
+                FTabs {
+                    visible: app.verticalOn
+                    model: ["Horizontal", "Vertical"]
+                    currentIndex: app.editingVertical ? 1 : 0
+                    onActivated: (i) => app.setEditingVertical(i === 1)
+                }
                 FHelp {
                         title: "Canvas"
                         points: [

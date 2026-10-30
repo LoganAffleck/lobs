@@ -324,9 +324,15 @@ bool Engine::startStreaming(bool test, const QJsonObject &plan)
 				releaseStreamEncoders();
 				return false;
 			}
-			obs_encoder_set_video(enc, obs_get_video());
+			// Qualities for the vertical canvas (canvas_index 1) encode from it, at its size.
+			const bool vertical = c.value("canvas_index").toInt() == 1 && m_vcanvas;
+			obs_encoder_set_video(enc, vertical ? obs_canvas_get_video(m_vcanvas) : obs_get_video());
+			obs_video_info vov{};
+			if (vertical)
+				obs_canvas_get_video_info(m_vcanvas, &vov);
+			const int cw = vertical ? int(vov.output_width) : m_settings.video.outWidth, chh = vertical ? int(vov.output_height) : m_settings.video.outHeight;
 			const int w = c.value("width").toInt(), h = c.value("height").toInt();
-			if (w && h && (w != m_settings.video.outWidth || h != m_settings.video.outHeight)) {
+			if (w && h && (w != cw || h != chh)) {
 				obs_encoder_set_scaled_size(enc, uint32_t(w), uint32_t(h));
 				obs_encoder_set_gpu_scale_type(enc, scaleType(c.value("gpu_scale_type").toString()));
 			}

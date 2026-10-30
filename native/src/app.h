@@ -31,6 +31,10 @@ class App : public QObject {
 	Q_PROPERTY(int historyIndex READ historyIndex NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneId READ editSceneId NOTIFY docChanged)
 	Q_PROPERTY(QString editSceneName READ editSceneName NOTIFY docChanged)
+	// Twitch's vertical stream: each scene's vertical layout, edited with a Horizontal/Vertical switch.
+	Q_PROPERTY(bool verticalOn READ verticalOn NOTIFY docChanged)
+	Q_PROPERTY(bool editingVertical READ editingVertical NOTIFY docChanged)
+	Q_PROPERTY(bool editingProgram READ editingProgram NOTIFY docChanged) // the scene on air (either layout)
 	Q_PROPERTY(QString programSceneId READ programSceneId NOTIFY docChanged)
 	Q_PROPERTY(bool canUndo READ canUndo NOTIFY docChanged)
 	Q_PROPERTY(bool canRedo READ canRedo NOTIFY docChanged)
@@ -68,6 +72,12 @@ public:
 	int historyIndex() const { return m_store.historyIndex(); }
 	QString editSceneId() const { return m_editScene; }
 	QString editSceneName() const;
+	bool verticalOn() const { return doc().verticalOn; }
+	bool editingProgram() const { return doc().mainScene(m_editScene) == programSceneId(); }
+	bool editingVertical() const { return !doc().scenes.value(m_editScene).verticalOf.isEmpty(); }
+	Q_INVOKABLE void setVerticalOn(bool on);
+	Q_INVOKABLE void setEditingVertical(bool vertical);
+	QSize editCanvas() const { return doc().canvasOf(m_editScene); }
 	QString programSceneId() const { return m_engine->programScene(); }
 	bool canUndo() const { return m_store.canUndo(); }
 	bool canRedo() const { return m_store.canRedo(); }

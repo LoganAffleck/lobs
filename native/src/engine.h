@@ -32,6 +32,7 @@ struct obs_display;
 struct obs_output;
 struct obs_encoder;
 struct obs_encoder_group;
+struct obs_canvas;
 struct obs_service;
 struct obs_volmeter;
 struct os_cpu_usage_info;
@@ -326,6 +327,11 @@ private:
 	QHash<QString, obs_scene *> m_scenes; // scene id -> private scene
 	QHash<QString, Item> m_items;          // instance id -> lobs_instance + scene item
 	QString m_editId, m_programId;
+	obs_canvas *m_vcanvas = nullptr; // the vertical canvas, while vertical is on
+	std::atomic<int> m_editCanvasW{1920}, m_editCanvasH{1080}; // the edited scene's canvas (graphics thread reads it)
+	QStringList scenesToMake(const lobs::Doc &doc) const;
+	void syncVerticalProgram();
+	void updateEditCanvas();
 	void renderPluginChannels(); // graphics thread: plugins' output channels, over the live scene
 	obs_source *m_transition = nullptr;
 	QString m_transitionType;

@@ -119,6 +119,25 @@ Scene &Doc::addScene(const QString &name)
 	return scenes[s.id] = s;
 }
 
+QString Doc::verticalLayout(const QString &sceneId) const
+{
+	for (const Scene &s : scenes)
+		if (s.verticalOf == sceneId)
+			return s.id;
+	return {};
+}
+
+QString Doc::mainScene(const QString &sceneId) const
+{
+	const QString of = scenes.value(sceneId).verticalOf;
+	return of.isEmpty() ? sceneId : of;
+}
+
+QSize Doc::canvasOf(const QString &sceneId) const
+{
+	return scenes.value(sceneId).verticalOf.isEmpty() ? QSize(canvasW, canvasH) : QSize(verticalW, verticalH);
+}
+
 PropMap Doc::defaultProps(const Source *src) const
 {
 	const KindInfo &k = src ? kindInfo(src->kind) : kindInfo("display");
@@ -137,6 +156,13 @@ Instance &Doc::placeSource(const QString &sceneId, const QString &sourceId)
 	i.sourceId = sourceId;
 	i.name = src.name;
 	i.props = defaultProps(&src);
+	// In a vertical layout, the default box (made for the main canvas) is fitted into the tall one.
+	if (const QSize c = canvasOf(sceneId); c != QSize(canvasW, canvasH)) {
+		Transform &t = i.props.transform;
+		const double k = std::min(c.width() / std::max(1.0, t.w), c.height() / std::max(1.0, t.h));
+		t.w = std::round(t.w * std::min(1.0, k)), t.h = std::round(t.h * std::min(1.0, k));
+		t.x = std::round((c.width() - t.w) / 2), t.y = std::round((c.height() - t.h) / 2);
+	}
 	scenes[sceneId].layers.prepend(i.id);
 	return instances[i.id] = i;
 }
@@ -373,8 +399,39 @@ void Doc::deleteSource(const QString &id)
 	sourceOrder.removeAll(id);
 }
 
+QString Doc::addVerticalLayout(const QString &sceneId)
+{
+	if (const QString v = verticalLayout(sceneId); !v.isEmpty())
+		return v;
+	const Scene &main = scenes[sceneId];
+	Scene v;
+	v.id = uid("scn_");
+	v.name = main.name + " (Vertical)";
+	v.verticalOf = sceneId;
+	// The horizontal picture scaled to the vertical canvas's width and centered: a start to adjust.
+	const double s = double(verticalW) / canvasW, dy = (verticalH - canvasH * s) / 2;
+	for (const QString &l : main.layers) {
+		const Instance &src = instances[l];
+		if (src.kind == "group")
+			continue; // groups come back as their layers when edited; v1 copies plain layers
+		Instance in = src;
+		in.id = uid("ins_");
+		in.sceneId = v.id;
+		in.links.clear(); // its own layout
+		Transform t = transform(src);
+		t.x = std::round(t.x * s), t.y = std::round(t.y * s + dy), t.w = std::round(t.w * s), t.h = std::round(t.h * s);
+		in.props = {t, crop(src), filters(src), visibility(src)}; // what it shows now (links resolved)
+		instances[in.id] = in;
+		v.layers << in.id;
+	}
+	scenes[v.id] = v; // not in sceneOrder: it isn't listed
+	return v.id;
+}
+
 void Doc::deleteScene(const QString &id)
 {
+	if (const QString v = verticalLayout(id); !v.isEmpty())
+		deleteScene(v); // its vertical layout goes with it
 	// Sources that showed this scene inside others go with it.
 	for (const QString &sid : QStringList(sourceOrder))
 		if (sources[sid].kind == "scene" && sources[sid].settings.value("scene").toString() == id)
@@ -541,7 +598,12 @@ QJsonObject Doc::toJson() const
 		srcs[s.id] = o;
 	}
 	for (const auto &s : scenes)
-		scns[s.id] = QJsonObject{{"id", s.id}, {"name", s.name}, {"folder", s.folder}, {"favorite", s.favorite}, {"layers", QJsonArray::fromStringList(s.layers)}};
+		{
+			QJsonObject sc{{"id", s.id}, {"name", s.name}, {"folder", s.folder}, {"favorite", s.favorite}, {"layers", QJsonArray::fromStringList(s.layers)}};
+			if (!s.verticalOf.isEmpty())
+				sc["verticalOf"] = s.verticalOf;
+			scns[s.id] = sc;
+		}
 	for (const auto &i : instances) {
 		QJsonObject l;
 		for (auto it = i.links.begin(); it != i.links.end(); ++it)
@@ -555,7 +617,7 @@ QJsonObject Doc::toJson() const
 	}
 	for (const auto &k : links)
 		lnks[k.id] = QJsonObject{{"id", k.id}, {"group", groupKey(k.group)}, {"value", propsJson(k.value)[groupKey(k.group)]}};
-	return QJsonObject{{"version", 1}, {"canvas", QJsonObject{{"w", canvasW}, {"h", canvasH}}}, {"sources", srcs}, {"sourceOrder", QJsonArray::fromStringList(sourceOrder)},
+	return QJsonObject{{"version", 1}, {"canvas", QJsonObject{{"w", canvasW}, {"h", canvasH}}}, {"vertical", QJsonObject{{"on", verticalOn}, {"w", verticalW}, {"h", verticalH}}}, {"sources", srcs}, {"sourceOrder", QJsonArray::fromStringList(sourceOrder)},
 			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"mixerOrder", QJsonArray::fromStringList(mixerOrder)}, {"backgroundsLocked", backgroundsLocked}, {"mixerPinned", QJsonArray::fromStringList(mixerPinned)}, {"swatches", QJsonArray::fromStringList(swatches)},
 			   {"transitions", [&] {
 				    QJsonArray a;
@@ -579,6 +641,10 @@ Doc Doc::fromJson(const QJsonObject &o)
 	Doc d;
 	d.canvasW = o["canvas"].toObject()["w"].toInt(1920);
 	d.canvasH = o["canvas"].toObject()["h"].toInt(1080);
+	const QJsonObject vo = o["vertical"].toObject();
+	d.verticalOn = vo["on"].toBool(false);
+	d.verticalW = vo["w"].toInt(1080);
+	d.verticalH = vo["h"].toInt(1920);
 	if (o.contains("swatches")) // older shows keep the default palette
 		d.swatches = strings(o["swatches"]);
 	if (o.contains("transitions")) { // older shows get Fade and Cut
@@ -614,7 +680,7 @@ Doc Doc::fromJson(const QJsonObject &o)
 	d.sourceOrder = strings(o["sourceOrder"]);
 	for (const auto &v : o["scenes"].toObject()) {
 		const QJsonObject s = v.toObject();
-		d.scenes[s["id"].toString()] = Scene{s["id"].toString(), s["name"].toString(), s["folder"].toString(), s["favorite"].toBool(), strings(s["layers"])};
+		d.scenes[s["id"].toString()] = Scene{s["id"].toString(), s["name"].toString(), s["folder"].toString(), s["favorite"].toBool(), strings(s["layers"]), s["verticalOf"].toString()};
 	}
 	d.sceneOrder = strings(o["sceneOrder"]);
 	for (const auto &v : o["instances"].toObject()) {

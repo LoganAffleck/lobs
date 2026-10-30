@@ -409,7 +409,7 @@ QVariantList App::scenes() const
 	for (const QString &id : doc().sceneOrder) {
 		const Scene &s = doc().scenes[id];
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"count", s.layers.size()}, {"favorite", s.favorite},
-				   {"editing", id == m_editScene}, {"program", id == m_engine->programScene()}};
+				   {"editing", id == doc().mainScene(m_editScene)}, {"program", id == m_engine->programScene()}};
 	}
 	return out;
 }
@@ -646,7 +646,7 @@ QVariantList App::history() const
 
 QString App::editSceneName() const
 {
-	return doc().scenes.value(m_editScene).name;
+	return doc().scenes.value(doc().mainScene(m_editScene)).name; // a vertical layout is its scene's
 }
 
 QVariantList App::filterTypes() const
@@ -881,9 +881,36 @@ void App::editScene(const QString &id)
 	emit docChanged();
 }
 
+void App::setVerticalOn(bool on)
+{
+	if (on == doc().verticalOn)
+		return;
+	m_store.commit(on ? "Vertical canvas on" : "Vertical canvas off", [&](Doc &d) {
+		d.verticalOn = on;
+		if (on)
+			for (const QString &id : d.sceneOrder)
+				d.addVerticalLayout(id);
+	});
+	if (!on && editingVertical())
+		editScene(doc().mainScene(m_editScene));
+}
+
+void App::setEditingVertical(bool vertical)
+{
+	const QString main = doc().mainScene(m_editScene);
+	if (!vertical)
+		return editScene(main);
+	if (!doc().verticalOn)
+		return;
+	QString v = doc().verticalLayout(main);
+	if (v.isEmpty()) // a scene made since vertical went on
+		m_store.commit("Vertical layout", [&](Doc &d) { v = d.addVerticalLayout(main); });
+	editScene(v);
+}
+
 void App::take()
 {
-	m_engine->setProgramScene(m_editScene, true);
+	m_engine->setProgramScene(doc().mainScene(m_editScene), true); // the scene, with its vertical layout
 	showToast("On air: " + editSceneName());
 	emit docChanged();
 }
@@ -1306,7 +1333,7 @@ void App::sizeNewLayers()
 		// Its own size and shape, centered; scaled down to fit the canvas, never up.
 		const Crop c = doc().crop(*inst);
 		const double w = std::max(1, ns.width() - c.l - c.r), h = std::max(1, ns.height() - c.t - c.b);
-		const double W = doc().canvasW, H = doc().canvasH, k = std::min({1.0, W / w, H / h});
+		const double W = editCanvas().width(), H = editCanvas().height(), k = std::min({1.0, W / w, H / h});
 		Transform t = doc().transform(*inst);
 		t.w = std::round(w * k), t.h = std::round(h * k);
 		t.x = std::round((W - t.w) / 2), t.y = std::round((H - t.h) / 2);
@@ -2012,7 +2039,7 @@ void App::fit(const QString &mode)
 	const QSize ns = m_engine->sourceSize(i.sourceId);
 	const Crop c = doc().crop(i);
 	Transform t = doc().transform(i);
-	const double W = doc().canvasW, H = doc().canvasH;
+	const double W = editCanvas().width(), H = editCanvas().height();
 	const double aspect = ns.isEmpty() ? t.w / std::max(1.0, t.h) : double(ns.width() - c.l - c.r) / std::max(1, ns.height() - c.t - c.b);
 	if (mode == "center") {
 		t.x = std::round((W - t.w) / 2), t.y = std::round((H - t.h) / 2);
@@ -3521,8 +3548,8 @@ Transform App::assetTransform(const QString &path, QPointF c) const
 	QSizeF sz = assetKind(path) == "image" ? QSizeF(QImageReader(path).size()) : QSizeF(1280, 720);
 	if (sz.isEmpty())
 		sz = QSizeF(640, 360);
-	const double W = doc().canvasW;
-	const double H = doc().canvasH;
+	const double W = editCanvas().width();
+	const double H = editCanvas().height();
 	const double k = std::min(1.0, std::min(W / sz.width(), H / sz.height()));
 	Transform t;
 	t.w = std::round(sz.width() * k), t.h = std::round(sz.height() * k);
@@ -3549,7 +3576,7 @@ void App::assetDrop(const QString &path, double x, double y)
 	m_dropBoxes.clear();
 	if (!doc().scenes.contains(m_editScene) || assetKind(path) == "other")
 		return updateOverlay();
-	const QPointF at = x < 0 ? QPointF(doc().canvasW / 2.0, doc().canvasH / 2.0) : toCanvas({x, y});
+	const QPointF at = x < 0 ? QPointF(editCanvas().width() / 2.0, editCanvas().height() / 2.0) : toCanvas({x, y});
 	const Transform t = assetKind(path) == "audio" ? Transform{0, 0, 1, 1} : assetTransform(path, at);
 	QString iid;
 	m_store.commit("Place " + QFileInfo(path).fileName(), [&](Doc &d) {
@@ -3786,7 +3813,8 @@ void App::beginStream(bool test)
 	QNetworkRequest r{QUrl(enhanced_broadcast::kConfigUrl)};
 	r.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 	r.setTransferTimeout(10000);
-	const QJsonObject body = enhanced_broadcast::request(s.stream.key, s.video.outWidth, s.video.outHeight, s.video.fps, obs_get_version_string());
+	const QJsonObject body = enhanced_broadcast::request(s.stream.key, s.video.outWidth, s.video.outHeight, s.video.fps, obs_get_version_string(),
+							     doc().verticalOn ? QSize(doc().verticalW, doc().verticalH) : QSize());
 	QNetworkReply *rep = m_net->post(r, QJsonDocument(body).toJson(QJsonDocument::Compact));
 	connect(rep, &QNetworkReply::finished, this, [this, rep, start] {
 		rep->deleteLater();
@@ -3995,7 +4023,7 @@ void App::setAudio(const QString &sourceId, const QString &field, const QVariant
 double App::canvasScale() const
 {
 	// Same rule as the engine's drawing, on physical pixels, back in logical units.
-	return previewScaleFor(m_previewSize.width() * m_previewDpr, m_previewSize.height() * m_previewDpr, doc().canvasW, doc().canvasH, m_pixelPerfect) / m_previewDpr;
+	return previewScaleFor(m_previewSize.width() * m_previewDpr, m_previewSize.height() * m_previewDpr, editCanvas().width(), editCanvas().height(), m_pixelPerfect) / m_previewDpr;
 }
 
 void App::setPixelPerfect(bool on)
@@ -4010,14 +4038,14 @@ void App::setPixelPerfect(bool on)
 QPointF App::toCanvas(QPointF p) const
 {
 	const double s = canvasScale();
-	const double ox = (m_previewSize.width() - doc().canvasW * s) / 2, oy = (m_previewSize.height() - doc().canvasH * s) / 2;
+	const double ox = (m_previewSize.width() - editCanvas().width() * s) / 2, oy = (m_previewSize.height() - editCanvas().height() * s) / 2;
 	return {(p.x() - ox) / s, (p.y() - oy) / s};
 }
 
 QPointF App::fromCanvas(QPointF c) const
 {
 	const double s = canvasScale();
-	const double ox = (m_previewSize.width() - doc().canvasW * s) / 2, oy = (m_previewSize.height() - doc().canvasH * s) / 2;
+	const double ox = (m_previewSize.width() - editCanvas().width() * s) / 2, oy = (m_previewSize.height() - editCanvas().height() * s) / 2;
 	return {c.x() * s + ox, c.y() * s + oy};
 }
 
@@ -4404,7 +4432,8 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 				const Transform b = base.bounds(id);
 				x0 = std::min(x0, b.x), y0 = std::min(y0, b.y), x1 = std::max(x1, b.x + b.w), y1 = std::max(y1, b.y + b.h);
 			}
-			QVector<double> xs{0, base.canvasW / 2.0, double(base.canvasW)}, ys{0, base.canvasH / 2.0, double(base.canvasH)};
+			const QSize ec = base.canvasOf(m_editScene); // the edited scene's canvas (vertical layouts are tall)
+			QVector<double> xs{0, ec.width() / 2.0, double(ec.width())}, ys{0, ec.height() / 2.0, double(ec.height())};
 			for (const auto &leaf : base.flatten(m_editScene)) {
 				if (moving.contains(leaf.id))
 					continue;

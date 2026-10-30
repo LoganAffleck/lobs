@@ -369,6 +369,17 @@ Rectangle {
                         visible: page.section === 2
                         Layout.fillWidth: true
                         spacing: 0
+                        GroupTitle { text: "Vertical" }
+                        Card {
+                            SettingRow {
+                                divider: false
+                                title: "Vertical canvas"
+                                description: app.verticalOn ? "Each scene has a 1080 × 1920 layout. Switch between them above the canvas. Twitch gets it with Enhanced Broadcasting."
+                                                            : "A tall layout of each scene for Twitch's vertical stream, sent with Enhanced Broadcasting."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: app.verticalOn; enabled: !app.live; onClicked: app.setVerticalOn(!app.verticalOn) }
+                            }
+                        }
+                        Item { implicitHeight: 12 }
                         GroupTitle { text: "Output" }
                         Card {
                             SettingRow {

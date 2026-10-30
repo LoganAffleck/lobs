@@ -406,6 +406,9 @@ void Engine::apply(const Doc &doc)
 	m_applying = true;
 	struct Done { bool &f; ~Done() { f = false; } } done{m_applying};
 	m_lastDoc = doc;
+	updateEditCanvas();
+	// When it's done (scenes made): the program's vertical layout on the vertical canvas.
+	struct Then { Engine *e; ~Then() { e->syncVerticalProgram(); } } then{this};
 	// The show's transition: rebuilt (without playing) when it changes.
 	if (const Transition *t = doc.transition()) {
 		const bool changed = transitionSig(*t) != transitionSig(m_trDef);
@@ -503,12 +506,24 @@ void Engine::apply(const Doc &doc)
 	}
 
 	m_hasSceneSources = std::any_of(doc.sources.cbegin(), doc.sources.cend(), [](const Source &s) { return s.kind == "scene"; });
+	// The vertical canvas (Twitch's vertical stream): made while it's on, its scenes are the scenes'
+	// vertical layouts. It follows the program; audio is the main canvas's (not mixed twice).
+	if (doc.verticalOn && !m_vcanvas) {
+		obs_video_info ovi{};
+		obs_get_video_info(&ovi);
+		ovi.base_width = ovi.output_width = uint32_t(doc.verticalW);
+		ovi.base_height = ovi.output_height = uint32_t(doc.verticalH);
+		m_vcanvas = obs_canvas_create("LOBS Vertical", &ovi, ACTIVATE | SCENE_REF);
+		blog(LOG_INFO, "[lobs] vertical canvas %dx%d: %s", doc.verticalW, doc.verticalH, m_vcanvas ? "made" : "failed");
+	}
+	const QStringList allScenes = scenesToMake(doc);
 	// 2. Scenes, named as in LOBS (made unique), since plugins show OBS's names (Downstream Keyer's
 	// list, for one). LOBS finds them by id (m_scenes) and layers find them by UUID.
 	{
 		QSet<QString> used;
-		for (const QString &id : doc.sceneOrder) {
-			QString name = doc.scenes[id].name.trimmed();
+		for (const QString &id : allScenes) {
+			QString name = doc.scenes[id].verticalOf.isEmpty() ? doc.scenes[id].name.trimmed()
+									 : doc.scenes.value(doc.scenes[id].verticalOf).name.trimmed() + " (Vertical)";
 			if (name.isEmpty())
 				name = "Scene";
 			const QString base = name;
@@ -516,7 +531,8 @@ void Engine::apply(const Doc &doc)
 				name = QString("%1 (%2)").arg(base).arg(n);
 			used.insert(name.toLower());
 			if (!m_scenes.contains(id))
-				m_scenes[id] = obs_scene_create(name.toUtf8().constData());
+				m_scenes[id] = doc.scenes[id].verticalOf.isEmpty() || !m_vcanvas ? obs_scene_create(name.toUtf8().constData())
+													 : obs_canvas_scene_create(m_vcanvas, name.toUtf8().constData());
 			else if (obs_source_t *s = obs_scene_get_source(m_scenes[id]); name != obs_source_get_name(s))
 				obs_source_set_name(s, name.toUtf8().constData());
 		}
@@ -524,7 +540,7 @@ void Engine::apply(const Doc &doc)
 
 	// 3. Layers: one lobs_instance per visible-capable leaf, with its own filters.
 	QSet<QString> wanted;
-	for (const QString &sceneId : doc.sceneOrder) {
+	for (const QString &sceneId : allScenes) {
 		obs_scene_t *scene = m_scenes[sceneId];
 		int order = 0;
 		for (const Doc::Leaf &leaf : doc.flatten(sceneId)) {
@@ -908,6 +924,8 @@ bool Engine::sceneWanted(const QString &sceneId) const
 	if (sceneId == m_editId || sceneId == m_programId || sceneId == m_unparkTarget || m_showingAll.contains(sceneId) || m_heldScenes.contains(sceneId) ||
 	    m_pluginScenes.contains(sceneId))
 		return true;
+	if (const QString of = m_lastDoc.scenes.value(sceneId).verticalOf; !of.isEmpty() && (of == m_programId || of == m_editId))
+		return true; // the live scene's vertical layout
 	if (!m_hasSceneSources) // the usual show: no scene inside another, nothing to walk (this runs per layer)
 		return false;
 	QStringList roots{m_editId, m_programId, m_unparkTarget};
@@ -945,6 +963,7 @@ void Engine::setEditScene(const QString &sceneId)
 		m_editSource = nullptr;
 	}
 	m_editId = sceneId;
+	updateEditCanvas();
 	if (obs_scene_t *s = m_scenes.value(sceneId)) {
 		m_editSource = obs_scene_get_source(s);
 		obs_source_inc_showing(m_editSource); // activates its cameras while editing
@@ -1003,6 +1022,7 @@ void Engine::setProgramScene(const QString &sceneId, bool animate)
 	if (!m_parkTimer.isActive())
 		m_parkTimer.start(500); // parks what stopped showing; waits out transitions itself
 	m_programId = sceneId;
+	syncVerticalProgram();
 	obs_scene_t *s = m_scenes.value(sceneId);
 	obs_source_t *scene = s ? obs_scene_get_source(s) : nullptr;
 	obs_source_t *tr = m_started ? ensureTransition() : nullptr;
@@ -1375,8 +1395,9 @@ static void fillRect(float x, float y, float w, float h)
 
 void Engine::drawPreview(uint32_t cx, uint32_t cy)
 {
-	const float W = float(m_canvasW), H = float(m_canvasH);
-	const float scale = float(previewScaleFor(cx, cy, m_canvasW, m_canvasH, m_pixelPerfect));
+	const int CW = m_editCanvasW.load(), CH = m_editCanvasH.load(); // the edited scene's canvas
+	const float W = float(CW), H = float(CH);
+	const float scale = float(previewScaleFor(cx, cy, CW, CH, m_pixelPerfect));
 	const int vw = int(W * scale), vh = int(H * scale);
 	const int vx = (int(cx) - vw) / 2, vy = (int(cy) - vh) / 2;
 
@@ -1407,13 +1428,13 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 	// output, instead of plain bilinear sampling, so text and edges stay sharp.
 	const double inv = scale > 0 ? 1.0 / scale : 1;
 	const bool exact = scale >= 1 ? std::abs(scale - std::round(scale)) < 1e-4
-				      : std::abs(inv - std::round(inv)) < 1e-4 && m_canvasW % int(std::round(inv)) == 0 && m_canvasH % int(std::round(inv)) == 0;
+				      : std::abs(inv - std::round(inv)) < 1e-4 && CW % int(std::round(inv)) == 0 && CH % int(std::round(inv)) == 0;
 	gs_texture_t *full = nullptr;
 	if (!exact && m_editSource) {
 		if (!m_previewTex)
 			m_previewTex = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 		gs_texrender_reset(m_previewTex);
-		if (gs_texrender_begin(m_previewTex, uint32_t(m_canvasW), uint32_t(m_canvasH))) {
+		if (gs_texrender_begin(m_previewTex, uint32_t(CW), uint32_t(CH))) {
 			vec4 clear;
 			vec4_set(&clear, 0, 0, 0, 1);
 			gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
@@ -1747,6 +1768,35 @@ void Engine::setPluginScenes(const QSet<QString> &scenes)
 		m_parkTimer.start(500); // parks what stopped showing
 }
 
+// The scenes the engine makes: the listed ones, and their vertical layouts while vertical is on.
+QStringList Engine::scenesToMake(const Doc &doc) const
+{
+	QStringList out = doc.sceneOrder;
+	if (doc.verticalOn && m_vcanvas)
+		for (const QString &id : doc.sceneOrder)
+			if (const QString v = doc.verticalLayout(id); !v.isEmpty())
+				out << v;
+	return out;
+}
+
+void Engine::updateEditCanvas()
+{
+	const QSize c = m_lastDoc.canvasOf(m_editId);
+	m_editCanvasW = c.width() > 0 ? c.width() : m_canvasW;
+	m_editCanvasH = c.height() > 0 ? c.height() : m_canvasH;
+}
+
+void Engine::syncVerticalProgram()
+{
+	if (!m_vcanvas)
+		return;
+	const QString v = m_lastDoc.verticalOn ? m_lastDoc.verticalLayout(m_programId) : QString(); // off: nothing on it
+	if (!v.isEmpty())
+		unparkScene(v);
+	obs_scene_t *s = m_scenes.value(v);
+	obs_canvas_set_channel(m_vcanvas, 0, s ? obs_scene_get_source(s) : nullptr);
+}
+
 QString Engine::sceneIdOf(obs_source *scene) const
 {
 	for (auto it = m_scenes.cbegin(); it != m_scenes.cend(); ++it)
@@ -2045,9 +2095,16 @@ void Engine::shutdown()
 		obs_set_output_source(uint32_t(ch), nullptr);
 	for (const QString &id : m_items.keys())
 		removeItem(id);
+	if (m_vcanvas)
+		obs_canvas_set_channel(m_vcanvas, 0, nullptr);
 	for (obs_scene_t *s : m_scenes)
 		obs_scene_release(s);
 	m_scenes.clear();
+	if (m_vcanvas) { // after its scenes
+		obs_canvas_remove(m_vcanvas);
+		obs_canvas_release(m_vcanvas);
+		m_vcanvas = nullptr;
+	}
 	bool browsers = false;
 	for (obs_source_t *in : m_inputs) {
 		browsers |= in && QByteArray(obs_source_get_id(in)) == "browser_source";

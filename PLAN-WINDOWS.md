@@ -237,6 +237,12 @@ OBS's main-window calls (Studio Mode, projectors, source dialogs).
 *As a streamer, I send Twitch's vertical stream next to my horizontal one.*
 - Twitch's dual format, through the same system as Enhanced Broadcasting (builds on P1-4). LOBS's
   scene editor suits a second, vertical canvas.
+- **Built 2026-10-30:** Settings > Video > Vertical canvas. Each scene gets a 1080x1920 layout
+  (a hidden scene, verticalOf), first made as a fit of its layers; a Horizontal/Vertical switch
+  on the Video panel edits either. The engine keeps them on a second OBS canvas that follows the
+  program, and Enhanced Broadcasting sends it as canvas 1. _probe-vertical, 30-persistence and
+  20-scenes-layers pass. Still to check: Twitch showing the vertical stream. Not yet: new layers
+  added in one layout don't appear in the other; groups aren't copied into a new vertical layout.
 
 ### P3-2. I watch all my scenes at once (Multiview)
 
