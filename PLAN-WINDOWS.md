@@ -87,7 +87,9 @@ stream key and adds my Twitch panels.*
 
 The same design as OBS's "Connect Account":
 1. **LOBS's own Twitch app.** Register "LOBS" in the Twitch Developer Console (free; the account
-   needs two-factor sign-in) as a Confidential client. That gives a client ID, which ships in LOBS,
+   needs two-factor sign-in) as a Confidential client. **Registered 2026-10-30:** "LOBS",
+   Broadcaster Suite, client ID `y0mck0jqerrkhzvqiy1pzhagusz1rn`, redirect
+   `http://localhost:5340/twitch/callback` for local testing. That gives a client ID, which ships in LOBS,
    and a secret, which never does. OBS's client ID can't be reused (Twitch's developer terms, and
    it only works with OBS's server).
 2. **A small auth server** holding the secret, like OBS's `auth.obsproject.com`. It takes Twitch's
