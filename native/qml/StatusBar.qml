@@ -32,8 +32,10 @@ Rectangle {
         Seg {
             visible: app.streaming
             dot: Pal.live
-            tone: Pal.fg
-            text: "LIVE " + (bar.ss.time || "00:00:00") + " · " + Math.round(bar.ss.kbps || 0) + " kbps · " + (bar.ss.dropped || 0) + " dropped (" + (bar.ss.dropPct || 0).toFixed(1) + "%)"
+            // Amber when the connection is fair, red when poor or reconnecting.
+            tone: bar.ss.health === "poor" || bar.ss.health === "reconnecting" ? "#f87171" : bar.ss.health === "fair" ? "#fbbf24" : Pal.fg
+            text: bar.ss.reconnecting ? "LIVE " + (bar.ss.time || "00:00:00") + " · Reconnecting…"
+                : "LIVE " + (bar.ss.time || "00:00:00") + " · " + Math.round(bar.ss.kbps || 0) + " kbps · " + (bar.ss.dropped || 0) + " dropped (" + (bar.ss.dropPct || 0).toFixed(1) + "%)"
         }
         Seg { visible: app.recording; dot: Pal.live; tone: Pal.fg; text: "REC " + (bar.st.recTime || "00:00:00") + " · " + (bar.st.recMb || 0).toFixed(0) + " MB" }
         Seg { visible: app.replayActive; dot: "#22c55e"; text: "Replay on" }

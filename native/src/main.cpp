@@ -34,6 +34,7 @@
 #include <obs-hotkey.h>
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QMutex>
@@ -877,6 +878,17 @@ int main(int argc, char *argv[])
 	std::unique_ptr<Splash> splash;
 	if (!isSelfTestRun(app.arguments()) && !app.arguments().contains("--engine-smoketest"))
 		splash = std::make_unique<Splash>(root + "/icons");
+	// The last session's log moves to logs/, named by when it ended (its last write: Windows hands
+	// a re-created lobs.log the old creation time), so a bad stream can still be looked at after a
+	// restart, as OBS keeps its logs. The newest 10 stay.
+	if (QFileInfo prev(appOut + "/lobs.log"); prev.exists() && prev.size() > 0) {
+		QDir logs(appOut + "/logs");
+		logs.mkpath(".");
+		QFile::rename(prev.absoluteFilePath(), logs.filePath("lobs-" + prev.lastModified().toString("yyyy-MM-dd HH-mm-ss") + ".log"));
+		const QFileInfoList old = logs.entryInfoList({"lobs-*.log"}, QDir::Files, QDir::Name | QDir::Reversed);
+		for (int i = 10; i < old.size(); i++)
+			QFile::remove(old[i].absoluteFilePath());
+	}
 	QFile log(appOut + "/lobs.log");
 	log.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
 	g_log = &log;
