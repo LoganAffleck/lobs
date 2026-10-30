@@ -30,6 +30,9 @@
 #include <functional>
 #include <memory>
 #include <QRegularExpression>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include "enhanced_broadcast.h"
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QImageReader>
@@ -2248,7 +2251,7 @@ void App::stopBandwidthTest() { m_engine->stopBandwidthTest(); }
 QVariantMap App::recommendSettings(int measured, const QString &service) const
 {
 	// Leave a quarter of the measured upload free for the rest of your connection.
-	const int cap = service == "Twitch" ? 5800 : service.startsWith("YouTube") ? 9000 : 8000;
+	const int cap = service == "Twitch" ? 6000 : service.startsWith("YouTube") ? 9000 : 8000;
 	// LOBS-028: never recommend more than that, even on a slow connection (the wizard warns below 2 Mbps).
 	const int bitrate = std::clamp(int(measured * 0.75 / 100) * 100, 100, cap);
 	const bool slow = measured < 2000;
@@ -3573,22 +3576,55 @@ void App::toggleStreaming()
 		m_engine->stopStreaming();
 		return;
 	}
-	if (!m_engine->startStreaming())
-		showToast(m_engine->lastError());
-	else
-		m_liveUnlock = false;
-	emit engineChanged();
+	beginStream(false);
 }
 
 void App::startTestStream()
 {
-	if (m_engine->streaming())
+	if (!m_engine->streaming())
+		beginStream(true);
+}
+
+// Going live. On Twitch with Enhanced Broadcasting on, Twitch is asked for its plan first (as OBS
+// does), and a "no" falls back to one quality with the reason.
+void App::beginStream(bool test)
+{
+	if (m_preparingStream)
 		return;
-	if (!m_engine->startStreaming(true))
-		showToast(m_engine->lastError());
-	else
-		m_liveUnlock = false, showToast("Test stream started. Viewers can't see it; check it in Twitch Inspector.");
+	const AppSettings s = m_engine->settings();
+	auto start = [this, test](const QJsonObject &plan) {
+		m_preparingStream = false;
+		if (!m_engine->startStreaming(test, plan))
+			showToast(m_engine->lastError());
+		else {
+			m_liveUnlock = false;
+			if (test)
+				showToast("Test stream started. Viewers can't see it; check it in Twitch Inspector.");
+		}
+		emit engineChanged();
+	};
+	if (!s.stream.service.startsWith("Twitch") || !s.stream.enhanced || s.stream.key.isEmpty())
+		return start({});
+	m_preparingStream = true;
 	emit engineChanged();
+	if (!m_net)
+		m_net = new QNetworkAccessManager(this);
+	QNetworkRequest r{QUrl(enhanced_broadcast::kConfigUrl)};
+	r.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+	r.setTransferTimeout(10000);
+	const QJsonObject body = enhanced_broadcast::request(s.stream.key, s.video.outWidth, s.video.outHeight, s.video.fps, obs_get_version_string());
+	QNetworkReply *rep = m_net->post(r, QJsonDocument(body).toJson(QJsonDocument::Compact));
+	connect(rep, &QNetworkReply::finished, this, [this, rep, start] {
+		rep->deleteLater();
+		const QByteArray data = rep->readAll();
+		const QJsonObject plan = QJsonDocument::fromJson(data).object();
+		QString why = rep->error() != QNetworkReply::NoError && plan.isEmpty() ? "Twitch didn't answer (" + rep->errorString() + ")" : enhanced_broadcast::check(plan);
+		if (why.isEmpty())
+			return start(plan);
+		qInfo("[lobs] Enhanced Broadcasting unavailable: %s. Answer: %s", qPrintable(why), data.left(2000).constData());
+		showToast("Enhanced Broadcasting isn't available: " + why + ". Streaming in one quality.");
+		start({});
+	});
 }
 
 void App::setLiveUnlock(bool on)

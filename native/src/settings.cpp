@@ -28,6 +28,7 @@ AppSettings AppSettings::load()
 	s.stream.key = platform::unprotectSecret(st["keyProtected"].toString());
 	s.stream.bitrate = st["bitrate"].toInt(s.stream.bitrate);
 	s.stream.audioBitrate = st["audioBitrate"].toInt(s.stream.audioBitrate);
+	s.stream.enhanced = st["enhanced"].toBool(s.stream.enhanced);
 	s.video.outWidth = v["outWidth"].toInt(s.video.outWidth);
 	s.video.outHeight = v["outHeight"].toInt(s.video.outHeight);
 	s.video.fps = v["fps"].toInt(s.video.fps);
@@ -50,7 +51,7 @@ void AppSettings::save() const
 	QDir().mkpath(QFileInfo(settingsPath()).absolutePath());
 	const QJsonObject o{
 		{"stream", QJsonObject{{"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl},
-				       {"keyProtected", platform::protectSecret(stream.key)}, {"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}}},
+				       {"keyProtected", platform::protectSecret(stream.key)}, {"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"enhanced", stream.enhanced}}},
 		{"video", QJsonObject{{"outWidth", video.outWidth}, {"outHeight", video.outHeight}, {"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}}},
 		{"record", QJsonObject{{"folder", record.folder}, {"format", record.format}, {"quality", record.quality}, {"replaySeconds", record.replaySeconds}}},
 		{"hotkeys", QJsonObject::fromVariantMap(hotkeys)},
@@ -65,7 +66,7 @@ void AppSettings::save() const
 QVariantMap AppSettings::toMap() const
 {
 	return {{"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl}, {"hasKey", !stream.key.isEmpty()},
-		{"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"outWidth", video.outWidth}, {"outHeight", video.outHeight},
+		{"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"enhanced", stream.enhanced}, {"outWidth", video.outWidth}, {"outHeight", video.outHeight},
 		{"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}, {"recordFolder", recordFolder()},
 		{"recordFormat", record.format}, {"recordQuality", record.quality},
 		{"transition", transition.type}, {"transitionMs", transition.durationMs}, {"replaySeconds", record.replaySeconds}, {"hotkeys", hotkeys}, {"liveLock", liveLock}};
@@ -84,6 +85,8 @@ void AppSettings::applyMap(const QVariantMap &m)
 		stream.key.clear();
 	num("bitrate", stream.bitrate);
 	num("audioBitrate", stream.audioBitrate);
+	if (m.contains("enhanced"))
+		stream.enhanced = m["enhanced"].toBool();
 	num("outWidth", video.outWidth);
 	num("outHeight", video.outHeight);
 	num("fps", video.fps);

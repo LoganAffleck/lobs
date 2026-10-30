@@ -14,6 +14,8 @@ struct StreamSettings {
 	QString key;
 	int bitrate = 6000; // kbps
 	int audioBitrate = 160;
+	// Twitch's Enhanced Broadcasting: Twitch picks several qualities and the GPU encodes them all.
+	bool enhanced = true;
 };
 
 struct VideoSettings {

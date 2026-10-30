@@ -8,6 +8,9 @@ GridLayout {
     readonly property var st: app.liveStats || ({})
     readonly property var ss: app.streamStats || ({})
     function warn(pct) { return pct > 1 ? "#fbbf24" : Pal.muted }
+    // "5 qualities, up to 1080p60" (the full list is in the status line and the log).
+    readonly property var qualities: ss.qualities ? String(ss.qualities).split(" · ") : []
+    readonly property string qualitiesText: qualities.length ? qualities.length + " qualities, up to " + qualities[0] : ""
     readonly property string health: ({ good: "Good", fair: "Fair", poor: "Poor", reconnecting: "Reconnecting…" })[ss.health] || "Good"
     readonly property color healthColor: ss.health === "poor" || ss.health === "reconnecting" ? "#f87171" : ss.health === "fair" ? "#fbbf24" : "#22c55e"
     columns: 2; columnSpacing: 16; rowSpacing: 6
@@ -25,6 +28,7 @@ GridLayout {
     K { text: "Stream" }              V { text: app.streaming ? (stats.ss.time || "") + " · " + Math.round(stats.ss.kbps || 0) + " kbps" : "Off" }
     // The connection: OBS's congestion (how far the network is behind) and LOBS's health from it
     // and the drops (good, fair, poor, reconnecting).
+    K { visible: app.streaming && !!stats.ss.qualities; text: "Enhanced Broadcasting" } V { visible: app.streaming && !!stats.ss.qualities; text: stats.qualitiesText }
     K { visible: app.streaming; text: "Connection" } V { visible: app.streaming; text: stats.health; color: stats.healthColor }
     K { visible: app.streaming; text: "Congestion" } V { visible: app.streaming; text: Math.round((stats.ss.congestion || 0) * 100) + "%"; color: (stats.ss.congestion || 0) > 0.2 ? "#fbbf24" : Pal.muted }
     K { visible: app.streaming; text: "Dropped frames (network)" } V { visible: app.streaming; text: (stats.ss.dropped || 0) + " / " + (stats.ss.total || 0) + " (" + (stats.ss.dropPct || 0).toFixed(1) + "%)"; color: stats.warn(stats.ss.dropPct || 0) }

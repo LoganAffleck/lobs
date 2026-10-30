@@ -49,6 +49,7 @@ qt_add_executable(LOBS WIN32 MACOSX_BUNDLE
     src/window_chrome.h
     src/captions.cpp src/captions.h
     src/twitch_account.cpp src/twitch_account.h
+    src/enhanced_broadcast.cpp src/enhanced_broadcast.h
     src/plugins.cpp src/plugins.h
     src/crash_report.cpp src/crash_report.h
     src/app_updater.cpp src/app_updater.h

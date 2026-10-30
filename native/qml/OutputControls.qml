@@ -144,7 +144,8 @@ RowLayout {
                 }
                 FIcon { visible: !app.streaming; name: "radio-tower"; size: 14; color: Pal.s1; anchors.verticalCenter: parent.verticalCenter }
                 Text {
-                    text: !app.streaming ? "Go live"
+                    text: app.preparingStream ? "Starting…"
+                        : !app.streaming ? "Go live"
                         : live.confirming ? "Click again to stop"
                         : (app.testStreaming ? "TEST  " : "LIVE  ") + (oc.ss.time || "00:00:00")
                     color: app.streaming ? "#fee2e2" : Pal.s1

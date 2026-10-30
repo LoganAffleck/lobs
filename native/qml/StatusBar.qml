@@ -59,7 +59,7 @@ Rectangle {
         id: statsPopup
         x: parent.width - width - 8
         y: -height - 6
-        width: 340
+        width: Math.max(340, implicitContentWidth + leftPadding + rightPadding) // long values (a stream's qualities) fit
         padding: 14
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         property bool coversPreview: false

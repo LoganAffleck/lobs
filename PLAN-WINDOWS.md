@@ -69,6 +69,12 @@ Without it, Twitch makes lower qualities only when it has capacity; a LOBS test 
 **Done when** a LOBS stream offers the same qualities as OBS's (see Reference) in the player and
 the VOD.
 
+**Built 2026-10-30:** a LOBS test stream got Twitch's five qualities (1080p60 to 160p30) and
+Inspector showed "Stable @ 12,716 Kbps", "Excellent" (OBS's plan totals 12,700). Still to check:
+the qualities in the player and the VOD on a real stream. Not done yet: Twitch's dynamic bitrate
+(the "bitrate_interpolation_points" in its plan), which lowers bitrates when the connection
+struggles.
+
 ### P1-5. Switching from OBS takes one step
 *As an OBS user trying LOBS, first-time setup brings over my settings, scenes and plugins at once.*
 - Setup starts with "Coming from OBS?". It finds `%APPDATA%\obs-studio`, defaults to the profile

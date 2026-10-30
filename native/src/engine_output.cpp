@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <cmath>
 
@@ -210,7 +211,25 @@ static void onStreamReconnect(void *data, calldata_t *)
 	QMetaObject::invokeMethod(self, [self]() { emit self->streamStatsChanged(); }, Qt::QueuedConnection);
 }
 
-bool Engine::startStreaming(bool test)
+// Twitch's names for the GPU scaling OBS applies per quality.
+static obs_scale_type scaleType(const QString &name)
+{
+	return name == "OBS_SCALE_BICUBIC" ? OBS_SCALE_BICUBIC : name == "OBS_SCALE_LANCZOS" ? OBS_SCALE_LANCZOS
+	     : name == "OBS_SCALE_AREA" ? OBS_SCALE_AREA : name == "OBS_SCALE_POINT" ? OBS_SCALE_POINT : OBS_SCALE_BILINEAR;
+}
+
+void Engine::releaseStreamEncoders()
+{
+	obs_encoder_release(m_streamVenc), m_streamVenc = nullptr;
+	obs_encoder_release(m_streamAenc), m_streamAenc = nullptr;
+	for (obs_encoder_t *e : m_extraVencs)
+		obs_encoder_release(e);
+	m_extraVencs.clear();
+	if (m_vencGroup) // after its encoders are gone
+		obs_encoder_group_destroy(m_vencGroup), m_vencGroup = nullptr;
+}
+
+bool Engine::startStreaming(bool test, const QJsonObject &plan)
 {
 	if (!m_started || m_streaming)
 		return false;
@@ -224,6 +243,7 @@ bool Engine::startStreaming(bool test)
 		m_lastError = "Test streams work with Twitch only";
 		return false;
 	}
+	const bool multi = !plan.isEmpty();
 
 	// The old output goes first: it still points at the old encoders (and service), and releasing
 	// those under it freed memory the output then touched (heap corruption on the next start).
@@ -233,42 +253,104 @@ bool Engine::startStreaming(bool test)
 	}
 	if (m_service)
 		obs_service_release(m_service);
-	if (st.service == "Custom") {
-		obs_data_t *d = toData({{"server", st.customUrl}, {"key", st.key}});
+	releaseStreamEncoders();
+	m_qualities.clear();
+
+	if (multi) {
+		// Enhanced Broadcasting: Twitch's address and key. OBS streams over the RTMP entry.
+		QJsonObject ep;
+		for (const QJsonValue &v : plan.value("ingest_endpoints").toArray()) {
+			const QJsonObject e = v.toObject();
+			if (e.value("protocol").toString() == "RTMP" || (ep.isEmpty() && e.value("protocol").toString() == "RTMPS"))
+				ep = e;
+		}
+		QString key = ep.value("authentication").toString();
+		if (key.isEmpty())
+			key = st.key;
+		if (test)
+			key += "?bandwidthtest=true";
+		const QString server = ep.value("url_template").toString().replace("/{stream_key}", "").replace("{stream_key}", "");
+		obs_data_t *d = toData({{"server", server}, {"key", key}});
 		m_service = obs_service_create("rtmp_custom", "LOBS service", d, nullptr);
 		obs_data_release(d);
+
+		// One encoder per quality, grouped so they start together (keyframes line up).
+		m_vencGroup = obs_encoder_group_create();
+		const QJsonArray cfgs = plan.value("encoder_configurations").toArray();
+		for (int i = 0; i < cfgs.size(); i++) {
+			const QJsonObject c = cfgs[i].toObject();
+			const QString type = c.value("type").toString();
+			obs_data_t *es = toData(c.value("settings").toObject());
+			obs_encoder_t *enc = obs_video_encoder_create(type.toUtf8().constData(), QString("LOBS stream video %1").arg(i).toUtf8().constData(), es, nullptr);
+			obs_data_release(es);
+			if (!enc) {
+				m_lastError = "Twitch asked for an encoder this PC doesn't have (" + type + ")";
+				releaseStreamEncoders();
+				return false;
+			}
+			obs_encoder_set_video(enc, obs_get_video());
+			const int w = c.value("width").toInt(), h = c.value("height").toInt();
+			if (w && h && (w != m_settings.video.outWidth || h != m_settings.video.outHeight)) {
+				obs_encoder_set_scaled_size(enc, uint32_t(w), uint32_t(h));
+				obs_encoder_set_gpu_scale_type(enc, scaleType(c.value("gpu_scale_type").toString()));
+			}
+			const QJsonObject fr = c.value("framerate").toObject();
+			const double fps = fr.value("numerator").toDouble() / std::max(1.0, fr.value("denominator").toDouble(1));
+			if (fps > 0 && m_settings.video.fps / fps >= 1.5)
+				obs_encoder_set_frame_rate_divisor(enc, uint32_t(std::lround(m_settings.video.fps / fps)));
+			obs_encoder_set_group(enc, m_vencGroup);
+			obs_data_t *got = obs_encoder_get_settings(enc);
+			blog(LOG_INFO, "[lobs] stream video %d: %s %dx%d@%g %s", i, qPrintable(type), w, h, fps, obs_data_get_json(got));
+			obs_data_release(got);
+			m_qualities << QString("%1p%2").arg(h).arg(std::lround(fps));
+			if (i == 0)
+				m_streamVenc = enc;
+			else
+				m_extraVencs.push_back(enc);
+		}
+		const QJsonArray audio = plan.value("audio_configurations").toObject().value("live").toArray();
+		const int abr = audio.isEmpty() ? st.audioBitrate : audio[0].toObject().value("settings").toObject().value("bitrate").toInt(st.audioBitrate);
+		obs_data_t *as = toData({{"bitrate", abr}});
+		m_streamAenc = obs_audio_encoder_create("ffmpeg_aac", "LOBS stream audio", as, 0, nullptr);
+		obs_data_release(as);
+		obs_encoder_set_audio(m_streamAenc, obs_get_audio());
+		blog(LOG_INFO, "[lobs] Enhanced Broadcasting: %d qualities, config %s, to %s", int(cfgs.size()),
+		     qPrintable(plan.value("meta").toObject().value("config_id").toString()), qPrintable(server));
 	} else {
-		const QString key = test ? st.key + "?bandwidthtest=true" : st.key;
-		obs_data_t *d = toData({{"service", st.service}, {"server", st.server}, {"key", key}});
-		m_service = obs_service_create("rtmp_common", "LOBS service", d, nullptr);
-		obs_data_release(d);
+		if (st.service == "Custom") {
+			obs_data_t *d = toData({{"server", st.customUrl}, {"key", st.key}});
+			m_service = obs_service_create("rtmp_custom", "LOBS service", d, nullptr);
+			obs_data_release(d);
+		} else {
+			const QString key = test ? st.key + "?bandwidthtest=true" : st.key;
+			obs_data_t *d = toData({{"service", st.service}, {"server", st.server}, {"key", key}});
+			m_service = obs_service_create("rtmp_common", "LOBS service", d, nullptr);
+			obs_data_release(d);
+		}
+		m_streamVenc = makeVideoEncoder(resolveEncoder(), false, "LOBS stream video");
+		if (!m_streamVenc) {
+			m_lastError = "Couldn't create the video encoder";
+			return false;
+		}
+		obs_data_t *as = toData({{"bitrate", st.audioBitrate}});
+		m_streamAenc = obs_audio_encoder_create("ffmpeg_aac", "LOBS stream audio", as, 0, nullptr);
+		obs_data_release(as);
+		obs_encoder_set_audio(m_streamAenc, obs_get_audio());
+
+		// Let the service clamp bitrates / keyframes to what the platform allows.
+		obs_data_t *vset = obs_encoder_get_settings(m_streamVenc), *aset = obs_encoder_get_settings(m_streamAenc);
+		obs_service_apply_encoder_settings(m_service, vset, aset);
+		obs_data_set_int(vset, "bitrate", streamBitrate(int(obs_data_get_int(vset, "bitrate"))));
+		obs_encoder_update(m_streamVenc, vset);
+		obs_encoder_update(m_streamAenc, aset);
+		// What the stream really uses, after the service's limits, to compare against OBS's log.
+		blog(LOG_INFO, "[lobs] stream video: %s %s", obs_encoder_get_id(m_streamVenc), obs_data_get_json(vset));
+		blog(LOG_INFO, "[lobs] stream audio: %s %s", obs_encoder_get_id(m_streamAenc), obs_data_get_json(aset));
+		obs_data_release(vset);
+		obs_data_release(aset);
 	}
 
-	obs_encoder_release(m_streamVenc);
-	obs_encoder_release(m_streamAenc);
-	m_streamVenc = makeVideoEncoder(resolveEncoder(), false, "LOBS stream video");
-	if (!m_streamVenc) {
-		m_lastError = "Couldn't create the video encoder";
-		return false;
-	}
-	obs_data_t *as = toData({{"bitrate", st.audioBitrate}});
-	m_streamAenc = obs_audio_encoder_create("ffmpeg_aac", "LOBS stream audio", as, 0, nullptr);
-	obs_data_release(as);
-	obs_encoder_set_audio(m_streamAenc, obs_get_audio());
-
-	// Let the service clamp bitrates / keyframes to what the platform allows.
-	obs_data_t *vset = obs_encoder_get_settings(m_streamVenc), *aset = obs_encoder_get_settings(m_streamAenc);
-	obs_service_apply_encoder_settings(m_service, vset, aset);
-	obs_data_set_int(vset, "bitrate", streamBitrate(int(obs_data_get_int(vset, "bitrate"))));
-	obs_encoder_update(m_streamVenc, vset);
-	obs_encoder_update(m_streamAenc, aset);
-	// What the stream really uses, after the service's limits, to compare against OBS's log.
-	blog(LOG_INFO, "[lobs] stream video: %s %s", obs_encoder_get_id(m_streamVenc), obs_data_get_json(vset));
-	blog(LOG_INFO, "[lobs] stream audio: %s %s", obs_encoder_get_id(m_streamAenc), obs_data_get_json(aset));
-	obs_data_release(vset);
-	obs_data_release(aset);
-
-	const char *outType = obs_service_get_preferred_output_type(m_service);
+	const char *outType = multi ? "rtmp_output" : obs_service_get_preferred_output_type(m_service);
 	if (!outType)
 		outType = "rtmp_output";
 	obs_data_t *od = toData({});
@@ -276,7 +358,9 @@ bool Engine::startStreaming(bool test)
 	obs_data_release(od);
 	obs_output_set_reconnect_settings(m_streamOutput, 20, 2);
 	obs_output_set_service(m_streamOutput, m_service);
-	obs_output_set_video_encoder(m_streamOutput, m_streamVenc);
+	obs_output_set_video_encoder2(m_streamOutput, m_streamVenc, 0);
+	for (size_t i = 0; i < m_extraVencs.size(); i++)
+		obs_output_set_video_encoder2(m_streamOutput, m_extraVencs[i], i + 1);
 	obs_output_set_audio_encoder(m_streamOutput, m_streamAenc, 0);
 	signal_handler_t *sh = obs_output_get_signal_handler(m_streamOutput);
 	signal_handler_connect(sh, "stop", onStreamStop, this);
@@ -292,10 +376,12 @@ bool Engine::startStreaming(bool test)
 	m_lastBytes = 0;
 	m_lastBytesAt = 0;
 	m_byteHistory.clear();
+	m_testStream = test;
+	m_multitrack = multi;
 	pollStreamStats();
 	emit streamingChanged();
-	m_testStream = test;
-	setStatus((test ? "Test stream to " : "Live on ") + (st.service == "Custom" ? st.customUrl : st.service) + " · " + QString(obs_encoder_get_name(m_streamVenc)));
+	setStatus((test ? "Test stream to " : "Live on ") + (st.service == "Custom" ? st.customUrl : st.service) + " · " +
+		  (multi ? "Enhanced Broadcasting, " + m_qualities.join(" · ") : QString(obs_encoder_get_name(m_streamVenc))));
 	return true;
 }
 
@@ -310,17 +396,19 @@ void Engine::stopStreaming()
 	setStatus("Stream ended after " + m_streamStats.value("time").toString());
 }
 
-// Twitch's guideline is 6,000 kbps for a whole single-quality stream, and its Inspector flags
-// "bitrate too high" above it: 6,000 of video plus audio measured 6,092. Video stops at 5,800.
+// Twitch allows 6,000 kbps of video, and Inspector flags "bitrate too high" when the session's
+// average goes over. Constant bitrate still averages ~1.5% over its target (keyframes, spikes): a
+// 6,000 target averaged 6,092, while 5,800 measured 5,803. So the setting goes up to 6,000 and
+// the encoder aims at most 5,900, which averages just inside it.
 int Engine::streamBitrate(int kbps) const
 {
-	return m_settings.stream.service.startsWith("Twitch") ? std::min(kbps, 5800) : kbps;
+	return m_settings.stream.service.startsWith("Twitch") ? std::min(kbps, 5900) : kbps;
 }
 
 // A new bitrate while live: the encoders (NVENC, x264, AMF, Quick Sync) take it without restarting.
 void Engine::applyStreamBitrate()
 {
-	if (!m_streamVenc)
+	if (!m_streamVenc || m_multitrack) // Twitch's plan sets each quality's bitrate
 		return;
 	obs_data_t *v = obs_encoder_get_settings(m_streamVenc);
 	obs_data_set_int(v, "bitrate", streamBitrate(m_settings.stream.bitrate));
@@ -358,7 +446,8 @@ void Engine::pollStreamStats()
 	const QString time = QString("%1:%2:%3").arg(secs / 3600, 2, 10, QChar('0')).arg((secs / 60) % 60, 2, 10, QChar('0')).arg(secs % 60, 2, 10, QChar('0'));
 	const QString health = reconnecting ? "reconnecting" : (dropPct > 5 || congestion > 0.5f) ? "poor" : (dropPct > 1 || congestion > 0.2f) ? "fair" : "good";
 	m_streamStats = {{"time", time}, {"kbps", kbps}, {"dropped", dropped}, {"total", total}, {"dropPct", dropPct},
-			 {"congestion", congestion}, {"health", health}, {"reconnecting", reconnecting}, {"bytes", double(bytes)}};
+			 {"congestion", congestion}, {"health", health}, {"reconnecting", reconnecting}, {"bytes", double(bytes)},
+			 {"qualities", m_multitrack ? m_qualities.join(" · ") : QString()}};
 	emit streamStatsChanged();
 }
 

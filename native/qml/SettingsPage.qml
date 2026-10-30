@@ -232,9 +232,17 @@ Rectangle {
                         }
                         // A rehearsal on Twitch: the real encoder, scene and connection, but the channel
                         // never goes live. Twitch Inspector shows how it arrives.
-                        GroupTitle { visible: String(page.s.service).startsWith("Twitch"); text: "Test stream" }
+                        GroupTitle { visible: String(page.s.service).startsWith("Twitch"); text: "Twitch" }
                         Card {
                             visible: String(page.s.service).startsWith("Twitch")
+                            // Twitch's Enhanced Broadcasting, as in OBS: Twitch picks the qualities and the GPU
+                            // encodes them all, so viewers and VODs always get a choice.
+                            SettingRow {
+                                title: "Enhanced Broadcasting"
+                                description: page.s.enhanced !== false ? "Twitch picks several qualities (1080p, 720p, 480p...) and this PC encodes them all. Uses more GPU and upload; the video bitrate below then doesn't apply."
+                                                                      : "Off: one quality at the bitrate below, and Twitch makes lower ones only when it has room."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.enhanced !== false; onClicked: page.save("enhanced", !(page.s.enhanced !== false)) }
+                            }
                             SettingRow {
                                 divider: false
                                 title: app.testStreaming ? "Test stream running" : "Test without going live"
@@ -258,7 +266,7 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Video bitrate"
-                                description: "6000 kbps suits 1080p60. Twitch streams stop at 5800 (Twitch's limit is 6000 with audio)."
+                                description: "6000 kbps suits 1080p60, and is Twitch's limit. LOBS aims just under it, so Twitch's average stays within."
                                 FNumField { label: ""; suffix: "kbps"; implicitWidth: 120; value: page.s.bitrate || 6000; onCommit: (v) => page.save("bitrate", Math.max(500, Math.round(v))) }
                             }
                             SettingRow {

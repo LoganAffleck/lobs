@@ -21,6 +21,8 @@
 #include <QString>
 #include <QTimer>
 #include <QVector>
+#include <QStringList>
+#include <vector>
 #include <QSet>
 
 struct obs_source;
@@ -29,6 +31,7 @@ struct obs_scene_item;
 struct obs_display;
 struct obs_output;
 struct obs_encoder;
+struct obs_encoder_group;
 struct obs_service;
 struct obs_volmeter;
 struct os_cpu_usage_info;
@@ -191,11 +194,14 @@ public:
 	bool resetVideo();                            // apply output size/FPS (only while nothing is live)
 	// test: a Twitch test stream (the key with ?bandwidthtest=true): it reaches Twitch, so Inspector
 	// shows it, but the channel never goes live and viewers never see it.
-	bool startStreaming(bool test = false);
+	// plan: Twitch's Enhanced Broadcasting answer (see enhanced_broadcast.h); empty for one quality.
+	bool startStreaming(bool test = false, const QJsonObject &plan = {});
+	bool multitrack() const { return m_streaming && m_multitrack; }
+	QStringList qualities() const { return m_qualities; } // "1080p60", "720p60", ... while it runs
 	bool testStreaming() const { return m_streaming && m_testStream; }
 	void stopStreaming();
 	void applyStreamBitrate(); // the saved bitrate, on the running stream
-	int streamBitrate(int kbps) const; // the service's cap (Twitch: 5800)
+	int streamBitrate(int kbps) const; // what the encoder aims at (Twitch: up to 5900, for a 6000 setting)
 	Q_INVOKABLE void recordClip(int seconds);
 	void refreshBrowser(const QString &sourceId);
 	QJsonObject inputFilters() const; // source id -> [libobs filter ids], for self-tests
@@ -359,6 +365,11 @@ private:
 	obs_encoder *m_recVenc = nullptr, *m_recAenc = nullptr;
 	bool m_streaming = false;
 	bool m_testStream = false;
+	bool m_multitrack = false;
+	QStringList m_qualities;
+	std::vector<obs_encoder *> m_extraVencs; // Enhanced Broadcasting: qualities after the first
+	obs_encoder_group *m_vencGroup = nullptr;
+	void releaseStreamEncoders();
 	QVariantMap m_streamStats;
 	QElapsedTimer m_streamClock;
 	quint64 m_lastBytes = 0;

@@ -43,6 +43,7 @@ class App : public QObject {
 	Q_PROPERTY(int thumbTick READ thumbTick NOTIFY thumbTickChanged)
 	Q_PROPERTY(bool streaming READ streaming NOTIFY engineChanged)
 	Q_PROPERTY(bool testStreaming READ testStreaming NOTIFY engineChanged)
+	Q_PROPERTY(bool preparingStream READ preparingStream NOTIFY engineChanged)
 	Q_PROPERTY(bool live READ live NOTIFY engineChanged)
 	// An untitled show with changes since New/Sample/Import: Open and Import ask to save it first.
 	Q_PROPERTY(bool unsavedShow READ unsavedShow NOTIFY docChanged)
@@ -396,6 +397,7 @@ public:
 	Q_INVOKABLE QString envValue(const QString &name) const { return qEnvironmentVariable(name.toUtf8().constData()); } // true once per key (one-time UI migrations)
 	Q_INVOKABLE void toggleStreaming();
 	Q_INVOKABLE void startTestStream(); // Twitch: reaches Inspector, never the channel
+	bool preparingStream() const { return m_preparingStream; } // asking Twitch for its Enhanced Broadcasting plan
 	bool testStreaming() const { return m_engine->testStreaming(); }
 	// Graphic tools: select | text | rect | ellipse | arrow | pencil | laser. Drawing tools make a
 	// layer in the edited scene; the laser draws a fading trail over the output, not a layer.
@@ -516,6 +518,9 @@ signals:
 private:
 	void onStoreChanged();
 	void showToast(const QString &msg);
+	void beginStream(bool test);
+	bool m_preparingStream = false;
+	class QNetworkAccessManager *m_net = nullptr;
 	void updateOverlay();
 	void autosave();
 	QPointF toCanvas(QPointF p) const;
