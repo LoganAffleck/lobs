@@ -397,10 +397,9 @@ ApplicationWindow {
                 FButton {
                     id: profileButton
                     visible: !profileBox.naming
-                    iconName: "sliders-horizontal"
-                    text: app.settings.profile || "Default"
+                    text: "Profile"
                     variant: "ghost"
-                    tip: "Profile: stream, video and recording settings"
+                    tip: "Profile: " + (app.settings.profile || "Default") + ". Stream, video and recording settings."
                     onClicked: profileMenu.popup(profileButton, 0, profileButton.height + 4)
                 }
                 InlineRename {
