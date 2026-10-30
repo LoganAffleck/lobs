@@ -385,6 +385,60 @@ ApplicationWindow {
                 }
             }
             FButton { text: "Save"; visible: !chrome.nativeMenuBar; variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
+            // The profile (stream, video and recording settings for one place you stream), next to Save.
+            // Naming one, new or renamed, happens right here in the bar.
+            Item {
+                id: profileBox
+                property string naming: "" // "new" | "rename" while typing
+                readonly property var list: { app.settings; return app.profiles() }
+                implicitWidth: naming ? 170 : profileButton.implicitWidth
+                implicitHeight: profileButton.implicitHeight
+                function finish(err) { if (err) app.notify(err); naming = "" }
+                FButton {
+                    id: profileButton
+                    visible: !profileBox.naming
+                    iconName: "sliders-horizontal"
+                    text: app.settings.profile || "Default"
+                    variant: "ghost"
+                    tip: "Profile: stream, video and recording settings"
+                    onClicked: profileMenu.popup(profileButton, 0, profileButton.height + 4)
+                }
+                InlineRename {
+                    anchors.fill: parent; anchors.margins: 4
+                    active: !!profileBox.naming
+                    original: profileBox.naming === "rename" ? (app.settings.profile || "") : ""
+                    onRenamed: (n) => profileBox.finish(profileBox.naming === "new" ? app.newProfile(n) : app.renameProfile(app.settings.profile, n))
+                    onFinished: profileBox.naming = ""
+                }
+                FMenu {
+                    id: profileMenu
+                    width: 240
+                    Instantiator {
+                        active: profileMenu.populated // built while the menu is open
+                        model: profileBox.list
+                        delegate: FMenuItem {
+                            required property string modelData
+                            text: modelData
+                            selected: modelData === app.settings.profile
+                            enabled: !app.live || modelData === app.settings.profile
+                            onTriggered: profileBox.finish(app.switchProfile(modelData))
+                        }
+                        onObjectAdded: (i, o) => profileMenu.insertItem(i, o)
+                        onObjectRemoved: (i, o) => profileMenu.removeItem(o)
+                    }
+                    MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                    FMenuItem { text: "New profile"; enabled: !app.live; onTriggered: profileBox.naming = "new" }
+                    FMenuItem { text: "Rename"; onTriggered: profileBox.naming = "rename" }
+                    // The others can be deleted (not the one in use), listed after these.
+                    Instantiator {
+                        active: profileMenu.populated
+                        model: profileBox.list.filter(n => n !== app.settings.profile)
+                        delegate: FMenuItem { required property string modelData; text: "Delete " + modelData; onTriggered: profileBox.finish(app.deleteProfile(modelData)) }
+                        onObjectAdded: (i, o) => profileMenu.addItem(o)
+                        onObjectRemoved: (i, o) => profileMenu.removeItem(o)
+                    }
+                }
+            }
             FButton {
                 visible: ["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0
                 iconName: "refresh-cw"
