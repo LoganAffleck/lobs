@@ -148,6 +148,9 @@ to confirm: the token a month later. Setup's account step has the button but has
 
 **Done when** nothing in LOBS opens the rename popup.
 
+**Built 2026-10-30:** the popup is gone; sources and assets (list rows, folder and file tiles,
+new folders) rename in place like layers and scenes. _probe-scenes-assets passes.
+
 ### P2-2. My Stream Deck and VTuber tools can control LOBS (obs-websocket)
 *As a streamer, Stream Deck, Touch Portal and VTuber apps such as VNyan control LOBS the way they
 control OBS.*
@@ -187,6 +190,8 @@ editor.
   Cancel), and the remove button sits with it.
 
 **Done when** Settings › Stream shows no key input until you click Edit.
+
+**Built 2026-10-30.**
 
 ## P3
 

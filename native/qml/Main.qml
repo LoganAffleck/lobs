@@ -32,7 +32,7 @@ ApplicationWindow {
 
     property int sceneView: 0 // 0 list, 1 grid
     onSceneViewChanged: app.setGridVisible(sceneView === 1)
-    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || twitchSignIn.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
+    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || twitchSignIn.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
     Shortcut { sequence: "Ctrl+,"; enabled: !chrome.nativeMenuBar; onActivated: settingsPage.show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
@@ -506,7 +506,7 @@ ApplicationWindow {
                         property var row: ({})
                         function openFor(r) { row = r; popup() }
                         FMenuItem { text: "Show this scene"; onTriggered: { app.editScene(sceneMenu.row.id); app.take() } }
-                        FMenuItem { text: "Rename…"; onTriggered: scenesGuest.editingId = sceneMenu.row.id }
+                        FMenuItem { text: "Rename"; onTriggered: scenesGuest.editingId = sceneMenu.row.id }
                         // Shows this scene inside the one being edited, as a layer (nested scenes).
                         FMenuItem { text: "Show in " + app.editSceneName; enabled: sceneMenu.row.id !== app.editSceneId; onTriggered: app.addSceneSource(sceneMenu.row.id) }
                         FMenuItem { text: "Duplicate with linked layers"; onTriggered: app.duplicateScene(sceneMenu.row.id, true) }
@@ -660,6 +660,7 @@ ApplicationWindow {
                     }
                     FluidList {
                         id: poolList
+                        property string editingId: "" // the source whose name is being typed in its row
                         readonly property var levels: app.levels // read once per update, not once per meter (LOBS-025)
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -754,7 +755,14 @@ ApplicationWindow {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
-                                    Body { text: modelData.name || ""; font.weight: 550; Layout.fillWidth: true; color: modelData.muted ? Pal.muted : Pal.fg }
+                                    Body { visible: poolList.editingId !== modelData.id; text: modelData.name || ""; font.weight: 550; Layout.fillWidth: true; color: modelData.muted ? Pal.muted : Pal.fg }
+                                    InlineRename {
+                                        active: poolList.editingId === modelData.id
+                                        original: modelData.name || ""
+                                        Layout.fillWidth: true
+                                        onRenamed: (n) => app.renameSource(modelData.id, n)
+                                        onFinished: poolList.editingId = ""
+                                    }
                                     Row {
                                         Layout.fillWidth: true
                                         spacing: 6
@@ -838,7 +846,7 @@ ApplicationWindow {
                             MouseArea {
                                 Accessible.role: Accessible.ListItem
                                 Accessible.name: String(modelData.name || "Source")
-                                enabled: !modelData.divider
+                                enabled: !modelData.divider && poolList.editingId !== modelData.id // typing: clicks go to the name
                                 anchors.fill: parent
                                 anchors.rightMargin: 150 // leave the row's buttons clickable
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -876,7 +884,7 @@ ApplicationWindow {
                                     onTriggered: app.toggleInScene(modelData.id)
                                 }
                                 FMenuItem { text: "Settings…"; onTriggered: app.selectSource(modelData.id) }
-                                FMenuItem { text: "Rename…"; onTriggered: renameDialog.ask("source", modelData.id, modelData.name) }
+                                FMenuItem { text: "Rename"; onTriggered: poolList.editingId = modelData.id }
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                                 FMenuItem {
                                     enabled: false
@@ -943,7 +951,9 @@ ApplicationWindow {
                     anchorPath = a.path
                 }
                 function targets(a) { return a && isSel(a.path) ? selected : a ? [a.path] : selected }
-                function newFolder() { const f = app.createAssetFolder(); if (f) { selected = [f]; renameDialog.ask("asset", f, "New folder") } }
+                property string editingPath: "" // the file or folder whose name is being typed in place
+                function rename(path) { editingPath = path }
+                function newFolder() { const f = app.createAssetFolder(); if (f) { selected = [f]; Qt.callLater(rename, f) } }
                 function currentFolderPath() { return app.assetPath ? app.assetsFolder + "/" + app.assetPath : app.assetsFolder }
                 property string dropFolder: "" // the folder a dragged asset would land in (it lights up)
                 function folderAt(gx, gy) { // folder item under a global point (drop target)
@@ -982,7 +992,7 @@ ApplicationWindow {
                     else if (ctrl && e.key === Qt.Key_N) { newFolder(); e.accepted = true }
                     else if (ctrl && e.key === Qt.Key_F) { searching = true; assetSearch.forceActiveFocus(); e.accepted = true }
                     else if (e.key === Qt.Key_Delete && selected.length) { app.trashAssets(selected); e.accepted = true }
-                    else if (e.key === Qt.Key_F2 && selected.length === 1) { renameDialog.ask("asset", selected[0], selected[0].split("/").pop()); e.accepted = true }
+                    else if (e.key === Qt.Key_F2 && selected.length === 1) { rename(selected[0]); e.accepted = true }
                     else if (e.key === Qt.Key_Backspace) { app.assetUp(); e.accepted = true }
                     else if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && selected.length === 1) {
                         const a = items.find(x => x.path === selected[0])
@@ -1184,12 +1194,20 @@ ApplicationWindow {
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 0
-                                        Body { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Body { visible: assetsGuest.editingPath !== modelData.path; text: modelData.name; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        InlineRename {
+                                        active: assetsGuest.editingPath === modelData.path
+                                        original: modelData.name
+                                        onRenamed: (n) => app.renameAsset(modelData.path, n)
+                                        onFinished: assetsGuest.editingPath = ""
+                                        Layout.fillWidth: true
+                                    }
                                         Caption { text: (assetSearch.query ? (modelData.where || "Assets") + " · " : "") + assetsGuest.detailOf(modelData); Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
                                     Rectangle { visible: !modelData.folder && modelData.uses > 0; width: 7; height: 7; radius: 3.5; color: "#22c55e" }
                                 }
                                 AssetMouse {
+                                    enabled: assetsGuest.editingPath !== modelData.path
                                     asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
                                     folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
                                     onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
@@ -1242,10 +1260,18 @@ ApplicationWindow {
                                                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
                                                     spacing: 8
                                                     FIcon { name: "folder"; size: 15; color: modelData.color || "#e9b949" }
-                                                    Text { text: modelData.name; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                    Text { visible: assetsGuest.editingPath !== modelData.path; text: modelData.name; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                    InlineRename {
+                                        active: assetsGuest.editingPath === modelData.path
+                                        original: modelData.name
+                                        onRenamed: (n) => app.renameAsset(modelData.path, n)
+                                        onFinished: assetsGuest.editingPath = ""
+                                        Layout.fillWidth: true; font.pixelSize: Pal.caption
+                                    }
                                                     Rectangle { visible: modelData.uses > 0; width: 7; height: 7; radius: 3.5; color: "#22c55e" }
                                                 }
                                                 AssetMouse {
+                                                    enabled: assetsGuest.editingPath !== modelData.path
                                                     id: folderMouse
                                                     asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
                                                     folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
@@ -1325,7 +1351,16 @@ ApplicationWindow {
                                         }
                                     }
                                     // Name: up to two lines, cut at the end (search shows the folder first).
+                                    InlineRename {
+                                        active: assetsGuest.editingPath === modelData.path
+                                        original: modelData.name
+                                        onRenamed: (n) => app.renameAsset(modelData.path, n)
+                                        onFinished: assetsGuest.editingPath = ""
+                                        anchors { left: parent.left; right: parent.right; top: thumbBox.bottom; topMargin: 5; leftMargin: 6; rightMargin: 6 }
+                                        font.pixelSize: Pal.caption; horizontalAlignment: TextInput.AlignHCenter
+                                    }
                                     Text {
+                                        visible: assetsGuest.editingPath !== modelData.path
                                         anchors { left: parent.left; right: parent.right; top: thumbBox.bottom; topMargin: 5; leftMargin: 6; rightMargin: 6 }
                                         text: (assetSearch.query && modelData.where ? modelData.where.split("/").pop() + " / " : "") + modelData.name
                                         color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption
@@ -1336,6 +1371,7 @@ ApplicationWindow {
                                         lineHeight: 1.05
                                     }
                                     AssetMouse {
+                                        enabled: assetsGuest.editingPath !== modelData.path
                                         id: tileMouse
                                         asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
                                         folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
@@ -1379,7 +1415,7 @@ ApplicationWindow {
                             readonly property bool many: sel.length > 1
                             FMenuItem { visible: !!assetMenu.asset.folder && !assetMenu.many; height: visible ? implicitHeight : 0; text: "Open"; onTriggered: app.openAssetFolder(assetMenu.asset.path) }
                             FMenuItem { visible: !assetMenu.asset.folder && !assetMenu.many; height: visible ? implicitHeight : 0; text: "Place on " + app.editSceneName; enabled: !!assetMenu.asset.placeable; onTriggered: app.placeAsset(assetMenu.asset.path) }
-                            FMenuItem { visible: !assetMenu.many; height: visible ? implicitHeight : 0; text: "Rename…  F2"; onTriggered: renameDialog.ask("asset", assetMenu.asset.path, assetMenu.asset.name) }
+                            FMenuItem { visible: !assetMenu.many; height: visible ? implicitHeight : 0; text: "Rename  F2"; onTriggered: assetsGuest.rename(assetMenu.asset.path) }
                             // Folder color: a row of swatches (the first is the default yellow).
                             Item {
                                 visible: !!assetMenu.asset.folder
@@ -1471,7 +1507,7 @@ ApplicationWindow {
                         FMenu {
                             id: layerMenu
                             property var row: ({}) // the row it was opened on
-                            FMenuItem { text: "Rename…"; onTriggered: layerList.rename(layerMenu.row.id) }
+                            FMenuItem { text: "Rename"; onTriggered: layerList.rename(layerMenu.row.id) }
                             FMenuItem { text: chrome.keys("Copy    Ctrl C"); onTriggered: app.copyLayers() }
                             FMenuItem { text: chrome.keys("Cut    Ctrl X"); visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; onTriggered: app.cutLayers() }
                             FMenuItem { text: chrome.keys("Paste    Ctrl V"); enabled: app.canPaste; onTriggered: app.pasteLayers(false) }
@@ -2551,31 +2587,6 @@ ApplicationWindow {
     SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; z: 500; onUpdateRequested: { open = false; updateDialog.open() }
         onTwitchConnectRequested: twitchSignIn.begin() }
 
-    FDialog {
-        id: renameDialog
-        property string target
-        property string targetId
-        title: "Rename"
-        width: 380
-        function ask(t, id, value) { target = t; targetId = id; rn.text = value; open() }
-        function apply() {
-            // Layers and scenes rename in place (InlineRename); sources and assets here.
-            target === "source" ? app.renameSource(targetId, rn.text) : app.renameAsset(targetId, rn.text)
-            close()
-        }
-        onOpened: { rn.selectAll(); rn.forceActiveFocus() }
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
-            FInput { id: rn; Layout.fillWidth: true; onAccepted: renameDialog.apply() }
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                FButton { text: "Cancel"; variant: "ghost"; onClicked: renameDialog.close() }
-                FButton { text: "Rename"; variant: "primary"; onClicked: renameDialog.apply() }
-            }
-        }
-    }
     // Connect with Twitch, as OBS's Connect Account: Twitch's sign-in page in LOBS's own browser
     // (the Twitch panels' profile, so they're signed in too). Closes once the stream key is in.
     FDialog {

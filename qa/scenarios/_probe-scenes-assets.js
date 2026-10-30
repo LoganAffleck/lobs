@@ -47,8 +47,8 @@ story("NS-02", "Rename a scene from the grid view; groups show a folder", () => 
 	check("tile shows", tile.length > 0);
 	t.note(JSON.stringify(ui("Opening")));
 	t.clickItem("Opening", ui("Opening").findIndex(i => i.text === "Opening" && i.cls === "Body"), "", true); t.wait(400); // the tile, not the canvas header
-	check("right-click menu on the tile", has("Rename…"));
-	t.click("Rename…"); t.wait(300);
+	check("right-click menu on the tile", has("Rename"));
+	t.click("Rename"); t.wait(300);
 	t.key("Ctrl+A"); t.typeText("Starting soon"); t.key("Return"); t.wait(300);
 	eq("renamed in place", t.doc().scenes[t.doc().sceneOrder[0]].name, "Starting soon");
 	t.grab("ns02-grid.png");

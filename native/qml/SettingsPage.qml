@@ -219,14 +219,29 @@ Rectangle {
                             }
                             SettingRow {
                                 divider: false
+                                id: keyRow
+                                // A saved key shows as saved; Edit opens the box (to replace or remove it).
+                                property bool editing: false
+                                readonly property bool showInput: !page.s.hasKey || editing
                                 title: page.s.hasKey ? "Key saved" : "No key yet"
                                 description: page.s.hasKey ? "Stored encrypted." : "Find it in your platform's dashboard."
                                 Row {
                                     spacing: 6
                                     height: Pal.ctl
-                                    FInput { id: keyIn; width: parent.width - (saveKey.visible ? saveKey.width + 6 : 0) - (removeKey.visible ? removeKey.width + 6 : 0); echoMode: TextInput.Password; placeholderText: page.s.hasKey ? "Replace key…" : "Paste stream key" }
-                                    FButton { id: saveKey; text: "Save"; variant: "primary"; visible: keyIn.text.length > 0; onClicked: { app.saveSettings({ key: keyIn.text }); keyIn.text = "" } }
-                                    FButton { id: removeKey; visible: page.s.hasKey && keyIn.text.length === 0; iconName: "trash-2"; variant: "ghost"; tip: "Remove saved key"; onClicked: app.saveSettings({ clearKey: true }) }
+                                    FIcon { visible: !keyRow.showInput; name: "check"; size: 16; color: "#22c55e"; anchors.verticalCenter: parent.verticalCenter }
+                                    FButton { visible: !keyRow.showInput; iconName: "pencil"; text: "Edit"; variant: "secondary"; onClicked: { keyRow.editing = true; keyIn.forceActiveFocus() } }
+                                    FInput {
+                                        id: keyIn
+                                        visible: keyRow.showInput
+                                        width: 220
+                                        echoMode: TextInput.Password
+                                        placeholderText: page.s.hasKey ? "New stream key" : "Paste stream key"
+                                        onAccepted: if (text.length) saveKey.clicked()
+                                        Keys.onEscapePressed: cancelKey.clicked()
+                                    }
+                                    FButton { id: saveKey; visible: keyRow.showInput; text: "Save"; variant: "primary"; enabled: keyIn.text.length > 0; onClicked: { app.saveSettings({ key: keyIn.text }); keyIn.text = ""; keyRow.editing = false } }
+                                    FButton { id: cancelKey; visible: keyRow.editing; text: "Cancel"; variant: "ghost"; onClicked: { keyIn.text = ""; keyRow.editing = false } }
+                                    FButton { visible: keyRow.editing && page.s.hasKey; iconName: "trash-2"; variant: "ghost"; tip: "Remove saved key"; onClicked: { app.saveSettings({ clearKey: true }); keyIn.text = ""; keyRow.editing = false } }
                                 }
                             }
                         }
