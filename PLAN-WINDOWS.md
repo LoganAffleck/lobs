@@ -216,8 +216,11 @@ _probe-record-pause and 50-output pass; a paused recording played back fine and 
 32.2.2 in native/deps/obs-frontend-api), so plugins get answers for docks, Tools items, events,
 scenes, outputs and save callbacks. Their docks go into one "Plugin panels" window (Window menu),
 a Qt Widgets main window, since LOBS's panels are Qt Quick. _probe-plugin-dock: Downstream Keyer
-0.4.5 loads and adds its panel. Still to check by hand: using its panel. Not yet: docking plugin
-panels among LOBS's own, OBS's main-window calls (Studio Mode, projectors, source dialogs).
+0.4.5 loads and adds its panel. Tried by hand (2026-10-30): its overlay keys over the live scene
+in the preview (output channels draw there, and a keyed scene isn't parked), and it lists scenes
+by their names (engine scenes are named as in LOBS; layers find nested scenes by UUID). Not yet:
+docking plugin panels among LOBS's own, LOBS's transitions for plugins (DSK offers only None),
+OBS's main-window calls (Studio Mode, projectors, source dialogs).
 
 ### P2-7. A saved stream key looks saved
 *As a streamer, once my key is saved, Settings shows that it's set instead of an empty box.*
