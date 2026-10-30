@@ -319,7 +319,7 @@ Independent rerun by QA from a clean rebuild of both builds. Evidence: `runs/202
 
 ## LOBS-006 · REOPENED · Live lock still has back doors that change what's on air
 - **Fix pass 2:** Fixed in 4d38c43 · verified in `runs/20261020-204324` (LY-06, RG-01..04 pass). Visibility and opacity are live controls. Guarded now: deleteSource (on-air layers), deleteScene (program), addBackground. New, Sample and New project are refused while live.
-- **Story:** RG-02 (`90-regression.js`) · **Status:** Reopened (fix 85f5fbb/2dde2ba is incomplete)
+- **Story:** RG-02 (`90-regression.js`) · **Status:** Closed 2026-10-30. RG-01..04 pass in `runs/20261030-043538`, and LY-06 in `runs/20261030-043643`. A fresh scan of `app.cpp` for edits with no live-lock check found none that change what's on air: scene and source names, swatches, layer locks and mixer order don't show; visibility and audio are live controls; transitions apply to the next cut; cancel crop only puts back the crop there was. (Was: Reopened, fix 85f5fbb/2dde2ba incomplete; fixed in 4d38c43.)
 - While recording, with live lock on and scene "OnAir" on program:
   1. **The Layers eye icon hides the on-air layer.** `App::toggleVisible` has no guard, while Inspector visibility (`setVisibleFlag`) is refused. Same action, two answers (H4).
   2. **Delete source removes the on-air layers.** `App::deleteSource` has no guard.

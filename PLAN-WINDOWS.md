@@ -103,6 +103,10 @@ Plugins shows the ones that don't load.
 
 **Done when** RG-02 (qa/scenarios/90-regression.js) passes.
 
+**Done 2026-10-30:** RG-01..04 and LY-06 pass, and a scan of every edit without a live-lock check
+found none that changes what's on air (see LOBS-006 in qa/BUGS.md). LY-06's wording check was
+updated for the copy pass's toast.
+
 ### P1-7. I sign in with Twitch instead of pasting a stream key
 *As a Twitch streamer, I connect my account in LOBS the way I do in OBS, and LOBS fills in my
 stream key and adds my Twitch panels.*

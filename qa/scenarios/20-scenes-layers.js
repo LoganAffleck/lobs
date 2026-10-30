@@ -196,7 +196,9 @@ story("LY-06", "Live lock while recording", () => {
 	eq("crop refused while live", eff(r, "crop").l, 0);
 	sel(r); app.moveSelected(1000);
 	check("reorder refused while live", t.doc().scenes[A].layers.indexOf(r) === 0, t.doc().scenes[A].layers);
-	check("refusals say why", app.toast.indexOf("Live lock") >= 0, app.toast);
+	// The wording changed in the copy pass ("On-air layers are locked. Hold Alt or click Unlock..."):
+	// it has to say they're locked, and how to edit anyway.
+	check("refusals say why", /locked/i.test(app.toast) && /Alt|Unlock/.test(app.toast), app.toast);
 	// Product decision (2026-10-20, revised): visibility and opacity are live controls, so they
 	// stay allowed on air (show/hide an overlay or CTA mid-show), from the Inspector and the eye icon.
 	sel(r); app.setVisibleFlag(false);
