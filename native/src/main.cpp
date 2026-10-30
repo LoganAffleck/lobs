@@ -667,7 +667,7 @@ static int runEngineSmokeTest(QGuiApplication &app, Engine &engine, const QStrin
 		QTimer::singleShot(1600, &app, [=, &engine]() {
 			obs_source_t *out = obs_get_output_source(0);
 			obs_source_t *active = out ? obs_transition_get_active_source(out) : nullptr;
-			check("transition lands on the new scene", active && QString(obs_source_get_name(active)) == engine.programScene());
+			check("transition lands on the new scene", active && active == engine.sceneSource(engine.programScene()));
 			obs_source_release(active);
 			obs_source_release(out);
 			engine.recordClip(2);

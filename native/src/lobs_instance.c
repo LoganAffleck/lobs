@@ -39,7 +39,10 @@ static void li_set_child(struct lobs_instance *li, const char *name)
 	li->child_name = bstrdup(name);
 	if (!name || !*name)
 		return;
-	obs_source_t *src = obs_get_source_by_name(name);
+	// A scene by its UUID (its name follows the scene's name in LOBS); anything else by name.
+	obs_source_t *src = obs_get_source_by_uuid(name);
+	if (!src)
+		src = obs_get_source_by_name(name);
 	if (src && src != li->self) {
 		li->child = obs_source_get_weak_source(src);
 	}

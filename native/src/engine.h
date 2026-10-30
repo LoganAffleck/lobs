@@ -189,6 +189,7 @@ public:
 	void setBlockedLayers(const QVector<BlockedLayer> &layers);
 	int canvasW() const { return m_canvasW; }
 	obs_source *sceneSource(const QString &sceneId) const; // borrowed; null if unknown
+	QString sceneIdOf(obs_source *scene) const;            // LOBS id of an engine scene ("" if not one)
 	obs_source *inputSource(const QString &sourceId) const;                            // borrowed
 	obs_source *layerFilter(const QString &instanceId, const QString &filterId) const; // borrowed
 	obs_source *audioFilter(const QString &sourceId, const QString &filterId) const;   // borrowed

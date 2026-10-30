@@ -503,10 +503,24 @@ void Engine::apply(const Doc &doc)
 	}
 
 	m_hasSceneSources = std::any_of(doc.sources.cbegin(), doc.sources.cend(), [](const Source &s) { return s.kind == "scene"; });
-	// 2. Scenes. Public (named by id), so a layer showing a scene inside another finds it by name.
-	for (const QString &id : doc.sceneOrder)
-		if (!m_scenes.contains(id))
-			m_scenes[id] = obs_scene_create(id.toUtf8().constData());
+	// 2. Scenes, named as in LOBS (made unique), since plugins show OBS's names (Downstream Keyer's
+	// list, for one). LOBS finds them by id (m_scenes) and layers find them by UUID.
+	{
+		QSet<QString> used;
+		for (const QString &id : doc.sceneOrder) {
+			QString name = doc.scenes[id].name.trimmed();
+			if (name.isEmpty())
+				name = "Scene";
+			const QString base = name;
+			for (int n = 2; used.contains(name.toLower()); n++)
+				name = QString("%1 (%2)").arg(base).arg(n);
+			used.insert(name.toLower());
+			if (!m_scenes.contains(id))
+				m_scenes[id] = obs_scene_create(name.toUtf8().constData());
+			else if (obs_source_t *s = obs_scene_get_source(m_scenes[id]); name != obs_source_get_name(s))
+				obs_source_set_name(s, name.toUtf8().constData());
+		}
+	}
 
 	// 3. Layers: one lobs_instance per visible-capable leaf, with its own filters.
 	QSet<QString> wanted;
@@ -538,7 +552,10 @@ void Engine::apply(const Doc &doc)
 			}
 			it.applied = now;
 			it.hasApplied = true;
-			QString childName = src.kind == "scene" ? src.settings.value("scene").toString() : inst.sourceId; // a scene by its own name
+			QString childName = inst.sourceId;
+			if (src.kind == "scene") // a scene by its UUID (its name follows the scene's)
+				if (obs_source_t *sc = sceneSource(src.settings.value("scene").toString()))
+					childName = obs_source_get_uuid(sc);
 			if (src.kind == "text" && kOwnText) {
 				// Drawn at the layer's own pixel size, so it stays crisp (as shapes).
 				const Transform tt = doc.transform(inst);
@@ -1700,11 +1717,11 @@ void Engine::renderPluginChannels()
 		if (o) {
 			now += QString("%1=%2 ").arg(ch).arg(obs_source_get_name(o));
 			if (obs_scene_from_source(o))
-				scenes.insert(obs_source_get_name(o));
+				scenes.insert(sceneIdOf(o));
 			else if (obs_source_get_type(o) == OBS_SOURCE_TYPE_TRANSITION)
 				if (obs_source_t *a = obs_transition_get_active_source(o)) {
 					if (obs_scene_from_source(a))
-						scenes.insert(obs_source_get_name(a)), now += QString("(%1) ").arg(obs_source_get_name(a));
+						scenes.insert(sceneIdOf(a)), now += QString("(%1) ").arg(obs_source_get_name(a));
 					obs_source_release(a);
 				}
 		}
@@ -1728,6 +1745,14 @@ void Engine::setPluginScenes(const QSet<QString> &scenes)
 		unparkScene(id);
 	if (!m_parkTimer.isActive())
 		m_parkTimer.start(500); // parks what stopped showing
+}
+
+QString Engine::sceneIdOf(obs_source *scene) const
+{
+	for (auto it = m_scenes.cbegin(); it != m_scenes.cend(); ++it)
+		if (obs_scene_get_source(it.value()) == scene)
+			return it.key();
+	return {};
 }
 
 obs_source_t *Engine::sceneSource(const QString &sceneId) const

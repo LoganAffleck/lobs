@@ -102,7 +102,7 @@ public:
 	{
 		if (!app || !scene)
 			return;
-		const QString id = obs_source_get_name(scene);
+		const QString id = engine->sceneIdOf(scene);
 		QMetaObject::invokeMethod(app, [a = app, id] { a->editScene(id); a->take(); }, Qt::QueuedConnection);
 	}
 	obs_source_t *obs_frontend_get_current_preview_scene(void) override
@@ -113,7 +113,7 @@ public:
 	void obs_frontend_set_current_preview_scene(obs_source_t *scene) override
 	{
 		if (app && scene)
-			QMetaObject::invokeMethod(app, [a = app, id = QString(obs_source_get_name(scene))] { a->editScene(id); }, Qt::QueuedConnection);
+			QMetaObject::invokeMethod(app, [a = app, id = engine->sceneIdOf(scene)] { a->editScene(id); }, Qt::QueuedConnection);
 	}
 
 	// ---- transitions: LOBS has one program transition ----
