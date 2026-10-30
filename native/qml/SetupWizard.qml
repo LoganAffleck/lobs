@@ -81,6 +81,7 @@ FDialog {
     function next() {
         if (step === "obs" && fromObs && !imported) {
             importResult = app.importFromObs(obsProfile, obsCollection, obsPlugins)
+            app.clickToShow = !obs.studioMode // scenes switch the way they did in OBS
             loadChoices() // what came over, so Finish saves it as it is
             imported = true
             index = 2 // panels or done

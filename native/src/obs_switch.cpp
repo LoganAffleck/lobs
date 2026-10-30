@@ -88,7 +88,8 @@ QVariantMap scan(const QString &folder)
 #endif
 	return {{"found", true}, {"folder", folder}, {"profiles", profiles}, {"collections", collections}, {"plugins", plugins},
 		{"lastProfile", QDir(lastProfile).exists() ? QDir::cleanPath(lastProfile) : QString()},
-		{"lastCollection", QFile::exists(lastCollection) ? QDir::cleanPath(lastCollection) : QString()}};
+		{"lastCollection", QFile::exists(lastCollection) ? QDir::cleanPath(lastCollection) : QString()},
+		{"studioMode", user.value("BasicWindow/PreviewProgramMode", false).toBool()}};
 }
 
 QVariantMap readProfile(const QString &dir)

@@ -244,7 +244,17 @@ OBS's main-window calls (Studio Mode, projectors, source dialogs).
   20-scenes-layers pass. Still to check: Twitch showing the vertical stream. Not yet: new layers
   added in one layout don't appear in the other; groups aren't copied into a new vertical layout.
 
-### P3-2. I watch all my scenes at once (Multiview)
+### P3-2. I watch all my scenes at once (Multiview): not doing it
+- Decided 2026-10-30: the Scenes list's thumbnails already cover most of what Multiview gives a
+  solo streamer. Revisit if people ask for live tiles on a second monitor.
+
+### P3-2b. Switching scenes works the way I'm used to
+- Instead of Multiview, scene switching gets the work. A setting picks what clicking a scene does:
+  **Show it** (it goes live, like OBS without Studio Mode) or **Edit it** (it opens, and Show puts
+  it live, like Studio Mode). Double-click goes live in both modes.
+- Right-clicking a scene offers **Edit before showing**, to set one up without putting it live.
+  The setting itself lives in Settings > Video.
+- Setup copies it from OBS's Studio Mode setting. New users get Show it.
 
 ### P3-3. Very large shows stay fast
 - Stress targets PF-01 to PF-06, and memory that grows with each scene visited (LOBS-022,

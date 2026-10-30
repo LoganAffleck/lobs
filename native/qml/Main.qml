@@ -598,6 +598,8 @@ ApplicationWindow {
                         property var row: ({})
                         function openFor(r) { row = r; popup() }
                         FMenuItem { text: "Show this scene"; onTriggered: { app.editScene(sceneMenu.row.id); app.take() } }
+                        // Opens the scene without putting it live (a click shows it).
+                        FMenuItem { visible: app.clickToShow; height: visible ? implicitHeight : 0; text: "Edit before showing"; onTriggered: app.editScene(sceneMenu.row.id) }
                         FMenuItem { text: "Rename"; onTriggered: scenesGuest.editingId = sceneMenu.row.id }
                         // Shows this scene inside the one being edited, as a layer (nested scenes).
                         FMenuItem { text: "Show in " + app.editSceneName; enabled: sceneMenu.row.id !== app.editSceneId; onTriggered: app.addSceneSource(sceneMenu.row.id) }
@@ -625,7 +627,7 @@ ApplicationWindow {
                                     Accessible.name: String(modelData.name || "Scene")
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.openFor(modelData) }
+                                    onClicked: (m) => { if (m.button === Qt.RightButton) sceneMenu.openFor(modelData); else app.pickScene(modelData.id) }
                                     onDoubleClicked: { app.editScene(modelData.id); app.take() }
                                 }
                                 RowLayout {
@@ -704,7 +706,7 @@ ApplicationWindow {
                                         z: -1 // under the name editor, which takes its own clicks
                                         hoverEnabled: true
                                         acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                        onClicked: (m) => { app.editScene(modelData.id); if (m.button === Qt.RightButton) sceneMenu.openFor(modelData) }
+                                        onClicked: (m) => { if (m.button === Qt.RightButton) sceneMenu.openFor(modelData); else app.pickScene(modelData.id) }
                                         onDoubleClicked: { app.editScene(modelData.id); app.take() }
                                     }
                                 }

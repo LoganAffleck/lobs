@@ -211,6 +211,7 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	connect(&m_assetWatch, &QFileSystemWatcher::directoryChanged, this, [this]() { emit assetsChanged(); });
 	QTimer::singleShot(0, this, &App::adoptExternalFiles);
 	m_pixelPerfect = QSettings().value("ui/preview/pixelPerfect", true).toBool();
+	m_clickToShow = QSettings().value("ui/scenes/clickToShow", true).toBool();
 	m_toolFill = uiValue("tools/fill", "#ef4444");
 	if (m_toolFill == "#7c5cff") // the old default
 		m_toolFill = "#ef4444";
@@ -4031,6 +4032,22 @@ double App::canvasScale() const
 {
 	// Same rule as the engine's drawing, on physical pixels, back in logical units.
 	return previewScaleFor(m_previewSize.width() * m_previewDpr, m_previewSize.height() * m_previewDpr, editCanvas().width(), editCanvas().height(), m_pixelPerfect) / m_previewDpr;
+}
+
+void App::setClickToShow(bool on)
+{
+	if (on == m_clickToShow)
+		return;
+	m_clickToShow = on;
+	setUiFlag("scenes/clickToShow", on);
+	emit clickToShowChanged();
+}
+
+void App::pickScene(const QString &id)
+{
+	editScene(id);
+	if (m_clickToShow)
+		take();
 }
 
 void App::setPixelPerfect(bool on)

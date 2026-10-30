@@ -482,8 +482,13 @@ public:
 	void setPreviewSize(QSizeF s, double dpr = 1) { m_previewSize = s; m_previewDpr = dpr > 0 ? dpr : 1; emit previewScaleChanged(); }
 	// Pixel-perfect preview (on by default): see previewScaleFor in engine.h.
 	Q_PROPERTY(bool pixelPerfect READ pixelPerfect WRITE setPixelPerfect NOTIFY previewScaleChanged)
+	// What clicking a scene does: show it (OBS without Studio Mode) or open it to edit (Studio Mode).
+	Q_PROPERTY(bool clickToShow READ clickToShow WRITE setClickToShow NOTIFY clickToShowChanged)
 	Q_PROPERTY(int previewPercent READ previewPercent NOTIFY previewScaleChanged) // canvas pixels shown at, per screen pixel
 	bool pixelPerfect() const { return m_pixelPerfect; }
+	bool clickToShow() const { return m_clickToShow; }
+	void setClickToShow(bool on);
+	Q_INVOKABLE void pickScene(const QString &id); // a click in the scene list
 	void setPixelPerfect(bool on);
 	int previewPercent() const { return int(std::round(canvasScale() * m_previewDpr * 100)); }
 	Qt::CursorShape cursorAt(QPointF p) const;
@@ -512,6 +517,7 @@ public:
 	}
 
 signals:
+	void clickToShowChanged();
 	void docChanged();
 	void pluginsChanged();
 	void recentShowsChanged();
@@ -619,6 +625,7 @@ private:
 	QSizeF m_previewSize;
 	double m_previewDpr = 1;
 	bool m_pixelPerfect = true;
+	bool m_clickToShow = true;
 	QString m_tool = "select", m_toolFill, m_toolStroke;
 	int m_toolStrokeWidth = 6;
 	int m_laserTrailMs = 500;

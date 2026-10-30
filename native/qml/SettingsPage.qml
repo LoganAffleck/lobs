@@ -369,6 +369,17 @@ Rectangle {
                         visible: page.section === 2
                         Layout.fillWidth: true
                         spacing: 0
+                        GroupTitle { text: "Scenes" }
+                        Card {
+                            SettingRow {
+                                divider: false
+                                title: "Clicking a scene shows it"
+                                description: app.clickToShow ? "Click a scene to go live with it. To set one up first, right-click it and pick Edit before showing."
+                                                             : "Clicking a scene opens it to edit. Show or a double-click puts it live, like OBS's Studio Mode."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: app.clickToShow; onClicked: app.clickToShow = !app.clickToShow }
+                            }
+                        }
+                        Item { implicitHeight: 12 }
                         GroupTitle { text: "Vertical" }
                         Card {
                             SettingRow {
