@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>LOBS · Twitch</title>
-<!-- Where Twitch sends you back after signing in to LOBS. LOBS's sign-in window reads the code
-     from this page's address and closes; the page itself only says what happened. -->
+<!-- Where Twitch sends you back after signing in to LOBS. It passes the code on to LOBS on this
+     computer (localhost:5340), which trades it for tokens through /api/twitch/token. -->
 <style>
   html, body { margin: 0; height: 100%; background: #0e0c14; color: #ece8f4; font: 16px/1.5 system-ui, sans-serif; }
   main { height: 100%; display: grid; place-content: center; text-align: center; padding: 0 16px; }
@@ -21,7 +21,13 @@
 </main>
 <script>
   const q = new URLSearchParams(location.search)
-  if (q.get('error')) {
+  // A sign-in from LOBS: hand the code to LOBS on this computer, which listens while its sign-in
+  // window is open (the window shows LOBS's own "signed in" page next).
+  if (q.get('state')) { // a code, or Twitch's error: LOBS says which
+    document.getElementById('t').textContent = 'Signing in to LOBS…'
+    document.getElementById('m').textContent = ''
+    location.replace('http://localhost:5340/twitch/callback' + location.search)
+  } else if (q.get('error')) {
     document.getElementById('t').textContent = 'Twitch sign-in didn’t finish'
     document.getElementById('m').textContent = (q.get('error_description') || q.get('error')) + '. Try again from LOBS.'
   }
