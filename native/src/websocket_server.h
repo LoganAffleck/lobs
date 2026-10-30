@@ -23,6 +23,7 @@ class ObsWebSocket : public QObject {
 	Q_OBJECT
 	Q_PROPERTY(bool enabled READ enabled NOTIFY changed)
 	Q_PROPERTY(int port READ port NOTIFY changed)
+	Q_PROPERTY(QString address READ address NOTIFY changed) // what apps on another device enter
 	Q_PROPERTY(QString password READ password NOTIFY changed)
 	Q_PROPERTY(bool authRequired READ authRequired NOTIFY changed)
 	Q_PROPERTY(int clients READ clients NOTIFY changed)
@@ -32,6 +33,7 @@ public:
 
 	bool enabled() const { return m_enabled; }
 	int port() const { return m_port; }
+	QString address() const;
 	QString password() const { return m_password; }
 	bool authRequired() const { return m_authRequired; }
 	int clients() const { return int(m_identified.size()); }

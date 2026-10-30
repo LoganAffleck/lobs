@@ -2664,7 +2664,8 @@ ApplicationWindow {
         }
     }
 
-    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; z: 500; onUpdateRequested: { open = false; updateDialog.open() }
+    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500; // below the top bar: it drags the window and has its buttons
+        onUpdateRequested: { open = false; updateDialog.open() }
         onTwitchConnectRequested: twitchSignIn.begin() }
 
     // Connect with Twitch, as OBS's Connect Account: Twitch's sign-in page in LOBS's own browser

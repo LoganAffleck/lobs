@@ -7,6 +7,7 @@
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QNetworkInterface>
 #include <QRandomGenerator>
 #include <QSettings>
 #include <QTcpServer>
@@ -82,6 +83,20 @@ ObsWebSocket::ObsWebSocket(App *app, QObject *parent) : QObject(parent), m_app(a
 		emitEvent("InputVolumeMeters", InputVolumeMeters, {{"inputs", inputs}});
 	});
 	restart();
+}
+
+// This PC on the local network (a private IPv4 address, as a phone or another PC reaches it).
+QString ObsWebSocket::address() const
+{
+	QString ip = "localhost";
+	for (const QNetworkInterface &nic : QNetworkInterface::allInterfaces()) {
+		if (!(nic.flags() & QNetworkInterface::IsUp) || (nic.flags() & QNetworkInterface::IsLoopBack) || nic.type() == QNetworkInterface::Virtual)
+			continue;
+		for (const QNetworkAddressEntry &e : nic.addressEntries())
+			if (e.ip().protocol() == QAbstractSocket::IPv4Protocol && e.ip().isPrivateUse())
+				return QString("ws://%1:%2").arg(e.ip().toString()).arg(m_port);
+	}
+	return QString("ws://%1:%2").arg(ip).arg(m_port);
 }
 
 void ObsWebSocket::save()

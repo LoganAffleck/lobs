@@ -208,6 +208,7 @@ Rectangle {
                             // Twitch: connect the account and the key fills itself in, as in OBS.
                             SettingRow {
                                 visible: String(page.s.service).startsWith("Twitch")
+                                divider: false
                                 title: twitch.connected ? "Connected as " + twitch.displayName : "Twitch account"
                                 description: twitch.connected ? "Stream key from Twitch." : "Fills in your stream key."
                                 Row {
@@ -219,10 +220,13 @@ Rectangle {
                                 }
                             }
                             SettingRow {
-                                divider: false
                                 id: keyRow
                                 // A saved key shows as saved; Edit opens the box (to replace or remove it).
+                                // Twitch's account provides it: no second row saying so.
                                 property bool editing: false
+                                readonly property bool fromTwitch: twitch.connected && String(page.s.service).startsWith("Twitch")
+                                visible: !fromTwitch
+                                divider: String(page.s.service).startsWith("Twitch")
                                 readonly property bool showInput: !page.s.hasKey || editing
                                 title: page.s.hasKey ? "Key saved" : "No key yet"
                                 description: page.s.hasKey ? "Stored encrypted." : "Find it in your platform's dashboard."
@@ -254,13 +258,13 @@ Rectangle {
                             // Twitch's Enhanced Broadcasting, as in OBS: Twitch picks the qualities and the GPU
                             // encodes them all, so viewers and VODs always get a choice.
                             SettingRow {
+                                divider: false
                                 title: "Enhanced Broadcasting"
                                 description: page.s.enhanced !== false ? "Sends several qualities so viewers can pick one. Uses more GPU and upload, and shares your PC's specs with Twitch."
                                                                       : "Sends one quality at the bitrate below."
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.enhanced !== false; onClicked: page.save("enhanced", !(page.s.enhanced !== false)) }
                             }
                             SettingRow {
-                                divider: false
                                 title: app.testStreaming ? "Test stream running" : "Test without going live"
                                 description: "Viewers can't see it. Check it in Twitch Inspector."
                                 Row {
@@ -269,7 +273,7 @@ Rectangle {
                                     FButton {
                                         visible: !app.streaming || app.testStreaming
                                         text: app.testStreaming ? "Stop" : "Start test stream"
-                                        variant: app.testStreaming ? "secondary" : "primary"
+                                        variant: "secondary"
                                         enabled: page.s.hasKey
                                         onClicked: app.testStreaming ? app.toggleStreaming() : app.startTestStream()
                                     }
@@ -282,8 +286,8 @@ Rectangle {
                             SettingRow {
                                 divider: false
                                 title: "Video bitrate"
-                                description: "6000 kbps suits 1080p60 and is Twitch's limit."
-                                FNumField { label: ""; suffix: "kbps"; implicitWidth: 120; value: page.s.bitrate || 6000; onCommit: (v) => page.save("bitrate", Math.max(500, Math.round(v))) }
+                                description: String(page.s.service).startsWith("Twitch") && page.s.enhanced !== false ? "Twitch sets it with Enhanced Broadcasting." : "6000 kbps suits 1080p60 and is Twitch's limit."
+                                FNumField { enabled: !(String(page.s.service).startsWith("Twitch") && page.s.enhanced !== false); label: ""; suffix: "kbps"; implicitWidth: 120; value: page.s.bitrate || 6000; onCommit: (v) => page.save("bitrate", Math.max(500, Math.round(v))) }
                             }
                             SettingRow {
                                 title: "Audio bitrate"
@@ -693,7 +697,7 @@ Rectangle {
                         visible: page.section === 7
                         Layout.fillWidth: true
                         spacing: 0
-                        GroupTitle { text: "obs-websocket server" }
+                        GroupTitle { text: "Server" }
                         Card {
                             SettingRow {
                                 divider: false
@@ -705,17 +709,29 @@ Rectangle {
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: websocket.enabled; onClicked: websocket.setEnabled(!websocket.enabled) }
                             }
                             SettingRow {
-                                title: "Port"
-                                description: "OBS uses 4455."
-                                FNumField { label: ""; implicitWidth: 120; from: 1024; to: 65535; value: websocket.port; onCommit: (v) => websocket.setPort(Math.round(v)) }
+                                visible: websocket.enabled
+                                title: "Address"
+                                description: "Enter it in the app. OBS apps use port 4455."
+                                Row {
+                                    spacing: 6
+                                    height: Pal.ctl
+                                    Text { text: websocket.address; color: Pal.fg; font.family: Pal.mono; font.pixelSize: Pal.body; anchors.verticalCenter: parent.verticalCenter }
+                                    FButton { iconName: "copy"; variant: "ghost"; tip: "Copy"; onClicked: { app.copyText(websocket.address); app.notify("Address copied") } }
+                                }
                             }
                             SettingRow {
+                                visible: websocket.enabled
+                                title: "Port"
+                                FNumField { property bool fillSlot: false; label: ""; implicitWidth: 120; from: 1024; to: 65535; value: websocket.port; onCommit: (v) => websocket.setPort(Math.round(v)) }
+                            }
+                            SettingRow {
+                                visible: websocket.enabled
                                 title: "Require a password"
                                 description: websocket.authRequired ? "" : "Any app on your network can control LOBS."
                                 FSwitch { property bool fillSlot: false; checkable: false; checked: websocket.authRequired; onClicked: websocket.setAuthRequired(!websocket.authRequired) }
                             }
                             SettingRow {
-                                visible: websocket.authRequired
+                                visible: websocket.enabled && websocket.authRequired
                                 title: "Password"
                                 description: "Enter it in the app."
                                 Row {
