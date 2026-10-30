@@ -193,7 +193,13 @@ static void onStreamStop(void *data, calldata_t *cd)
 	const char *err = calldata_string(cd, "last_error");
 	const QString msg = err && *err ? QString::fromUtf8(err) : QString();
 	QMetaObject::invokeMethod(self, [self, code, msg]() {
+		// It was reconnecting and ran out of tries: say so, rather than just "disconnected".
+		const int tries = self->reconnectAttempt();
 		self->stopStreaming();
+		if (tries > 0 && code != OBS_OUTPUT_SUCCESS) {
+			emit self->streamError(QString("Couldn't reconnect after %1 tries, so the stream ended. Check your connection, then go live again.").arg(tries));
+			return;
+		}
 		const QString why = code == OBS_OUTPUT_BAD_PATH ? "Bad server address"
 				    : code == OBS_OUTPUT_CONNECT_FAILED ? "Couldn't connect to the server"
 				    : code == OBS_OUTPUT_INVALID_STREAM ? "Server rejected the stream key"
@@ -205,10 +211,35 @@ static void onStreamStop(void *data, calldata_t *cd)
 	}, Qt::QueuedConnection);
 }
 
-static void onStreamReconnect(void *data, calldata_t *)
+// The connection dropped: OBS's engine waits timeout_sec, then tries again (the wait grows).
+static void onStreamReconnect(void *data, calldata_t *cd)
 {
 	auto *self = static_cast<Engine *>(data);
-	QMetaObject::invokeMethod(self, [self]() { emit self->streamStatsChanged(); }, Qt::QueuedConnection);
+	const int wait = int(calldata_int(cd, "timeout_sec"));
+	QMetaObject::invokeMethod(self, [self, wait]() { self->onReconnecting(wait); }, Qt::QueuedConnection);
+}
+
+static void onStreamReconnected(void *data, calldata_t *)
+{
+	auto *self = static_cast<Engine *>(data);
+	QMetaObject::invokeMethod(self, [self]() { self->onReconnected(); }, Qt::QueuedConnection);
+}
+
+void Engine::onReconnecting(int waitSec)
+{
+	if (m_reconnectAttempt++ == 0)
+		blog(LOG_WARNING, "[lobs] stream connection dropped; reconnecting");
+	m_reconnectAt = m_streamClock.elapsed() + qint64(waitSec) * 1000;
+	pollStreamStats();
+}
+
+void Engine::onReconnected()
+{
+	const int tries = m_reconnectAttempt;
+	m_reconnectAttempt = 0;
+	blog(LOG_INFO, "[lobs] stream reconnected after %d tries", tries);
+	emit streamReconnected(tries);
+	pollStreamStats();
 }
 
 // Twitch's names for the GPU scaling OBS applies per quality.
@@ -356,7 +387,7 @@ bool Engine::startStreaming(bool test, const QJsonObject &plan)
 	obs_data_t *od = toData({});
 	m_streamOutput = obs_output_create(outType, "LOBS stream", od, nullptr);
 	obs_data_release(od);
-	obs_output_set_reconnect_settings(m_streamOutput, 20, 2);
+	obs_output_set_reconnect_settings(m_streamOutput, 25, 2); // OBS's defaults: 25 tries, from 2 s apart
 	obs_output_set_service(m_streamOutput, m_service);
 	obs_output_set_video_encoder2(m_streamOutput, m_streamVenc, 0);
 	for (size_t i = 0; i < m_extraVencs.size(); i++)
@@ -365,7 +396,7 @@ bool Engine::startStreaming(bool test, const QJsonObject &plan)
 	signal_handler_t *sh = obs_output_get_signal_handler(m_streamOutput);
 	signal_handler_connect(sh, "stop", onStreamStop, this);
 	signal_handler_connect(sh, "reconnect", onStreamReconnect, this);
-	signal_handler_connect(sh, "reconnect_success", onStreamReconnect, this);
+	signal_handler_connect(sh, "reconnect_success", onStreamReconnected, this);
 
 	if (!obs_output_start(m_streamOutput)) {
 		m_lastError = "Couldn't start the stream" + obsOutputError(m_streamOutput);
@@ -376,8 +407,10 @@ bool Engine::startStreaming(bool test, const QJsonObject &plan)
 	m_lastBytes = 0;
 	m_lastBytesAt = 0;
 	m_byteHistory.clear();
+	m_stallBytes = 0, m_stallSince = 0;
 	m_testStream = test;
 	m_multitrack = multi;
+	m_reconnectAttempt = 0;
 	pollStreamStats();
 	emit streamingChanged();
 	setStatus((test ? "Test stream to " : "Live on ") + (st.service == "Custom" ? st.customUrl : st.service) + " · " +
@@ -437,6 +470,11 @@ void Engine::pollStreamStats()
 		m_lastBytes = bytes;
 		m_lastBytesAt = now;
 	}
+	// Nothing sent: the network is gone before OBS's engine notices (it only does once its send
+	// buffer fills, several seconds after a cable comes out), so say so meanwhile.
+	if (bytes != m_stallBytes)
+		m_stallBytes = bytes, m_stallSince = now;
+	const int stalledSec = now - m_stallSince >= 3000 ? int((now - m_stallSince) / 1000) : 0;
 	const int dropped = obs_output_get_frames_dropped(m_streamOutput);
 	const int total = obs_output_get_total_frames(m_streamOutput);
 	const double dropPct = total > 0 ? 100.0 * dropped / total : 0;
@@ -447,7 +485,11 @@ void Engine::pollStreamStats()
 	const QString health = reconnecting ? "reconnecting" : (dropPct > 5 || congestion > 0.5f) ? "poor" : (dropPct > 1 || congestion > 0.2f) ? "fair" : "good";
 	m_streamStats = {{"time", time}, {"kbps", kbps}, {"dropped", dropped}, {"total", total}, {"dropPct", dropPct},
 			 {"congestion", congestion}, {"health", health}, {"reconnecting", reconnecting}, {"bytes", double(bytes)},
-			 {"qualities", m_multitrack ? m_qualities.join(" · ") : QString()}};
+			 {"qualities", m_multitrack ? m_qualities.join(" · ") : QString()},
+			 // While reconnecting: which try is next, and in how many seconds.
+			 {"reconnectAttempt", m_reconnectAttempt},
+			 {"stalledSec", reconnecting ? 0 : stalledSec},
+			 {"reconnectIn", reconnecting ? int(std::max<qint64>(0, (m_reconnectAt - now + 999) / 1000)) : 0}};
 	emit streamStatsChanged();
 }
 

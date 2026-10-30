@@ -177,6 +177,11 @@ supported yet".
 
 **Done when** pulling the network cable and plugging it back in brings the stream back unattended.
 
+**Done 2026-10-30:** a test stream came back by itself after the cable was pulled and replugged.
+25 tries from 2 s apart (OBS's defaults); the status bar counts down each try, a toast says when
+it's back, and a clear message says when it gave up. Before OBS's engine notices (its send buffer
+has to fill), the status bar says "Connection lost? Nothing sent for N s" (not yet seen live).
+
 ### P2-4. Separate settings for each place I stream
 *As a streamer, I keep separate settings sets (profiles) for Twitch, YouTube and local recording,
 and switch between them.*

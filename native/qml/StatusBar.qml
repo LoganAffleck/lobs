@@ -33,8 +33,9 @@ Rectangle {
             visible: app.streaming
             dot: Pal.live
             // Amber when the connection is fair, red when poor or reconnecting.
-            tone: bar.ss.health === "poor" || bar.ss.health === "reconnecting" ? "#f87171" : bar.ss.health === "fair" ? "#fbbf24" : Pal.fg
-            text: bar.ss.reconnecting ? (app.testStreaming ? "TEST " : "LIVE ") + (bar.ss.time || "00:00:00") + " · Reconnecting…"
+            tone: bar.ss.stalledSec || bar.ss.health === "poor" || bar.ss.health === "reconnecting" ? "#f87171" : bar.ss.health === "fair" ? "#fbbf24" : Pal.fg
+            text: bar.ss.reconnecting ? (app.testStreaming ? "TEST " : "LIVE ") + (bar.ss.time || "00:00:00") + " · Reconnecting, try " + (bar.ss.reconnectAttempt || 1) + (bar.ss.reconnectIn ? " in " + bar.ss.reconnectIn + " s" : "…")
+                : bar.ss.stalledSec ? (app.testStreaming ? "TEST " : "LIVE ") + (bar.ss.time || "00:00:00") + " · Connection lost? Nothing sent for " + bar.ss.stalledSec + " s"
                 : (app.testStreaming ? "TEST " : "LIVE ") + (bar.ss.time || "00:00:00") + " · " + Math.round(bar.ss.kbps || 0) + " kbps · " + (bar.ss.dropped || 0) + " dropped (" + (bar.ss.dropPct || 0).toFixed(1) + "%)"
         }
         Seg { visible: app.recording; dot: Pal.live; tone: Pal.fg; text: "REC " + (bar.st.recTime || "00:00:00") + " · " + (bar.st.recMb || 0).toFixed(0) + " MB" }

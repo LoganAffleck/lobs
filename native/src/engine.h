@@ -198,6 +198,10 @@ public:
 	// plan: Twitch's Enhanced Broadcasting answer (see enhanced_broadcast.h); empty for one quality.
 	bool startStreaming(bool test = false, const QJsonObject &plan = {});
 	bool multitrack() const { return m_streaming && m_multitrack; }
+	// Reconnecting after a dropped connection (from the output's signals, on this thread).
+	int reconnectAttempt() const { return m_reconnectAttempt; }
+	void onReconnecting(int waitSec);
+	void onReconnected();
 	QStringList qualities() const { return m_qualities; } // "1080p60", "720p60", ... while it runs
 	bool testStreaming() const { return m_streaming && m_testStream; }
 	void stopStreaming();
@@ -243,6 +247,7 @@ signals:
 	void streamingChanged();
 	void streamStatsChanged();
 	void streamError(const QString &message);
+	void streamReconnected(int tries);
 	void replayChanged();
 	void replaySaved(const QString &path);
 	void vcamChanged();
@@ -367,6 +372,10 @@ private:
 	bool m_streaming = false;
 	bool m_testStream = false;
 	bool m_multitrack = false;
+	int m_reconnectAttempt = 0; // tries since the connection dropped (0: connected)
+	qint64 m_reconnectAt = 0;   // stream clock ms of the next try
+	quint64 m_stallBytes = 0;   // bytes sent at the last poll that saw them grow
+	qint64 m_stallSince = 0;
 	QStringList m_qualities;
 	std::vector<obs_encoder *> m_extraVencs; // Enhanced Broadcasting: qualities after the first
 	obs_encoder_group *m_vencGroup = nullptr;
