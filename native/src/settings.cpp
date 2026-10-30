@@ -21,6 +21,23 @@ AppSettings AppSettings::load()
 	if (!f.open(QIODevice::ReadOnly))
 		return s;
 	const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+	s.applyProfile(o);
+	s.profile = o["profile"].toString(s.profile);
+	const QJsonObject tr = o["transition"].toObject();
+	s.transition.type = tr["type"].toString(s.transition.type);
+	s.transition.durationMs = tr["durationMs"].toInt(s.transition.durationMs);
+	s.hotkeys = o["hotkeys"].toObject().toVariantMap();
+	s.liveLock = o["liveLock"].toBool(true);
+	return s;
+}
+
+// A profile: where and how you stream and record (as OBS's profiles). Hotkeys, transitions and
+// live lock are about how you work, and stay the same across profiles.
+void AppSettings::applyProfile(const QJsonObject &o)
+{
+	AppSettings &s = *this;
+	const AppSettings d; // defaults, for what a profile leaves out
+	s.stream = d.stream, s.video = d.video, s.record = d.record;
 	const QJsonObject st = o["stream"].toObject(), v = o["video"].toObject(), r = o["record"].toObject();
 	s.stream.service = st["service"].toString(s.stream.service);
 	s.stream.server = st["server"].toString(s.stream.server);
@@ -34,30 +51,32 @@ AppSettings AppSettings::load()
 	s.video.fps = v["fps"].toInt(s.video.fps);
 	s.video.encoder = v["encoder"].toString(s.video.encoder);
 	s.video.preset = v["preset"].toString(s.video.preset);
-	const QJsonObject tr = o["transition"].toObject();
-	s.transition.type = tr["type"].toString(s.transition.type);
-	s.transition.durationMs = tr["durationMs"].toInt(s.transition.durationMs);
 	s.record.folder = r["folder"].toString();
 	s.record.format = r["format"].toString(s.record.format);
 	s.record.quality = r["quality"].toString(s.record.quality);
 	s.record.replaySeconds = r["replaySeconds"].toInt(s.record.replaySeconds);
-	s.hotkeys = o["hotkeys"].toObject().toVariantMap();
-	s.liveLock = o["liveLock"].toBool(true);
-	return s;
 }
 
-void AppSettings::save() const
+QJsonObject AppSettings::profileJson() const
 {
-	QDir().mkpath(QFileInfo(settingsPath()).absolutePath());
-	const QJsonObject o{
+	return {
 		{"stream", QJsonObject{{"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl},
 				       {"keyProtected", platform::protectSecret(stream.key)}, {"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"enhanced", stream.enhanced}}},
 		{"video", QJsonObject{{"outWidth", video.outWidth}, {"outHeight", video.outHeight}, {"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}}},
 		{"record", QJsonObject{{"folder", record.folder}, {"format", record.format}, {"quality", record.quality}, {"replaySeconds", record.replaySeconds}}},
-		{"hotkeys", QJsonObject::fromVariantMap(hotkeys)},
-		{"liveLock", liveLock},
-		{"transition", QJsonObject{{"type", transition.type}, {"durationMs", transition.durationMs}}},
 	};
+}
+
+QString AppSettings::profilesFolder() { return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/profiles"; }
+
+void AppSettings::save() const
+{
+	QDir().mkpath(QFileInfo(settingsPath()).absolutePath());
+	QJsonObject o = profileJson();
+	o["profile"] = profile;
+	o["hotkeys"] = QJsonObject::fromVariantMap(hotkeys);
+	o["liveLock"] = liveLock;
+	o["transition"] = QJsonObject{{"type", transition.type}, {"durationMs", transition.durationMs}};
 	QFile f(settingsPath());
 	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
 		f.write(QJsonDocument(o).toJson());
@@ -65,7 +84,7 @@ void AppSettings::save() const
 
 QVariantMap AppSettings::toMap() const
 {
-	return {{"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl}, {"hasKey", !stream.key.isEmpty()},
+	return {{"profile", profile}, {"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl}, {"hasKey", !stream.key.isEmpty()},
 		{"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"enhanced", stream.enhanced}, {"outWidth", video.outWidth}, {"outHeight", video.outHeight},
 		{"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}, {"recordFolder", recordFolder()},
 		{"recordFormat", record.format}, {"recordQuality", record.quality},

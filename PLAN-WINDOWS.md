@@ -188,6 +188,11 @@ and switch between them.*
 
 **Done when** switching profiles changes the stream service, encoder and recording settings at once.
 
+**Built 2026-10-30:** Settings > Stream > Profile (switch, new as a copy, rename, delete). A profile
+holds stream, video and recording settings, in profiles/<name>.json; hotkeys, transitions and
+live lock are shared. Existing settings become "Default". _probe-profiles passes. Not yet: a
+profile switcher outside Settings, and importing OBS's other profiles as LOBS profiles.
+
 ### P2-5. Recording does what OBS's does
 *As a creator, I can pause a recording, and my MKV recordings come out as MP4 to edit.*
 - Pause and resume, and convert MKV to MP4 automatically or on request.

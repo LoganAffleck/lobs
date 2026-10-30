@@ -2761,6 +2761,120 @@ bool App::saveSettings(const QVariantMap &changes)
 	return true;
 }
 
+// ---------- profiles ----------
+
+static QString profileFile(const QString &name)
+{
+	QString safe = name;
+	safe.replace(QRegularExpression(R"([<>:"/\\|?*\x00-\x1f])"), "_");
+	return AppSettings::profilesFolder() + "/" + safe + ".json";
+}
+
+static bool writeProfile(const QString &name, const AppSettings &s)
+{
+	QDir().mkpath(AppSettings::profilesFolder());
+	QJsonObject o = s.profileJson();
+	o["name"] = name;
+	QSaveFile f(profileFile(name));
+	return f.open(QIODevice::WriteOnly) && f.write(QJsonDocument(o).toJson()) > 0 && f.commit();
+}
+
+QStringList App::profiles() const
+{
+	QStringList out;
+	for (const QFileInfo &fi : QDir(AppSettings::profilesFolder()).entryInfoList({"*.json"}, QDir::Files, QDir::Name)) {
+		QFile f(fi.filePath());
+		if (f.open(QIODevice::ReadOnly))
+			out << QJsonDocument::fromJson(f.readAll()).object().value("name").toString(fi.completeBaseName());
+	}
+	const QString cur = m_engine->settings().profile;
+	if (!out.contains(cur))
+		out.prepend(cur);
+	return out;
+}
+
+QString App::switchProfile(const QString &name)
+{
+	AppSettings s = m_engine->settings();
+	if (name == s.profile)
+		return {};
+	if (live())
+		return "Stop streaming and recording to switch profiles";
+	QFile f(profileFile(name));
+	if (!f.open(QIODevice::ReadOnly))
+		return "No profile called " + name;
+	const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+	f.close();
+	writeProfile(s.profile, s); // the one being left keeps its latest changes
+	const int w = s.video.outWidth, h = s.video.outHeight, fps = s.video.fps;
+	s.applyProfile(o);
+	s.profile = name;
+	m_engine->setSettings(s);
+	s.save();
+	if (s.video.outWidth != w || s.video.outHeight != h || s.video.fps != fps)
+		if (!m_engine->resetVideo())
+			showToast(m_engine->lastError());
+	emit settingsChanged();
+	showToast("Profile: " + name);
+	return {};
+}
+
+QString App::newProfile(const QString &name)
+{
+	const QString n = name.trimmed();
+	if (n.isEmpty())
+		return "Name the profile";
+	if (profiles().contains(n, Qt::CaseInsensitive))
+		return "There's already a profile called " + n;
+	AppSettings s = m_engine->settings();
+	writeProfile(s.profile, s);
+	if (!writeProfile(n, s))
+		return "Couldn't save the profile";
+	s.profile = n; // the same settings, now under the new name
+	m_engine->setSettings(s);
+	s.save();
+	emit settingsChanged();
+	return {};
+}
+
+QString App::renameProfile(const QString &from, const QString &to)
+{
+	const QString n = to.trimmed();
+	if (n.isEmpty() || n == from)
+		return {};
+	if (profiles().contains(n, Qt::CaseInsensitive) && n.compare(from, Qt::CaseInsensitive) != 0)
+		return "There's already a profile called " + n;
+	AppSettings s = m_engine->settings();
+	if (from == s.profile) {
+		writeProfile(n, s);
+		s.profile = n;
+		m_engine->setSettings(s);
+		s.save();
+	} else {
+		QFile f(profileFile(from));
+		if (!f.open(QIODevice::ReadOnly))
+			return "No profile called " + from;
+		AppSettings p;
+		p.applyProfile(QJsonDocument::fromJson(f.readAll()).object());
+		f.close();
+		writeProfile(n, p);
+	}
+	if (profileFile(from) != profileFile(n))
+		QFile::remove(profileFile(from));
+	emit settingsChanged();
+	return {};
+}
+
+QString App::deleteProfile(const QString &name)
+{
+	if (name == m_engine->settings().profile)
+		return "Switch to another profile before deleting this one";
+	if (!QFile::remove(profileFile(name)))
+		return "No profile called " + name;
+	emit settingsChanged();
+	return {};
+}
+
 QString App::dataFolder() const
 {
 	return QDir::toNativeSeparators(QFileInfo(m_docPath).absolutePath());

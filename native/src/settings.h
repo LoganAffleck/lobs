@@ -4,6 +4,7 @@
 // on this PC can read it back; on macOS it lives in the login Keychain instead.
 #pragma once
 
+#include <QJsonObject>
 #include <QString>
 #include <QVariantMap>
 
@@ -44,9 +45,14 @@ struct AppSettings {
 	VideoSettings video;
 	RecordSettings record;
 	bool liveLock = true; // while streaming or recording, layers on air need Alt or Unlock to change
+	QString profile = "Default"; // the profile the stream, video and record settings belong to
 
 	static AppSettings load();
 	void save() const;
+	// The profile part (stream, video, record), as profiles/<name>.json holds it.
+	QJsonObject profileJson() const;
+	void applyProfile(const QJsonObject &o);
+	static QString profilesFolder();
 	QVariantMap toMap() const; // for QML (stream key never included, only whether one is set)
 	void applyMap(const QVariantMap &m);
 	QString recordFolder() const;

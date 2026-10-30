@@ -310,6 +310,13 @@ public:
 	QStringList services() const { return m_engine->services(); }
 	Q_INVOKABLE QVariantList servers(const QString &service) const { return m_engine->servers(service); }
 	Q_INVOKABLE bool saveSettings(const QVariantMap &changes);
+	// Profiles: named sets of stream, video and recording settings (as OBS's), e.g. Twitch,
+	// YouTube, recording only. Switching isn't allowed while live. Each returns an error or "".
+	Q_INVOKABLE QStringList profiles() const;
+	Q_INVOKABLE QString switchProfile(const QString &name);
+	Q_INVOKABLE QString newProfile(const QString &name); // a copy of the current one, switched to
+	Q_INVOKABLE QString renameProfile(const QString &from, const QString &to);
+	Q_INVOKABLE QString deleteProfile(const QString &name);
 	Q_INVOKABLE QVariant sourceSetting(const QString &id, const QString &key) const { return doc().sources.value(id).settings.value(key); }
 	Q_PROPERTY(QString dataFolder READ dataFolder CONSTANT)
 	// Asset Library: the project's assets folder (next to the saved show, or LOBS's data folder).

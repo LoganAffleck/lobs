@@ -165,6 +165,59 @@ Rectangle {
                         visible: page.section === 0
                         Layout.fillWidth: true
                         spacing: 0
+                        // Profiles: a set of these stream, video and recording settings per place you
+                        // stream (as OBS's). Naming one (new or rename) happens in place.
+                        Card {
+                            SettingRow {
+                                id: profRow
+                                divider: false
+                                property string naming: "" // "new" | "rename" while typing a name
+                                property string err: ""
+                                readonly property var list: { app.settings; return app.profiles() } // re-read when settings change
+                                title: "Profile"
+                                description: profRow.err ? profRow.err : app.live ? "Switch profiles after you stop streaming and recording."
+                                           : "Stream, video and recording settings, one set per profile."
+                                function done(e) { err = e; if (!e) naming = "" }
+                                Row {
+                                    spacing: 6
+                                    height: Pal.ctl
+                                    FSelect {
+                                        visible: !profRow.naming
+                                        width: 180
+                                        enabled: !app.live
+                                        options: profRow.list.map(n => ({ name: n, value: n }))
+                                        currentValue: page.s.profile
+                                        onPicked: (v) => profRow.done(app.switchProfile(v))
+                                    }
+                                    FInput {
+                                        id: profName
+                                        visible: !!profRow.naming
+                                        width: 180
+                                        placeholderText: profRow.naming === "new" ? "New profile name" : "Profile name"
+                                        onAccepted: profSave.clicked()
+                                        Keys.onEscapePressed: profRow.naming = ""
+                                    }
+                                    FButton { id: profSave; visible: !!profRow.naming; text: profRow.naming === "new" ? "Create" : "Rename"; variant: "primary"; enabled: profName.text.trim().length > 0
+                                              onClicked: profRow.done(profRow.naming === "new" ? app.newProfile(profName.text) : app.renameProfile(page.s.profile, profName.text)) }
+                                    FButton { visible: !!profRow.naming; text: "Cancel"; variant: "ghost"; onClicked: { profRow.naming = ""; profRow.err = "" } }
+                                    FButton { visible: !profRow.naming; iconName: "plus"; variant: "ghost"; tip: "New profile (a copy of this one)"; enabled: !app.live; onClicked: { profRow.naming = "new"; profName.text = ""; profName.forceActiveFocus() } }
+                                    FButton { visible: !profRow.naming; iconName: "pencil"; variant: "ghost"; tip: "Rename this profile"; onClicked: { profRow.naming = "rename"; profName.text = page.s.profile; profName.selectAll(); profName.forceActiveFocus() } }
+                                    FButton { visible: !profRow.naming && profRow.list.length > 1; iconName: "trash-2"; variant: "ghost"; tip: "Delete a profile you're not using"
+                                              onClicked: { profRow.err = ""; deleteMenu.popup() } }
+                                    FMenu {
+                                        id: deleteMenu
+                                        Instantiator {
+                                            active: deleteMenu.populated // built while the menu is open
+                                            model: profRow.list.filter(n => n !== page.s.profile)
+                                            delegate: FMenuItem { required property string modelData; text: "Delete " + modelData; onTriggered: profRow.done(app.deleteProfile(modelData)) }
+                                            onObjectAdded: (i, o) => deleteMenu.insertItem(i, o)
+                                            onObjectRemoved: (i, o) => deleteMenu.removeItem(o)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Item { implicitHeight: 12 }
                         Card {
                             SettingRow {
                                 divider: false
