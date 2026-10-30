@@ -81,6 +81,31 @@ settings to change.
 
 **Done when** RG-02 (qa/scenarios/90-regression.js) passes.
 
+### P1-7. I sign in with Twitch instead of pasting a stream key
+*As a Twitch streamer, I connect my account in LOBS the way I do in OBS, and LOBS fills in my
+stream key and adds my Twitch panels.*
+
+The same design as OBS's "Connect Account":
+1. **LOBS's own Twitch app.** Register "LOBS" in the Twitch Developer Console (free; the account
+   needs two-factor sign-in) as a Confidential client. That gives a client ID, which ships in LOBS,
+   and a secret, which never does. OBS's client ID can't be reused (Twitch's developer terms, and
+   it only works with OBS's server).
+2. **A small auth server** holding the secret, like OBS's `auth.obsproject.com`. It takes Twitch's
+   redirect, swaps the one-time code for tokens, hands them to LOBS, and refreshes them later.
+   A few endpoints: a serverless function on the website's host would do. **Open:** where the site
+   is hosted, and the server's address (it becomes the app's redirect URL).
+3. **Sign-in inside LOBS.** "Connect account" in the stream settings and in first-time setup opens
+   Twitch's sign-in page in a LOBS window (the browser engine LOBS already bundles), with the
+   permissions OBS asks for: reading the stream key, chat, and the channel's details.
+4. **After sign-in:** LOBS fetches the stream key and channel name through Twitch's API (Helix) and
+   adds OBS's Twitch panels: chat, activity feed, and stream info (title and category). Tokens are
+   kept in Windows Credential Manager. "Disconnect" removes them, and the panels go with them.
+- Pairs with P1-5: setup offers "Connect with Twitch" instead of a stream key box. P1-4 (Enhanced
+  Broadcasting) still authenticates with the stream key, as OBS does.
+
+**Done when** someone streams to Twitch after only signing in, never seeing the stream key, and the
+token still works a month later.
+
 ## P2
 
 ### P2-1. I rename things where they are
