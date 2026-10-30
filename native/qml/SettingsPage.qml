@@ -12,6 +12,7 @@ Rectangle {
     opacity: open ? 1 : 0
     property bool open: false
     signal updateRequested() // the update dialog lives in the main window
+    signal twitchConnectRequested() // so does the Twitch sign-in window
     property int section: 0
     property var s: app.settings
     Behavior on opacity { NumberAnimation { duration: page.open ? Pal.slow : Pal.moderate; easing.type: Easing.OutCubic } }
@@ -203,6 +204,19 @@ Rectangle {
                         }
                         GroupTitle { text: "Stream key" }
                         Card {
+                            // Twitch: connect the account and the key fills itself in, as in OBS.
+                            SettingRow {
+                                visible: String(page.s.service).startsWith("Twitch")
+                                title: twitch.connected ? "Connected as " + twitch.displayName : "Twitch account"
+                                description: twitch.connected ? "LOBS got your stream key from Twitch." : "Connect, and LOBS fills in your stream key."
+                                Row {
+                                    spacing: 6
+                                    height: Pal.ctl
+                                    FButton { visible: !twitch.connected; text: "Connect with Twitch"; variant: "primary"; onClicked: page.twitchConnectRequested() }
+                                    FButton { visible: twitch.connected; iconName: "refresh-cw"; variant: "ghost"; tip: "Get the stream key again (after you reset it on Twitch)"; enabled: !twitch.busy; onClicked: twitch.refreshStreamKey() }
+                                    FButton { visible: twitch.connected; text: "Disconnect"; variant: "secondary"; onClicked: twitch.disconnectAccount() }
+                                }
+                            }
                             SettingRow {
                                 divider: false
                                 title: page.s.hasKey ? "Key saved" : "No key yet"

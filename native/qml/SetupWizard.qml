@@ -14,6 +14,8 @@ FDialog {
     padding: 20
     topPadding: 12
     signal addPanels(bool chat, bool info)
+    signal twitchConnectRequested() // the sign-in window lives in the main window
+    Connections { target: twitch; function onChanged() { if (twitch.connected) wiz.channel = twitch.login } }
 
     // ---- choices ----
     property bool streaming: true
@@ -246,8 +248,19 @@ FDialog {
         ColumnLayout {
             visible: wiz.step === "account"
             width: parent.width; spacing: 16
-            ColumnLayout {
+            // Connect, as in OBS: Twitch gives LOBS the channel and stream key, so neither is typed.
+            RowLayout {
                 visible: wiz.twitch
+                Layout.fillWidth: true; spacing: 10
+                FButton { visible: !twitch.connected; text: "Connect with Twitch"; variant: "primary"; onClicked: wiz.twitchConnectRequested() }
+                Text {
+                    Layout.fillWidth: true
+                    text: twitch.connected ? "Connected as " + twitch.displayName + ". Your stream key is set." : "Or type your channel and paste your key below."
+                    color: twitch.connected ? Pal.fg : Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body; wrapMode: Text.WordWrap
+                }
+            }
+            ColumnLayout {
+                visible: wiz.twitch && !twitch.connected
                 Layout.fillWidth: true; spacing: 6
                 Text { text: "Twitch username"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
                 FInput {
@@ -269,6 +282,7 @@ FDialog {
                 FInput { Layout.fillWidth: true; placeholderText: "rtmp://…"; text: wiz.customUrl; onTextChanged: wiz.customUrl = text }
             }
             ColumnLayout {
+                visible: !(wiz.twitch && twitch.connected)
                 Layout.fillWidth: true; spacing: 6
                 Text { text: "Stream key"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
                 RowLayout {

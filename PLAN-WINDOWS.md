@@ -152,6 +152,13 @@ editor.
 
 **Done when** a plugin that adds a dock in OBS adds the same panel in LOBS.
 
+### P2-7. A saved stream key looks saved
+*As a streamer, once my key is saved, Settings shows that it's set instead of an empty box.*
+- Saved: a checkmark and an Edit button, with no input. Edit opens the input (with Save and
+  Cancel), and the remove button sits with it.
+
+**Done when** Settings › Stream shows no key input until you click Edit.
+
 ## P3
 
 ### P3-1. I stream vertical at the same time

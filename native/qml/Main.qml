@@ -32,7 +32,7 @@ ApplicationWindow {
 
     property int sceneView: 0 // 0 list, 1 grid
     onSceneViewChanged: app.setGridVisible(sceneView === 1)
-    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
+    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || renameDialog.visible || twitchSignIn.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
     Shortcut { sequence: "Ctrl+,"; enabled: !chrome.nativeMenuBar; onActivated: settingsPage.show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
@@ -213,7 +213,7 @@ ApplicationWindow {
     }
     TransitionsDialog { id: trDialog }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
-    SetupWizard { id: setupWizard; onAddPanels: (chat, info) => win.openTwitchPanels(chat, info) }
+    SetupWizard { id: setupWizard; onAddPanels: (chat, info) => win.openTwitchPanels(chat, info); onTwitchConnectRequested: twitchSignIn.begin() }
     // Stable models for the big lists: rows are updated in place instead of rebuilt (LOBS-022).
     RowsModel { id: sceneRows; rows: app.scenes }
     function openSetup() { setupWizard.open() }
@@ -234,6 +234,8 @@ ApplicationWindow {
     // The Twitch channel both panels show; setup and either panel can set it.
     property string twitchChannel: app.uiValue("twitch/channel", "")
     function setTwitchChannel(c) { app.setUiValue("twitch/channel", c); twitchChannel = c }
+    // Connecting the account sets the channel the panels show.
+    Connections { target: twitch; function onChanged() { if (twitch.connected && twitch.login !== win.twitchChannel) win.setTwitchChannel(twitch.login) } }
     // Docks the Twitch panels at the right edge, Chat and Stream info as tabs.
     function openTwitchPanels(chat, info) {
         twitchChannel = app.uiValue("twitch/channel", "") // setup just saved it
@@ -241,6 +243,11 @@ ApplicationWindow {
         if (info && !infoDock.isOpen) {
             if (chatDock.isOpen) chatDock.addDockWidgetAsTab(infoDock)
             else dockArea.addDockWidget(infoDock, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(340, 0))
+        }
+        // The activity feed goes with Stream info, as OBS docks it.
+        if (info && !feedDock.isOpen) {
+            if (infoDock.isOpen) infoDock.addDockWidgetAsTab(feedDock)
+            else dockArea.addDockWidget(feedDock, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(340, 0))
         }
     }
     // First run: the setup assistant, once the layout is up.
@@ -1691,6 +1698,17 @@ ApplicationWindow {
                 sourceComponent: TwitchPanel { kind: "info"; live: infoDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c) }
             }
         }
+        KDDW.DockWidget {
+            id: feedDock
+            uniqueName: "twitchFeed"
+            title: "Activity feed"
+            Loader {
+                property size kddockwidgets_min_size: Qt.size(260, 200)
+                anchors.fill: parent
+                active: feedDock.isOpen || item
+                sourceComponent: TwitchPanel { kind: "feed"; live: feedDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c) }
+            }
+        }
 
         KDDW.DockWidget {
             id: audioDock
@@ -1762,7 +1780,7 @@ ApplicationWindow {
     property bool layoutReady: false
     Timer { interval: 3000; repeat: true; running: win.layoutReady; onTriggered: layoutSaver.saveToFile(win.layoutFile) }
     onClosing: { layoutReady = false; app.closeProjectors() }
-    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, captionsDock, chatDock, infoDock]
+    readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, captionsDock, chatDock, infoDock, feedDock]
     property Item previewItem: null
 
     // Docked panels are moved with LOBS's own drag (keeps their slot until the drop).
@@ -2530,7 +2548,8 @@ ApplicationWindow {
         }
     }
 
-    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; z: 500; onUpdateRequested: { open = false; updateDialog.open() } }
+    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; z: 500; onUpdateRequested: { open = false; updateDialog.open() }
+        onTwitchConnectRequested: twitchSignIn.begin() }
 
     FDialog {
         id: renameDialog
@@ -2554,6 +2573,53 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: renameDialog.close() }
                 FButton { text: "Rename"; variant: "primary"; onClicked: renameDialog.apply() }
+            }
+        }
+    }
+    // Connect with Twitch, as OBS's Connect Account: Twitch's sign-in page in LOBS's own browser
+    // (the Twitch panels' profile, so they're signed in too). Closes once the stream key is in.
+    FDialog {
+        id: twitchSignIn
+        title: "Connect with Twitch"
+        width: 520
+        z: 1000 // over Settings
+        property string url: ""
+        function begin() { url = twitch.beginSignIn(); if (url) open(); else failToast() }
+        function failToast() { app.notify(twitch.error) }
+        onClosed: { twitch.cancelSignIn(); url = "" }
+        Connections {
+            target: twitch
+            function onSignedIn() { if (twitchSignIn.visible) { twitchSignIn.close(); app.notify("Connected to Twitch as " + twitch.displayName + ". Your stream key is set.") } }
+            function onSignInFailed(why) { if (twitchSignIn.visible) twitchSignIn.close(); app.notify(why) }
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 600
+                radius: Pal.radius; color: Pal.s1; clip: true
+                BrowserView {
+                    id: twitchPage
+                    anchors.fill: parent
+                    url: twitchSignIn.url
+                    live: twitchSignIn.visible
+                }
+                Text {
+                    visible: !twitchPage.ready || twitch.busy
+                    anchors.centerIn: parent
+                    text: twitch.busy ? "Getting your stream key…" : "Loading Twitch…"
+                    color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                // Zoom, as in a browser (Ctrl + / Ctrl - work on the page too).
+                FButton { text: "−"; variant: "ghost"; tip: "Zoom out"; enabled: twitchPage.zoom > 0.51; onClicked: twitchPage.zoom -= 0.1 }
+                FButton { text: Math.round(twitchPage.zoom * 100) + "%"; variant: "ghost"; tip: "Back to 100%"; onClicked: twitchPage.zoom = 1 }
+                FButton { text: "+"; variant: "ghost"; tip: "Zoom in"; enabled: twitchPage.zoom < 2.49; onClicked: twitchPage.zoom += 0.1 }
+                Item { Layout.fillWidth: true }
+                FButton { text: "Cancel"; variant: "ghost"; onClicked: twitchSignIn.close() }
             }
         }
     }

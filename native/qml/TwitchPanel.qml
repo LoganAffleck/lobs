@@ -6,7 +6,7 @@ import LOBS.Web
 // panel once; it stays signed in. Asks for the channel name if setup didn't get it.
 Rectangle {
     id: tp
-    property string kind: "chat" // chat | info
+    property string kind: "chat" // chat | info | feed
     property bool live: true
     property string channel: ""      // shared by the panels (set by the window)
     signal channelPicked(string name)
@@ -15,6 +15,7 @@ Rectangle {
     color: Pal.s1
     readonly property string url: !hasPage ? ""
         : kind === "chat" ? "https://www.twitch.tv/popout/" + channel + "/chat?darkpopout"
+        : kind === "feed" ? "https://dashboard.twitch.tv/popout/u/" + channel + "/stream-manager/activity-feed?uuid=lobs"
         : "https://dashboard.twitch.tv/popout/u/" + channel + "/stream-manager/edit-stream-info"
     component Caption: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; wrapMode: Text.WordWrap }
 
@@ -58,7 +59,7 @@ Rectangle {
             Layout.fillWidth: true; Layout.fillHeight: true; Layout.margins: 16
             spacing: 8
             Item { Layout.fillHeight: true }
-            Text { text: tp.kind === "chat" ? "Twitch chat" : "Stream info"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550 }
+            Text { text: tp.kind === "chat" ? "Twitch chat" : tp.kind === "feed" ? "Activity feed" : "Stream info"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550 }
             Caption { Layout.fillWidth: true; text: "As in twitch.tv/yourname." }
             RowLayout {
                 Layout.fillWidth: true; spacing: 6

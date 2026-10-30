@@ -80,10 +80,13 @@ void BrowserView::setUrl(const QString &u)
 }
 
 // Zoom is CSS zoom on the page, so text re-lays out crisply instead of being scaled. (This
-// also replaces the browser source's default CSS, which hides scrollbars.)
+// also replaces the browser source's default CSS, which hides scrollbars.) The page renders at
+// device pixels, so the display's scaling is part of it: at 150% Windows scaling, 100% here is
+// CSS zoom 1.5, and the page is the size a browser would show it.
 QString BrowserView::pageCss() const
 {
-	return QString("html { zoom: %1; }").arg(m_zoom, 0, 'f', 2);
+	const double dpr = window() ? window()->devicePixelRatio() : 1.0;
+	return QString("html { zoom: %1; }").arg(m_zoom * dpr, 0, 'f', 2);
 }
 
 void BrowserView::setZoom(double z)

@@ -387,6 +387,7 @@ public:
 	Q_INVOKABLE bool uiFlag(const QString &key, bool fallback) const;   // small remembered UI states
 	Q_INVOKABLE QString uiValue(const QString &key, const QString &fallback) const;
 	Q_INVOKABLE void setUiValue(const QString &key, const QString &value);
+	Q_INVOKABLE void notify(const QString &msg) { showToast(msg); } // a toast from QML
 	Q_INVOKABLE QVariantList searchAssets(const QString &query) const; // every folder; adds "where"
 	Q_INVOKABLE void setUiFlag(const QString &key, bool on);
 	QVariantMap sourceInfo(const lobs::Source &s) const;               // what the inspectors show for an input

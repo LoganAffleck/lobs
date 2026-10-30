@@ -2,6 +2,7 @@
 // item is where libobs renders the edited scene, and where canvas mouse input lands.
 #include "window_chrome.h"
 #include "captions.h"
+#include "twitch_account.h"
 #include "crash_report.h"
 #include "dock_tabs.h"
 #include "app_updater.h"
@@ -973,8 +974,10 @@ int main(int argc, char *argv[])
 	QQmlApplicationEngine qml;
 	KDDockWidgets::QtQuick::Platform::instance()->setQmlEngine(&qml);
 	PreviewHost previewHost(&engine, &controller);
+	TwitchAccount twitch(&controller);
 	qml.rootContext()->setContextProperty("previewHost", &previewHost);
 	qml.rootContext()->setContextProperty("app", &controller);
+	qml.rootContext()->setContextProperty("twitch", &twitch);
 	qml.rootContext()->setContextProperty("engineUpdater", &engineUpdater);
 	// Fluid Functionalism tokens (dark), shared by every QML file as `Pal.<name>`:
 	// the 8-step surface ladder, 2 text colors, 12% borders, +6%/+10% hover/selected,
