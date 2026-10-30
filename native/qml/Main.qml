@@ -122,7 +122,7 @@ ApplicationWindow {
                 Platform.MenuItem { text: "Save"; shortcut: "Ctrl+S"; onTriggered: win.save() }
                 Platform.MenuItem { text: "Save As…"; shortcut: "Ctrl+Shift+S"; onTriggered: saveDialog.open() }
                 // Moved to the LOBS menu by macOS.
-                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(7) }
+                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(8) }
                 Platform.MenuItem { text: "Settings…"; shortcut: "Ctrl+,"; role: Platform.MenuItem.PreferencesRole; onTriggered: settingsPage.show() }
             }
             Platform.Menu {

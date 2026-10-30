@@ -159,6 +159,13 @@ control OBS.*
 
 **Done when** Stream Deck's OBS plugin and VNyan's OBS connection work with LOBS.
 
+**Built 2026-10-30:** LOBS speaks obs-websocket v5 itself (native/src/websocket_server.cpp; OBS's
+plugin needs OBS's interface). Settings > Remote control: on/off, port 4455, password. Covers
+scenes, inputs (mute, volume), scene items (visibility), stream, record, replay buffer, virtual
+camera, and their events. _probe-websocket with qa/tools/ws_client.py passes (password, scenes,
+layers, events, batches). Still to check: mute and volume (no audio source in the probe), and
+real apps (Stream Deck, VNyan). Not yet: filters, transitions, source settings, studio mode.
+
 ### P2-3. My stream comes back on its own
 *As a streamer, if my connection drops, LOBS reconnects without me, and tells me it did.*
 - Automatic reconnect with a countdown, and a health warning built on P1-2's stats.

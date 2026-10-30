@@ -186,6 +186,7 @@ public:
 	void setSettings(const AppSettings &s) { m_settings = s; }
 	const AppSettings &settings() const { return m_settings; }
 	QVariantList encoders() const;               // [{value, name}] usable on this PC, best first
+	static QString obsIdFor(const QString &kind); // OBS's source id for a LOBS kind (camera -> dshow_input)
 	bool kindAvailable(const QString &kind) const; // this platform and engine can capture it (no game capture on macOS)
 	QString resolveEncoder() const;               // settings.encoder, or the best available for "auto"
 	QString resolveRecordEncoder() const;         // HEVC for quality recordings where VideoToolbox has it, else resolveEncoder()

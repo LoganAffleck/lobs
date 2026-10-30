@@ -684,6 +684,8 @@ QString App::pluginsFolder() const { return QDir::toNativeSeparators(lobs::plugi
 
 void App::openPluginsFolder() const { QDesktopServices::openUrl(QUrl::fromLocalFile(lobs::plugins::folder())); }
 
+void App::copyText(const QString &text) const { QGuiApplication::clipboard()->setText(text); }
+
 QVariantMap App::obsSetup(const QString &folder) const { return obs_switch::scan(folder.isEmpty() ? obs_switch::obsFolder() : folder); }
 
 QVariantMap App::importFromObs(const QString &profileDir, const QString &collectionPath, const QVariantList &pluginList)

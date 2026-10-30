@@ -29,6 +29,7 @@ Rectangle {
         { title: "Hotkeys", icon: "keyboard", desc: "Work even while a game has focus." },
         { title: "Updates", icon: "refresh-cw", desc: "New versions of LOBS and its OBS engine." },
         { title: "Plugins", icon: "puzzle", desc: "OBS plugins that add sources and filters." },
+        { title: "Remote control", icon: "radio", desc: "Stream Deck, Touch Portal and VTuber apps, over the obs-websocket protocol." },
         { title: "About", icon: "info", desc: "Versions, licenses and where LOBS keeps its files." }
     ]
 
@@ -686,9 +687,58 @@ Rectangle {
                         }
                     }
 
-                    // ===== About =====
+                    // ===== Remote control: obs-websocket =====
+                    // Apps that control OBS connect to LOBS the same way: same protocol, same port.
                     ColumnLayout {
                         visible: page.section === 7
+                        Layout.fillWidth: true
+                        spacing: 0
+                        GroupTitle { text: "obs-websocket server" }
+                        Card {
+                            SettingRow {
+                                divider: false
+                                title: "Allow remote control"
+                                description: !websocket.enabled ? "Off. Turn it on for Stream Deck, Touch Portal, VNyan and other apps made for OBS."
+                                           : websocket.error ? websocket.error
+                                           : websocket.clients ? websocket.clients + (websocket.clients === 1 ? " app connected" : " apps connected")
+                                           : "On. Waiting for an app to connect."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: websocket.enabled; onClicked: websocket.setEnabled(!websocket.enabled) }
+                            }
+                            SettingRow {
+                                title: "Port"
+                                description: "Apps connect to this PC's address at this port. OBS's default is 4455."
+                                FNumField { label: ""; implicitWidth: 120; from: 1024; to: 65535; value: websocket.port; onCommit: (v) => websocket.setPort(Math.round(v)) }
+                            }
+                            SettingRow {
+                                title: "Require a password"
+                                description: websocket.authRequired ? "Apps need the password below." : "Any app on your network can control LOBS."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: websocket.authRequired; onClicked: websocket.setAuthRequired(!websocket.authRequired) }
+                            }
+                            SettingRow {
+                                visible: websocket.authRequired
+                                title: "Password"
+                                description: "Paste it into the app's OBS connection settings."
+                                Row {
+                                    spacing: 6
+                                    height: Pal.ctl
+                                    FInput { id: wsPass; width: 180; readOnly: true; text: websocket.password; echoMode: wsShow.revealed ? TextInput.Normal : TextInput.Password }
+                                    FButton { id: wsShow; property bool revealed: false; iconName: revealed ? "eye-off" : "eye"; variant: "ghost"; tip: revealed ? "Hide" : "Show"; onClicked: revealed = !revealed }
+                                    FButton { iconName: "copy"; variant: "ghost"; tip: "Copy"; onClicked: { app.copyText(websocket.password); app.notify("Password copied") } }
+                                    FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "New password (connected apps need the new one)"; onClicked: websocket.newPassword() }
+                                }
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true; Layout.topMargin: 10; Layout.leftMargin: 4
+                            wrapMode: Text.WordWrap
+                            text: "Apps can switch scenes, show and hide layers, mute and set volume, and start or stop the stream, recording, replay buffer and virtual camera. Not yet: filters, transitions and source settings."
+                            color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+                        }
+                    }
+
+                    // ===== About =====
+                    ColumnLayout {
+                        visible: page.section === 8
                         Layout.fillWidth: true
                         spacing: 0
                         GroupTitle { text: "LOBS" }

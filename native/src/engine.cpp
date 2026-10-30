@@ -209,6 +209,12 @@ static const char *obsKind(const QString &kind)
 	return id ? id : "color_source_v3";
 }
 
+QString Engine::obsIdFor(const QString &kind)
+{
+	const char *id = obsKindOrNull(kind);
+	return id ? QString(id) : kind;
+}
+
 bool Engine::kindAvailable(const QString &kind) const
 {
 	if (kind == "scene")

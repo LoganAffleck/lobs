@@ -770,11 +770,12 @@ void startScenario(QGuiApplication &app, App &controller, Engine &engine, QQmlAp
 	QJSEngine::setObjectOwnership(api, QJSEngine::CppOwnership);
 	js->globalObject().setProperty("app", js->newQObject(&controller));
 	js->globalObject().setProperty("t", js->newQObject(api));
-	// The app's other QML-facing objects (live captions), as QML sees them.
-	if (QObject *cc = qml.rootContext()->contextProperty("captions").value<QObject *>()) {
-		QJSEngine::setObjectOwnership(cc, QJSEngine::CppOwnership);
-		js->globalObject().setProperty("captions", js->newQObject(cc));
-	}
+	// The app's other QML-facing objects (live captions, remote control, Twitch), as QML sees them.
+	for (const char *name : {"captions", "websocket", "twitch"})
+		if (QObject *o = qml.rootContext()->contextProperty(name).value<QObject *>()) {
+			QJSEngine::setObjectOwnership(o, QJSEngine::CppOwnership);
+			js->globalObject().setProperty(name, js->newQObject(o));
+		}
 	api->setRecordFolder(QDir(outDir).absolutePath() + "/rec");
 	api->writeResults("starting");
 
