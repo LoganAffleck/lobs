@@ -15,8 +15,12 @@ Rectangle {
     border.width: 1
     border.color: Pal.border
     property int hoverIndex: -1
-    function itemX(i) { const it = rep.itemAt(i); return it ? it.x + 2 : 0 }
-    function itemW(i) { const it = rep.itemAt(i); return it ? it.width : 0 }
+    // rep.itemAt() isn't something bindings track, so the pills read this too: it changes when
+    // the tabs are made or resized (else a pill measured before its tab existed stayed at 0 wide,
+    // and showed only after a click).
+    property int layoutRev: 0
+    function itemX(i) { layoutRev; const it = rep.itemAt(i); return it ? it.x + 2 : 0 }
+    function itemW(i) { layoutRev; const it = rep.itemAt(i); return it ? it.width : 0 }
 
     Rectangle { // hover glide
         opacity: t.hoverIndex >= 0 && t.hoverIndex !== t.currentIndex ? 1 : 0
@@ -40,9 +44,11 @@ Rectangle {
         id: row
         x: 2
         height: parent.height
+        onWidthChanged: t.layoutRev++
         Repeater {
             id: rep
             model: t.model
+            onItemAdded: t.layoutRev++
             delegate: Item {
                 required property var modelData
                 required property int index
