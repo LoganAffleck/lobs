@@ -386,28 +386,55 @@ ApplicationWindow {
             }
             FButton { text: "Save"; visible: !chrome.nativeMenuBar; variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
             // The profile (stream, video and recording settings for one place you stream), next to Save.
-            // Naming one, new or renamed, happens right here in the bar.
+            // New and Rename open a small popover under the button to name it.
             Item {
                 id: profileBox
-                property string naming: "" // "new" | "rename" while typing
                 readonly property var list: { app.settings; return app.profiles() }
-                implicitWidth: naming ? 170 : profileButton.implicitWidth
+                implicitWidth: profileButton.implicitWidth
                 implicitHeight: profileButton.implicitHeight
-                function finish(err) { if (err) app.notify(err); naming = "" }
+                function finish(err) { if (err) app.notify(err) }
                 FButton {
                     id: profileButton
-                    visible: !profileBox.naming
                     text: "Profile"
                     variant: "ghost"
-                    tip: "Profile: " + (app.settings.profile || "Default") + ". Stream, video and recording settings."
                     onClicked: profileMenu.popup(profileButton, 0, profileButton.height + 4)
                 }
-                InlineRename {
-                    anchors.fill: parent; anchors.margins: 4
-                    active: !!profileBox.naming
-                    original: profileBox.naming === "rename" ? (app.settings.profile || "") : ""
-                    onRenamed: (n) => profileBox.finish(profileBox.naming === "new" ? app.newProfile(n) : app.renameProfile(app.settings.profile, n))
-                    onFinished: profileBox.naming = ""
+                Popup {
+                    id: profileName
+                    popupType: Popup.Item // in the scene, not an OS window (see FMenu)
+                    property string mode: "new" // new | rename
+                    function ask(m) { mode = m; nameIn.text = m === "rename" ? (app.settings.profile || "") : ""; err.text = ""; open() }
+                    function apply() {
+                        const n = nameIn.text.trim()
+                        if (!n) return
+                        const e = mode === "new" ? app.newProfile(n) : app.renameProfile(app.settings.profile, n)
+                        if (e) err.text = e; else close()
+                    }
+                    y: profileButton.height + 4
+                    width: 300
+                    padding: 14
+                    modal: false
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                    onOpened: { nameIn.selectAll(); nameIn.forceActiveFocus() }
+                    background: Rectangle { radius: Pal.radius + 4; color: Pal.s4; border.width: 1; border.color: Pal.border }
+                    contentItem: ColumnLayout {
+                        spacing: 8
+                        Text { text: profileName.mode === "new" ? "New profile" : "Rename profile"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 600 }
+                        FInput { id: nameIn; Layout.fillWidth: true; placeholderText: "Name, like YouTube or Recording"; onAccepted: profileName.apply() }
+                        Text {
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: profileName.mode === "new" ? "Starts as a copy of " + (app.settings.profile || "Default") + " and switches to it. Its stream, video and recording settings are its own."
+                                                              : "Only the name changes."
+                            color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+                        }
+                        Text { id: err; visible: text !== ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Pal.danger; font.family: Pal.font; font.pixelSize: Pal.caption }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Item { Layout.fillWidth: true }
+                            FButton { text: "Cancel"; variant: "ghost"; onClicked: profileName.close() }
+                            FButton { text: profileName.mode === "new" ? "Create" : "Rename"; variant: "primary"; enabled: nameIn.text.trim() !== ""; onClicked: profileName.apply() }
+                        }
+                    }
                 }
                 FMenu {
                     id: profileMenu
@@ -426,8 +453,8 @@ ApplicationWindow {
                         onObjectRemoved: (i, o) => profileMenu.removeItem(o)
                     }
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                    FMenuItem { text: "New profile"; enabled: !app.live; onTriggered: profileBox.naming = "new" }
-                    FMenuItem { text: "Rename"; onTriggered: profileBox.naming = "rename" }
+                    FMenuItem { text: "New profile"; enabled: !app.live; onTriggered: profileName.ask("new") }
+                    FMenuItem { text: "Rename"; onTriggered: profileName.ask("rename") }
                     // The others can be deleted (not the one in use), listed after these.
                     Instantiator {
                         active: profileMenu.populated
