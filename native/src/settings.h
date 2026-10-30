@@ -31,6 +31,7 @@ struct RecordSettings {
 	QString format = "mp4"; // mp4 | mkv | mov
 	QString quality = "high"; // stream (reuse stream encoder) | high | indistinguishable
 	int replaySeconds = 30;   // replay buffer length
+	bool remux = true;        // MKV: also make an MP4 copy when it stops (OBS's automatic remux)
 };
 
 struct TransitionSettings {

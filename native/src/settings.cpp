@@ -55,6 +55,7 @@ void AppSettings::applyProfile(const QJsonObject &o)
 	s.record.format = r["format"].toString(s.record.format);
 	s.record.quality = r["quality"].toString(s.record.quality);
 	s.record.replaySeconds = r["replaySeconds"].toInt(s.record.replaySeconds);
+	s.record.remux = r["remux"].toBool(s.record.remux);
 }
 
 QJsonObject AppSettings::profileJson() const
@@ -63,7 +64,7 @@ QJsonObject AppSettings::profileJson() const
 		{"stream", QJsonObject{{"service", stream.service}, {"server", stream.server}, {"customUrl", stream.customUrl},
 				       {"keyProtected", platform::protectSecret(stream.key)}, {"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"enhanced", stream.enhanced}}},
 		{"video", QJsonObject{{"outWidth", video.outWidth}, {"outHeight", video.outHeight}, {"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}}},
-		{"record", QJsonObject{{"folder", record.folder}, {"format", record.format}, {"quality", record.quality}, {"replaySeconds", record.replaySeconds}}},
+		{"record", QJsonObject{{"folder", record.folder}, {"format", record.format}, {"quality", record.quality}, {"replaySeconds", record.replaySeconds}, {"remux", record.remux}}},
 	};
 }
 
@@ -88,7 +89,7 @@ QVariantMap AppSettings::toMap() const
 		{"bitrate", stream.bitrate}, {"audioBitrate", stream.audioBitrate}, {"enhanced", stream.enhanced}, {"outWidth", video.outWidth}, {"outHeight", video.outHeight},
 		{"fps", video.fps}, {"encoder", video.encoder}, {"preset", video.preset}, {"recordFolder", recordFolder()},
 		{"recordFormat", record.format}, {"recordQuality", record.quality},
-		{"transition", transition.type}, {"transitionMs", transition.durationMs}, {"replaySeconds", record.replaySeconds}, {"hotkeys", hotkeys}, {"liveLock", liveLock}};
+		{"transition", transition.type}, {"transitionMs", transition.durationMs}, {"replaySeconds", record.replaySeconds}, {"remux", record.remux}, {"hotkeys", hotkeys}, {"liveLock", liveLock}};
 }
 
 void AppSettings::applyMap(const QVariantMap &m)
@@ -125,6 +126,8 @@ void AppSettings::applyMap(const QVariantMap &m)
 	num("transitionMs", transition.durationMs);
 	transition.durationMs = std::clamp(transition.durationMs, 50, 5000);
 	str("recordFormat", record.format);
+	if (m.contains("remux"))
+		record.remux = m["remux"].toBool();
 	str("recordQuality", record.quality);
 }
 

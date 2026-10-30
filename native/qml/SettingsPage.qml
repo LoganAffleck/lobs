@@ -328,6 +328,12 @@ Rectangle {
                                 description: "MKV survives a crash; MP4 plays everywhere."
                                 FTabs { model: ["MP4", "MKV", "MOV"]; currentIndex: ["mp4", "mkv", "mov"].indexOf(page.s.recordFormat); onActivated: (i) => page.save("recordFormat", ["mp4", "mkv", "mov"][i]) }
                             }
+                            SettingRow {
+                                visible: page.s.recordFormat === "mkv"
+                                title: "Also save as MP4"
+                                description: "Makes an MP4 copy when you stop, for editors that don't open MKV."
+                                FSwitch { property bool fillSlot: false; checkable: false; checked: page.s.remux !== false; onClicked: page.save("remux", !(page.s.remux !== false)) }
+                            }
                         }
                         GroupTitle { text: "Quality" }
                         Card {

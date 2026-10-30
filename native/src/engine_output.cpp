@@ -4,7 +4,12 @@
 
 #include <obs.h>
 
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QFile>
+#include <QPointer>
+#include <media-io/media-remux.h>
+#include <thread>
 #include <QDir>
 #include <QRegularExpression>
 #include <QFileInfo>
@@ -501,7 +506,10 @@ static void onRecordStop(void *data, calldata_t *cd)
 	const int code = int(calldata_int(cd, "code"));
 	QMetaObject::invokeMethod(self, [self, code]() {
 		const QFileInfo fi(self->lastRecording());
-		emit self->recordingFinished(code == OBS_OUTPUT_SUCCESS && fi.exists(), fi.absoluteFilePath(), fi.exists() ? fi.size() : 0);
+		const bool ok = code == OBS_OUTPUT_SUCCESS && fi.exists();
+		emit self->recordingFinished(ok, fi.absoluteFilePath(), fi.exists() ? fi.size() : 0);
+		if (ok && fi.suffix().compare("mkv", Qt::CaseInsensitive) == 0 && self->settings().record.remux)
+			self->remuxToMp4(fi.absoluteFilePath());
 	}, Qt::QueuedConnection);
 }
 
@@ -557,20 +565,65 @@ void Engine::startRecording()
 		return;
 	}
 	m_recording = true;
+	m_recPaused = false, m_recPausedMs = 0;
 	m_recClock.start();
 	emit recordingChanged();
 	setStatus("Recording → " + QDir::toNativeSeparators(m_lastRecording));
+}
+
+bool Engine::canPauseRecording() const { return m_recOutput && m_recording && obs_output_can_pause(m_recOutput); }
+
+void Engine::setRecordingPaused(bool paused)
+{
+	if (!canPauseRecording() || paused == m_recPaused || !obs_output_pause(m_recOutput, paused))
+		return;
+	m_recPaused = paused;
+	if (paused)
+		m_recPausedAt = m_recClock.elapsed();
+	else
+		m_recPausedMs += m_recClock.elapsed() - m_recPausedAt;
+	emit recordingChanged();
+	setStatus(paused ? "Recording paused" : "Recording → " + QDir::toNativeSeparators(m_lastRecording));
+}
+
+qint64 Engine::recordedMs() const
+{
+	return m_recClock.elapsed() - m_recPausedMs - (m_recPaused ? m_recClock.elapsed() - m_recPausedAt : 0);
 }
 
 void Engine::stopRecording()
 {
 	if (!m_recording)
 		return;
+	m_recPaused = false;
 	m_recordTimer.stop();
 	obs_output_stop(m_recOutput);
 	m_recording = false;
 	emit recordingChanged();
 	setStatus("Recording saved: " + QDir::toNativeSeparators(m_lastRecording));
+}
+
+// An MP4 copy of a finished MKV recording, as OBS's automatic remux: same streams, no re-encode,
+// so it takes seconds. Off the main thread; the MKV stays (it's the one that survives a crash).
+void Engine::remuxToMp4(const QString &mkv)
+{
+	const QFileInfo fi(mkv);
+	QString mp4 = fi.absolutePath() + "/" + fi.completeBaseName() + ".mp4";
+	for (int n = 1; QFileInfo::exists(mp4); n++)
+		mp4 = fi.absolutePath() + "/" + fi.completeBaseName() + QString(" (%1).mp4").arg(n);
+	QPointer<Engine> self(this);
+	std::thread([self, mkv, mp4] {
+		media_remux_job_t job = nullptr;
+		bool ok = media_remux_job_create(&job, QDir::toNativeSeparators(mkv).toUtf8().constData(), QDir::toNativeSeparators(mp4).toUtf8().constData());
+		if (ok)
+			ok = media_remux_job_process(job, nullptr, nullptr);
+		if (job)
+			media_remux_job_destroy(job);
+		if (!ok)
+			QFile::remove(mp4);
+		blog(ok ? LOG_INFO : LOG_WARNING, "[lobs] remux to MP4 %s: %s", ok ? "done" : "failed", QDir::toNativeSeparators(mp4).toUtf8().constData());
+		QMetaObject::invokeMethod(qApp, [self, ok, mp4] { if (self) emit self->remuxFinished(ok, mp4); }, Qt::QueuedConnection);
+	}).detach();
 }
 
 void Engine::releaseOutputs()

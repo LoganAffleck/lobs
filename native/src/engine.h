@@ -97,9 +97,15 @@ public:
 	QString stats() const { return m_stats; }
 	QVariantMap layerResources() const; // for QA: how many layers hold filters, text and shape renderers
 	bool recording() const { return m_recording; }
+	// Pausing: OBS can't pause a recording that shares the stream's encoder ("Same as stream").
+	bool canPauseRecording() const;
+	bool recordingPaused() const { return m_recording && m_recPaused; }
+	void setRecordingPaused(bool paused);
 	bool streaming() const { return m_streaming; }
 	bool live() const { return m_streaming || m_recording; }
 	QString lastRecording() const { return m_lastRecording; }
+	qint64 recordedMs() const; // time recorded, pauses left out
+	void remuxToMp4(const QString &mkv); // a .mp4 next to it, in the background (OBS's remux)
 	QVariantMap streamStats() const { return m_streamStats; }
 
 	// Document → libobs
@@ -244,6 +250,7 @@ signals:
 	void statsChanged();
 	void recordingChanged();
 	void recordingFinished(bool ok, const QString &path, qint64 bytes);
+	void remuxFinished(bool ok, const QString &mp4);
 	void streamingChanged();
 	void streamStatsChanged();
 	void streamError(const QString &message);
@@ -371,6 +378,8 @@ private:
 	obs_encoder *m_recVenc = nullptr, *m_recAenc = nullptr;
 	bool m_streaming = false;
 	bool m_testStream = false;
+	bool m_recPaused = false;
+	qint64 m_recPausedMs = 0, m_recPausedAt = 0; // total paused, and when this pause began (rec clock)
 	bool m_multitrack = false;
 	int m_reconnectAttempt = 0; // tries since the connection dropped (0: connected)
 	qint64 m_reconnectAt = 0;   // stream clock ms of the next try

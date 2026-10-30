@@ -66,7 +66,7 @@ void Engine::pollLiveStats()
 	QDir().mkpath(recDir);
 	s["diskFreeGb"] = double(os_get_free_disk_space(recDir.toUtf8().constData())) / (1024.0 * 1024.0 * 1024.0);
 	if (m_recording && m_recOutput) {
-		s["recTime"] = hms(m_recClock.elapsed() / 1000);
+		s["recTime"] = hms(recordedMs() / 1000);
 		s["recMb"] = double(obs_output_get_total_bytes(m_recOutput)) / (1024.0 * 1024.0);
 		s["recDropped"] = obs_output_get_frames_dropped(m_recOutput);
 	}

@@ -99,6 +99,15 @@ RowLayout {
                 tip: app.recording ? "Stop recording (" + (oc.st.recMb || 0).toFixed(0) + " MB)" : "Record the on-air scene"
                 onClicked: app.toggleRecording()
             }
+            FButton { // appears only while recording
+                visible: app.recording && (app.canPauseRecording || app.recordingPaused)
+                implicitHeight: Pal.ctl - 6
+                Layout.rightMargin: 4
+                iconName: app.recordingPaused ? "play" : "pause"
+                variant: app.recordingPaused ? "secondary" : "ghost"
+                tip: app.recordingPaused ? "Resume recording" : "Pause recording"
+                onClicked: app.togglePauseRecording()
+            }
         }
     }
 

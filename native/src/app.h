@@ -38,6 +38,8 @@ class App : public QObject {
 	Q_PROPERTY(QString stats READ stats NOTIFY engineChanged)
 	Q_PROPERTY(QString status READ status NOTIFY engineChanged)
 	Q_PROPERTY(bool recording READ recording NOTIFY engineChanged)
+	Q_PROPERTY(bool recordingPaused READ recordingPaused NOTIFY engineChanged)
+	Q_PROPERTY(bool canPauseRecording READ canPauseRecording NOTIFY engineChanged)
 	Q_PROPERTY(QString toast READ toast NOTIFY toastChanged)
 	Q_PROPERTY(QStringList kinds READ kinds CONSTANT)
 	Q_PROPERTY(int thumbTick READ thumbTick NOTIFY thumbTickChanged)
@@ -73,6 +75,8 @@ public:
 	QString stats() const { return m_engine->stats(); }
 	QString status() const { return m_engine->status(); }
 	bool recording() const { return m_engine->recording(); }
+	bool recordingPaused() const { return m_engine->recordingPaused(); }
+	bool canPauseRecording() const { return m_engine->canPauseRecording(); }
 	QString toast() const { return m_toast; }
 	QStringList kinds() const { return lobs::allKinds(); }
 	const lobs::Doc &doc() const { return m_store.doc(); }
@@ -231,6 +235,7 @@ public:
 	Q_INVOKABLE QVariantMap obsSetup(const QString &folder = {}) const; // folder: QA points it at one
 	Q_INVOKABLE QVariantMap importFromObs(const QString &profileDir, const QString &collectionPath, const QVariantList &plugins);
 	Q_INVOKABLE void toggleRecording();
+	Q_INVOKABLE void togglePauseRecording() { m_engine->setRecordingPaused(!m_engine->recordingPaused()); emit engineChanged(); }
 	Q_INVOKABLE void nudge(int dx, int dy);
 	// drag a source from Sources over the preview (coords relative to the preview item)
 	Q_INVOKABLE void poolDragMove(const QString &sourceId, double x, double y);
