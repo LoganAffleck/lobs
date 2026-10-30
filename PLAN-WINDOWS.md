@@ -94,8 +94,10 @@ The same design as OBS's "Connect Account":
    it only works with OBS's server).
 2. **A small auth server** holding the secret, like OBS's `auth.obsproject.com`. It takes Twitch's
    redirect, swaps the one-time code for tokens, hands them to LOBS, and refreshes them later.
-   A few endpoints: a serverless function on the website's host would do. **Open:** where the site
-   is hosted, and the server's address (it becomes the app's redirect URL).
+   **Netlify Functions** on the website's site (decided 2026-10-30), in `web/netlify/functions`,
+   with the secret in Netlify's environment variables (`TWITCH_CLIENT_SECRET`, never in the repo).
+   Redirect URL: `https://streamlobs.com/twitch/callback` (add it in the Twitch console next to the
+   localhost one). Endpoints: the callback (code → tokens, handed to LOBS) and a refresh.
 3. **Sign-in inside LOBS.** "Connect account" in the stream settings and in first-time setup opens
    Twitch's sign-in page in a LOBS window (the browser engine LOBS already bundles), with the
    permissions OBS asks for: reading the stream key, chat, and the channel's details.
