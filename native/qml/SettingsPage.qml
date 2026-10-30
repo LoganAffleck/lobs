@@ -230,6 +230,29 @@ Rectangle {
                                 }
                             }
                         }
+                        // A rehearsal on Twitch: the real encoder, scene and connection, but the channel
+                        // never goes live. Twitch Inspector shows how it arrives.
+                        GroupTitle { visible: String(page.s.service).startsWith("Twitch"); text: "Test stream" }
+                        Card {
+                            visible: String(page.s.service).startsWith("Twitch")
+                            SettingRow {
+                                divider: false
+                                title: app.testStreaming ? "Test stream running" : "Test without going live"
+                                description: "Streams to Twitch, but viewers can't see it. Check it in Twitch Inspector."
+                                Row {
+                                    spacing: 6
+                                    height: Pal.ctl
+                                    FButton {
+                                        visible: !app.streaming || app.testStreaming
+                                        text: app.testStreaming ? "Stop" : "Start test stream"
+                                        variant: app.testStreaming ? "secondary" : "primary"
+                                        enabled: page.s.hasKey
+                                        onClicked: app.testStreaming ? app.toggleStreaming() : app.startTestStream()
+                                    }
+                                    FButton { iconName: "external-link"; text: "Inspector"; variant: "ghost"; onClicked: Qt.openUrlExternally("https://inspector.twitch.tv/") }
+                                }
+                            }
+                        }
                         GroupTitle { text: "Quality" }
                         Card {
                             SettingRow {

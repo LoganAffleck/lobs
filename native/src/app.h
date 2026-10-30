@@ -42,6 +42,7 @@ class App : public QObject {
 	Q_PROPERTY(QStringList kinds READ kinds CONSTANT)
 	Q_PROPERTY(int thumbTick READ thumbTick NOTIFY thumbTickChanged)
 	Q_PROPERTY(bool streaming READ streaming NOTIFY engineChanged)
+	Q_PROPERTY(bool testStreaming READ testStreaming NOTIFY engineChanged)
 	Q_PROPERTY(bool live READ live NOTIFY engineChanged)
 	// An untitled show with changes since New/Sample/Import: Open and Import ask to save it first.
 	Q_PROPERTY(bool unsavedShow READ unsavedShow NOTIFY docChanged)
@@ -394,6 +395,8 @@ public:
 	Q_INVOKABLE bool envFlag(const QString &name) const { return qEnvironmentVariableIsSet(name.toUtf8().constData()); }
 	Q_INVOKABLE QString envValue(const QString &name) const { return qEnvironmentVariable(name.toUtf8().constData()); } // true once per key (one-time UI migrations)
 	Q_INVOKABLE void toggleStreaming();
+	Q_INVOKABLE void startTestStream(); // Twitch: reaches Inspector, never the channel
+	bool testStreaming() const { return m_engine->testStreaming(); }
 	// Graphic tools: select | text | rect | ellipse | arrow | pencil | laser. Drawing tools make a
 	// layer in the edited scene; the laser draws a fading trail over the output, not a layer.
 	Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY toolChanged)

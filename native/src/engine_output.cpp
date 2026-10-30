@@ -210,7 +210,7 @@ static void onStreamReconnect(void *data, calldata_t *)
 	QMetaObject::invokeMethod(self, [self]() { emit self->streamStatsChanged(); }, Qt::QueuedConnection);
 }
 
-bool Engine::startStreaming()
+bool Engine::startStreaming(bool test)
 {
 	if (!m_started || m_streaming)
 		return false;
@@ -218,6 +218,10 @@ bool Engine::startStreaming()
 	const StreamSettings &st = m_settings.stream;
 	if (st.key.isEmpty() && st.service != "Custom") {
 		m_lastError = "Add your stream key in Settings first";
+		return false;
+	}
+	if (test && !st.service.startsWith("Twitch")) {
+		m_lastError = "Test streams work with Twitch only";
 		return false;
 	}
 
@@ -234,7 +238,8 @@ bool Engine::startStreaming()
 		m_service = obs_service_create("rtmp_custom", "LOBS service", d, nullptr);
 		obs_data_release(d);
 	} else {
-		obs_data_t *d = toData({{"service", st.service}, {"server", st.server}, {"key", st.key}});
+		const QString key = test ? st.key + "?bandwidthtest=true" : st.key;
+		obs_data_t *d = toData({{"service", st.service}, {"server", st.server}, {"key", key}});
 		m_service = obs_service_create("rtmp_common", "LOBS service", d, nullptr);
 		obs_data_release(d);
 	}
@@ -289,7 +294,8 @@ bool Engine::startStreaming()
 	m_byteHistory.clear();
 	pollStreamStats();
 	emit streamingChanged();
-	setStatus("Live on " + (st.service == "Custom" ? st.customUrl : st.service) + " · " + QString(obs_encoder_get_name(m_streamVenc)));
+	m_testStream = test;
+	setStatus((test ? "Test stream to " : "Live on ") + (st.service == "Custom" ? st.customUrl : st.service) + " · " + QString(obs_encoder_get_name(m_streamVenc)));
 	return true;
 }
 

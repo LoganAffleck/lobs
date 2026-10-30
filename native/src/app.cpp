@@ -3580,6 +3580,17 @@ void App::toggleStreaming()
 	emit engineChanged();
 }
 
+void App::startTestStream()
+{
+	if (m_engine->streaming())
+		return;
+	if (!m_engine->startStreaming(true))
+		showToast(m_engine->lastError());
+	else
+		m_liveUnlock = false, showToast("Test stream started. Viewers can't see it; check it in Twitch Inspector.");
+	emit engineChanged();
+}
+
 void App::setLiveUnlock(bool on)
 {
 	m_liveUnlock = on;

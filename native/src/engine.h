@@ -189,7 +189,10 @@ public:
 	QStringList services() const;                 // rtmp-services names
 	QVariantList servers(const QString &service) const; // [{name, value}]
 	bool resetVideo();                            // apply output size/FPS (only while nothing is live)
-	bool startStreaming();
+	// test: a Twitch test stream (the key with ?bandwidthtest=true): it reaches Twitch, so Inspector
+	// shows it, but the channel never goes live and viewers never see it.
+	bool startStreaming(bool test = false);
+	bool testStreaming() const { return m_streaming && m_testStream; }
 	void stopStreaming();
 	void applyStreamBitrate(); // the saved bitrate, on the running stream
 	int streamBitrate(int kbps) const; // the service's cap (Twitch: 5800)
@@ -355,6 +358,7 @@ private:
 	obs_encoder *m_streamVenc = nullptr, *m_streamAenc = nullptr;
 	obs_encoder *m_recVenc = nullptr, *m_recAenc = nullptr;
 	bool m_streaming = false;
+	bool m_testStream = false;
 	QVariantMap m_streamStats;
 	QElapsedTimer m_streamClock;
 	quint64 m_lastBytes = 0;

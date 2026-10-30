@@ -106,7 +106,7 @@ RowLayout {
     AbstractButton {
         id: live
         Accessible.role: Accessible.Button
-        Accessible.name: app.streaming ? "Stop streaming" : "Go live"
+        Accessible.name: app.testStreaming ? "Stop the test stream" : app.streaming ? "Stop streaming" : "Go live"
         property bool confirming: false
         hoverEnabled: true
         implicitHeight: Pal.ctl + 6
@@ -146,7 +146,7 @@ RowLayout {
                 Text {
                     text: !app.streaming ? "Go live"
                         : live.confirming ? "Click again to stop"
-                        : "LIVE  " + (oc.ss.time || "00:00:00")
+                        : (app.testStreaming ? "TEST  " : "LIVE  ") + (oc.ss.time || "00:00:00")
                     color: app.streaming ? "#fee2e2" : Pal.s1
                     font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 600
                     anchors.verticalCenter: parent.verticalCenter
