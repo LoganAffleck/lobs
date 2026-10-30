@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "frontend.h"
 #include "model/audio_fx.h"
 #include "model/video_fx.h"
 #include "permissions.h"
@@ -105,6 +106,8 @@ bool Engine::start(const QString &runtimeRoot)
 		setStatus("Couldn't start audio");
 		return false;
 	}
+	// LOBS answers OBS's interface API before plugins load: they register docks and events there.
+	lobs::frontend::install(this);
 	// OBS 33 replaced module loading: obs_load_all_modules() became an empty stub, and its
 	// obs_load_core_modules() insists on every module OBS ships (including OBS's UI-only ones,
 	// which LOBS leaves out). So on 33+ LOBS loads exactly the modules it kept, from

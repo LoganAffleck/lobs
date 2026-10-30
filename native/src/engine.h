@@ -97,6 +97,12 @@ public:
 	QString stats() const { return m_stats; }
 	QVariantMap layerResources() const; // for QA: how many layers hold filters, text and shape renderers
 	bool recording() const { return m_recording; }
+	// For the frontend API (frontend.cpp): OBS objects plugins ask for.
+	obs_output *streamOutput() const { return m_streamOutput; }
+	obs_output *recordOutput() const { return m_recOutput; }
+	obs_output *replayOutput() const { return m_replayOutput; }
+	obs_output *vcamOutput() const { return m_vcamOutput; }
+	obs_service *streamService() const { return m_service; }
 	// Pausing: OBS can't pause a recording that shares the stream's encoder ("Same as stream").
 	bool canPauseRecording() const;
 	bool recordingPaused() const { return m_recording && m_recPaused; }

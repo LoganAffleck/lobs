@@ -499,6 +499,16 @@ ApplicationWindow {
                     }
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                     FMenuItem { text: "Show all panels"; onTriggered: win.panels.forEach(d => { if (!d.isOpen) d.show() }) }
+                    // Plugins that add panels or Tools items through OBS's interface.
+                    MenuSeparator { visible: windowMenu.populated && (app.hasPluginPanels() || app.pluginTools().length > 0); height: visible ? implicitHeight : 0; contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                    FMenuItem { visible: windowMenu.populated && app.hasPluginPanels(); height: visible ? implicitHeight : 0; text: "Plugin panels"; onTriggered: app.showPluginPanels() }
+                    Instantiator {
+                        active: windowMenu.populated
+                        model: windowMenu.populated ? app.pluginTools() : []
+                        delegate: FMenuItem { required property string modelData; text: modelData; onTriggered: app.triggerPluginTool(modelData) }
+                        onObjectAdded: (i, o) => windowMenu.addItem(o)
+                        onObjectRemoved: (i, o) => windowMenu.removeItem(o)
+                    }
                     FMenuItem { text: "Reset layout"; onTriggered: layoutSaver.restoreFromFile(win.defaultLayoutFile) }
                 }
             }

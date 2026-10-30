@@ -212,6 +212,13 @@ _probe-record-pause and 50-output pass; a paused recording played back fine and 
 
 **Done when** a plugin that adds a dock in OBS adds the same panel in LOBS.
 
+**Built 2026-10-30:** LOBS registers as OBS's frontend (native/src/frontend.cpp, headers from OBS
+32.2.2 in native/deps/obs-frontend-api), so plugins get answers for docks, Tools items, events,
+scenes, outputs and save callbacks. Their docks go into one "Plugin panels" window (Window menu),
+a Qt Widgets main window, since LOBS's panels are Qt Quick. _probe-plugin-dock: Downstream Keyer
+0.4.5 loads and adds its panel. Still to check by hand: using its panel. Not yet: docking plugin
+panels among LOBS's own, OBS's main-window calls (Studio Mode, projectors, source dialogs).
+
 ### P2-7. A saved stream key looks saved
 *As a streamer, once my key is saved, Settings shows that it's set instead of an empty box.*
 - Saved: a checkmark and an Edit button, with no input. Edit opens the input (with Save and

@@ -407,6 +407,11 @@ public:
 	Q_INVOKABLE void setUiValue(const QString &key, const QString &value);
 	Q_INVOKABLE void notify(const QString &msg) { showToast(msg); } // a toast from QML
 	Q_INVOKABLE void copyText(const QString &text) const;
+	// Plugins that use OBS's interface: their panels (one window) and Tools menu items.
+	Q_INVOKABLE bool hasPluginPanels() const;
+	Q_INVOKABLE void showPluginPanels() const;
+	Q_INVOKABLE QStringList pluginTools() const;
+	Q_INVOKABLE void triggerPluginTool(const QString &name) const;
 	Q_INVOKABLE QVariantList searchAssets(const QString &query) const; // every folder; adds "where"
 	Q_INVOKABLE void setUiFlag(const QString &key, bool on);
 	QVariantMap sourceInfo(const lobs::Source &s) const;               // what the inspectors show for an input

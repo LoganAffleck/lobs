@@ -34,6 +34,7 @@
 #include <QNetworkReply>
 #include "enhanced_broadcast.h"
 #include "obs_switch.h"
+#include "frontend.h"
 #include <QTemporaryDir>
 #include <QStandardPaths>
 #include <QCoreApplication>
@@ -687,6 +688,10 @@ QString App::pluginsFolder() const { return QDir::toNativeSeparators(lobs::plugi
 void App::openPluginsFolder() const { QDesktopServices::openUrl(QUrl::fromLocalFile(lobs::plugins::folder())); }
 
 void App::copyText(const QString &text) const { QGuiApplication::clipboard()->setText(text); }
+bool App::hasPluginPanels() const { return lobs::frontend::hasPanels(); }
+void App::showPluginPanels() const { lobs::frontend::showPanels(); }
+QStringList App::pluginTools() const { return lobs::frontend::toolsItems(); }
+void App::triggerPluginTool(const QString &name) const { lobs::frontend::triggerTool(name); }
 
 QVariantMap App::obsSetup(const QString &folder) const { return obs_switch::scan(folder.isEmpty() ? obs_switch::obsFolder() : folder); }
 

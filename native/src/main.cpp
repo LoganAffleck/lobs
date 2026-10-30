@@ -3,6 +3,8 @@
 #include "window_chrome.h"
 #include "captions.h"
 #include "twitch_account.h"
+#include "frontend.h"
+#include <QApplication>
 #include "websocket_server.h"
 #include "crash_report.h"
 #include "dock_tabs.h"
@@ -744,7 +746,7 @@ int main(int argc, char *argv[])
 	if (scenePreviewEnabled() && !qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
 		qputenv("QSG_RENDER_LOOP", "basic");
 #endif
-	QGuiApplication app(argc, argv);
+	QApplication app(argc, argv); // not QGuiApplication: plugin panels are Qt Widgets
 	app.setOrganizationName("LOBS");
 	app.setApplicationName("LOBS");
 #ifdef LOBS_TESTS
@@ -935,6 +937,7 @@ int main(int argc, char *argv[])
 	if (const int st = int(app.arguments().indexOf("--engine-smoketest")); st > 0 && st + 1 < app.arguments().size())
 		return runEngineSmokeTest(app, engine, docPath, app.arguments()[st + 1]);
 	App controller(&engine, docPath);
+	lobs::frontend::setApp(&controller);
 	blog(LOG_INFO, "[lobs] startup: show loaded");
 	// macOS privacy permissions never hold up startup: what isn't allowed yet isn't created,
 	// the permissions bar says so, and a grant applies the show again (see permissions.h).
@@ -1024,6 +1027,7 @@ int main(int argc, char *argv[])
 	qml.addImageProvider("assetthumb", new AssetThumbProvider);
 	qml.addImageProvider("icon", new IconProvider(root + "/icons"));
 	qml.loadFromModule("LOBS", "Main");
+	QTimer::singleShot(0, &app, [] { lobs::frontend::loaded(); }); // plugins' FINISHED_LOADING, with the window up
 	if (qml.rootObjects().isEmpty())
 		return 1;
 	blog(LOG_INFO, "[lobs] startup: UI built");
@@ -1819,6 +1823,7 @@ int main(int argc, char *argv[])
 	}
 
 	const int rc = app.exec();
+	lobs::frontend::exiting(); // plugins save their state while the engine still runs
 	QThreadPool::globalInstance()->waitForDone(); // a background autosave finishes writing
 	captions.stop(); // its audio tap is on an engine input
 	engine.shutdown();
