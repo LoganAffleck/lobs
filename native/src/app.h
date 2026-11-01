@@ -495,6 +495,7 @@ public:
 	QVariantList mixer() const;
 	QVariantMap levels() const { return m_levels; }
 	Q_INVOKABLE void setAudio(const QString &sourceId, const QString &field, const QVariant &value, bool final);
+	Q_INVOKABLE void setDuckUnder(const QString &micId, bool on); // other audio dips while this mic talks
 	Q_INVOKABLE void setMutedInScene(const QString &sourceId, bool muted); // the scene being edited
 
 	// canvas input (from the preview window), in window-logical pixels

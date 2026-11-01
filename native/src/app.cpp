@@ -1273,6 +1273,14 @@ void App::duplicateScene(const QString &id, bool linked)
 
 // ---------- pool ----------
 
+// A ducker: this source dips while the voice is above -30 dB (after tuning, while you talk).
+static Filter duckFilter(const QString &voiceId)
+{
+	QVariantMap st = audioFxDefaults("duck");
+	st.insert({{"threshold", -30}, {"ratio", 6}, {"attack_time", 10}, {"release_time", 400}, {"sidechain_source", voiceId}});
+	return Filter{uid("afx_"), "duck", true, st};
+}
+
 void App::addSource(const QString &kind, const QString &name, const QString &extra, bool place, const QVariantMap &more)
 {
 	if (place && !liveSceneEditAllowed(m_editScene))
@@ -1305,6 +1313,13 @@ void App::addSource(const QString &kind, const QString &name, const QString &ext
 			d.sources[sid].audio.monitor = "monitor_and_output";
 		if (more.value("mono").toBool())
 			d.sources[sid].audio.mono = true;
+		// A game's own sound starts muted while Desktop audio already hears it (no doubling);
+		// unmute it (and mute Desktop audio) to mix the game on its own.
+		if (kind == "game" && std::any_of(d.sources.cbegin(), d.sources.cend(), [](const Source &o) { return o.kind == "desktop_audio" && !o.audio.muted; }))
+			d.sources[sid].audio.muted = true;
+		// Ducking is on for the show: new audio (not another voice) dips under the voice.
+		if (d.sources[sid].hasAudio && kind != "mic" && d.sources.contains(d.duckUnder))
+			d.sources[sid].audio.filters << duckFilter(d.duckUnder);
 		if (place && k.video && d.scenes.contains(m_editScene))
 			iid = d.placeSource(m_editScene, sid).id;
 	});
@@ -3926,6 +3941,8 @@ QVariantList App::mixer() const
 			warn << "Monitoring desktop audio causes an echo.";
 		if (s.kind == "mic" && s.audio.monitor == "monitor_and_output") // LOBS-029
 			warn << "You're monitoring your mic.";
+		if (s.kind == "game" && !s.audio.muted && std::any_of(doc().sources.cbegin(), doc().sources.cend(), [](const Source &o) { return o.kind == "desktop_audio" && !o.audio.muted; }))
+			warn << "Desktop audio hears this game too. Mute one so it isn't doubled.";
 		if (s.audio.monitor == "monitor_only")
 			warn << "Monitor only: not in the stream or recording.";
 		if (s.kind == "browser" && s.audio.monitor == "off")
@@ -3956,7 +3973,7 @@ QVariantList App::mixer() const
 					  {"obs", !plugin.isEmpty()}};
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
-				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"inRecording", s.audio.inRecording}, {"mutedHere", doc().scenes.value(doc().mainScene(m_editScene)).mutedAudio.contains(id)}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
+				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"inRecording", s.audio.inRecording}, {"mutedHere", doc().scenes.value(doc().mainScene(m_editScene)).mutedAudio.contains(id)}, {"ducksOthers", doc().duckUnder == id}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
 				   {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"pinned", doc().mixerPinned.contains(id)}};
 	}
 	return out;
@@ -4189,18 +4206,10 @@ void App::applyMicTuning(const QString &micId, const QVariantMap &m)
 		const double want = (speech + gain) - 8;
 		deskVol = std::pow(10.0, clamp(want - deskRaw, -40, 0) / 20); // never louder than it was at full
 	}
-	// Ducking (asked for in the game step): desktop audio dips while the tuned voice is above
-	// -30 dB, which after tuning means while you talk. Replaces an earlier ducker on it.
-	const bool duck = desk && m.value("duck").toBool();
 	m_store.commit("Tune " + doc().sources[micId].name, [&](Doc &d) {
 		d.sources[micId].audio.filters = chain;
 		if (desk)
 			d.sources[deskId].audio.volume = deskVol;
-		if (duck) {
-			QVector<Filter> &df = d.sources[deskId].audio.filters;
-			df.erase(std::remove_if(df.begin(), df.end(), [](const Filter &f) { return f.type == "duck"; }), df.end());
-			df << fx("duck", {{"threshold", -30}, {"ratio", 6}, {"attack_time", 10}, {"release_time", 400}, {"sidechain_source", micId}});
-		}
 	});
 }
 
@@ -4364,6 +4373,29 @@ PreviewLayout App::previewLayout() const
 	l.scale /= d, l.ox = std::round(l.ox) / d, l.oy = std::round(l.oy) / d;
 	l.other = QRectF(l.other.x() / d, l.other.y() / d, l.other.width() / d, l.other.height() / d);
 	return l;
+}
+
+// Ducking, a mic's Advanced option: every other audio source but voices dips under it, and ones
+// added later do too. One voice at a time; off removes the duckers it added.
+void App::setDuckUnder(const QString &micId, bool on)
+{
+	if (!doc().sources.contains(micId) || (doc().duckUnder == micId) == on)
+		return;
+	const QString old = doc().duckUnder;
+	m_store.commit((on ? "Duck under " : "Stop ducking under ") + doc().sources[micId].name, [&](Doc &d) {
+		d.duckUnder = on ? micId : QString();
+		for (Source &s : d.sources) {
+			if (!s.hasAudio || s.kind == "mic")
+				continue;
+			QVector<Filter> &df = s.audio.filters;
+			df.erase(std::remove_if(df.begin(), df.end(), [&](const Filter &f) {
+				const QString sc = f.settings.value("sidechain_source").toString();
+				return f.type == "duck" && (sc == micId || (!old.isEmpty() && sc == old));
+			}), df.end());
+			if (on)
+				df << duckFilter(micId);
+		}
+	});
 }
 
 void App::setMutedInScene(const QString &sourceId, bool muted)

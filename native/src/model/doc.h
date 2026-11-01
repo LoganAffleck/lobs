@@ -163,6 +163,9 @@ struct Doc {
 	// Backgrounds were unlocked before 0.3.0; a show opened in a later version locks them once
 	// (then the user can unlock them and it stays that way).
 	bool backgroundsLocked = true;
+	// The voice other audio ducks under (the mic wizard's Ducking step): audio sources added
+	// later get a ducker keyed to it. "" = off.
+	QString duckUnder;
 	// Transitions for Show: the list you pick from, and the one in use.
 	QVector<Transition> transitions = {{"tr_fade", "Fade", "fade", 300, {}}, {"tr_cut", "Cut", "cut", 0, {}}};
 	QString currentTransition = "tr_fade";

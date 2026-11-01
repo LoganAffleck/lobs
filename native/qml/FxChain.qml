@@ -112,7 +112,7 @@ ColumnLayout {
                             Text {
                                 Layout.fillWidth: true
                                 text: !fxRow.expandable || fxRow.open ? ""
-                                    : fxRow.fx.type === "duck" ? ((app.mixer.find(m => m.id === fxRow.fx.sidechain) || {}).name ? "Under " + app.mixer.find(m => m.id === fxRow.fx.sidechain).name : "No voice chosen")
+                                    : fxRow.fx.type === "duck" ? ((app.mixer.find(m => m.id === fxRow.fx.sidechain) || {}).name ? "Under " + app.mixer.find(m => m.id === fxRow.fx.sidechain).name : "No source chosen")
                                     : fxRow.params.slice(0, 2).map(p => fxRow.fmt(p)).join(" · ")
                                 elide: Text.ElideRight
                                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
@@ -158,8 +158,8 @@ ColumnLayout {
             FSelect {
                 visible: fxRow.open && fxRow.fx.type === "duck"
                 Layout.fillWidth: true; Layout.leftMargin: fxChain.s.fx.length > 1 && !fxChain.review ? 20 : 0
-                placeholder: "Choose the voice to duck under"
-                options: app.mixer.filter(m => m.id !== fxChain.s.id).map(m => ({ name: "Under " + m.name, value: m.id }))
+                placeholder: "Choose what it ducks under"
+                options: app.mixer.filter(m => m.id !== fxChain.s.id).map(m => ({ name: m.name, value: m.id }))
                 currentValue: fxRow.fx.sidechain || ""
                 onPicked: (v) => app.setAudioFilterText(fxChain.s.id, fxRow.index, "sidechain_source", v)
             }

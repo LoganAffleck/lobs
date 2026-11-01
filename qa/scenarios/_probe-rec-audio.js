@@ -154,7 +154,7 @@ story("RA-06", "Tune my mic: what it heard becomes an ordinary chain, one undo s
 	check("Tune my mic offered", t.items("Tune my mic").length >= 1);
 	t.clickItem("Tune my mic", 0); t.waitFrames(10, 2000);
 	check("wizard opens", t.waitUntil(() => t.items("Tune your mic").length >= 1, 3000));
-	check("shows its steps", t.items("Quiet").length >= 1 && t.items("Compare").length >= 1 && t.items("Game").length >= 1);
+	check("shows its steps", t.items("Room noise").length >= 1 && t.items("Get loud!").length >= 1 && t.items("Compare").length >= 1);
 	t.grab("wizard.png");
 	t.clickItem("Start", t.items("Start").length - 1); t.waitFrames(5, 2000);
 	if (t.waitUntil(() => t.items("Get ready").length >= 1, 2000)) t.grab("wizard-ready.png");
@@ -184,17 +184,26 @@ story("RA-07", "Tune my mic: the results screen, with the effects to adjust", ()
 	check("Edit filters opens the effects", t.waitUntil(() => t.items("Noise gate").length >= 1 && t.items("Record After again").length >= 1, 3000));
 });
 
-story("RA-08", "Ducking: tuning can make game audio dip under the voice", () => {
+story("RA-08", "Ducking: a mic option that makes other audio dip under it", () => {
 	fresh();
 	addKind("mic", "Mic", "", false); addKind("desktop_audio", "Desktop", "", false); t.wait(300);
 	const mic = app.mixer.find(m => m.name === "Mic").id, desk = app.mixer.find(m => m.name === "Desktop").id;
-	const dfx = () => app.mixer.find(m => m.id === desk).fx;
-	app.applyMicTuning(mic, { floor: -60, speech: -22, loud: -10, desk: -8, deskId: desk, duck: true });
-	const d = dfx().find(f => f.type === "duck");
+	const fxOf = (n) => app.mixer.find(m => m.name === n).fx;
+	app.setDuckUnder(mic, true);
+	const d = fxOf("Desktop").find(f => f.type === "duck");
 	check("a ducker on desktop audio", !!d);
 	eq("keyed to the mic", d && d.sidechain, mic);
-	app.applyMicTuning(mic, { floor: -60, speech: -22, loud: -10, desk: -8, deskId: desk, duck: true });
-	eq("tuning again replaces it", dfx().filter(f => f.type === "duck").length, 1);
+	check("the mic says so", !!app.mixer.find(m => m.id === mic).ducksOthers);
 	app.addAudioFilter(desk, "duck");
-	eq("also addable by hand", dfx().filter(f => f.type === "duck").length, 2);
+	eq("also addable by hand", fxOf("Desktop").filter(f => f.type === "duck").length, 2);
+	addKind("desktop_audio", "Music", "", false); addKind("mic", "Guest", "", false); t.wait(300);
+	eq("audio added later ducks too", (fxOf("Music").find(f => f.type === "duck") || {}).sidechain, mic);
+	check("another voice doesn't", !fxOf("Guest").some(f => f.type === "duck"));
+	app.undo(); app.undo(); app.undo(); app.undo();
+	check("one undo step", !fxOf("Desktop").some(f => f.type === "duck"));
+	app.redo(); app.redo();
+	app.setDuckUnder(mic, false);
+	eq("turning it off removes it (the hand-added one stays)", fxOf("Desktop").filter(f => f.type === "duck").length, 1);
+	addKind("desktop_audio", "Later", "", false); t.wait(300);
+	check("and new audio stops ducking", !fxOf("Later").some(f => f.type === "duck"));
 });

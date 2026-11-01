@@ -14,7 +14,6 @@ FDialog {
     // Only Cancel, Keep it or Undo close it: a stray click outside (or Esc) would throw away a run.
     closePolicy: Popup.NoAutoClose
     property string micId: ""
-    property string deskId: "" // desktop audio, if the show has one
     property bool fromAdd: false // opened right after adding the mic: its close button reads "Skip"
     readonly property var mic: app.mixer.find(m => m.id === micId) || ({ name: "Mic" })
     // About 12 seconds read aloud: long enough to measure, the same both times.
@@ -22,9 +21,9 @@ FDialog {
 
     // Steps: 0 start, 1 quiet, 2 talk, 3 loud, 4 game audio, 5 read it again, 6 results.
     property int step: 0
-    // The strip: step number, name and icon. No desktop audio, no game step.
-    readonly property var strip: [{ n: 1, name: "Quiet", icon: "volume-x" }, { n: 2, name: "Talk", icon: "mic" }, { n: 3, name: "Loud", icon: "volume-2" }]
-        .concat(deskId ? [{ n: 4, name: "Game", icon: "gamepad-2" }] : []).concat([{ n: 5, name: "Compare", icon: "headphones" }])
+    // The strip: step number, name and icon. (4 was game audio, now gone; ducking is a mic option.)
+    readonly property var strip: [{ n: 1, name: "Room noise", icon: "volume-x" }, { n: 2, name: "Talking", icon: "mic" }, { n: 3, name: "Get loud!", icon: "volume-2" },
+        { n: 5, name: "Compare", icon: "headphones" }]
     // phase: "wait" (counting down, or waiting to hear you), "listen", "done"
     property string phase: "wait"
     property real elapsed: 0
@@ -36,13 +35,10 @@ FDialog {
     property string afterClip: ""
     property string playing: "" // "before" | "after" | ""
     property bool again: false // recording After again from the results
-    property bool duck: true // game step: lower game audio while you talk
     property int before: -1 // the history step before tuning: Undo and Try again go back to it, tweaks and all
 
     function openFor(id) {
         micId = id
-        const d = app.mixer.find(m => m.global && m.kind === "desktop_audio")
-        deskId = d ? d.id : ""
         measured = ({}); beforeClip = ""; afterClip = ""; playing = ""
         step = 0
         app.setFxBypassed(micId, true)
@@ -73,11 +69,9 @@ FDialog {
         if (step === 1) m.floor = pct(samples, 0.5)
         if (step === 2) { const voiced = samples.filter(v => v > floorDb + 10); m.speech = pct(voiced.length > 10 ? voiced : samples, 0.9); beforeClip = app.stopClip("mic-before") }
         if (step === 3) m.loud = pct(samples, 1)
-        if (step === 4) { m.desk = pct(samples, 0.9); m.deskId = deskId; m.duck = duck }
         if (step === 5) afterClip = app.stopClip("mic-after")
         measured = m
-        if (step === 3 && !deskId) return tune()
-        if (step === 4) return tune()
+        if (step === 3) return tune()
         if (step === 5) again = false
         begin(step + 1)
     }
@@ -89,7 +83,7 @@ FDialog {
     Timer {
         interval: 50; repeat: true; running: wiz.visible && wiz.step >= 1 && wiz.step <= 5 && wiz.phase !== "done"
         onTriggered: {
-            const lv = wiz.level(wiz.step === 4 ? wiz.deskId : wiz.micId)
+            const lv = wiz.level(wiz.micId)
             if (wiz.phase === "wait") {
                 if (wiz.countdown > 0) { wiz.countdown -= 0.05; if (wiz.countdown <= 0) wiz.listen(); return }
                 // Talking: starts when your voice is clearly above the room. Loud: when it jumps.
@@ -176,19 +170,13 @@ FDialog {
             Text {
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                 color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.subtitle; font.weight: 550
-                text: ["", "Stay quiet", "Read this out loud", "Now get loud", "Play something loud", "Read it once more"][wiz.step]
+                text: ["", "Stay quiet", "Read this out loud", "Now get loud", "", "Read it once more"][wiz.step]
             }
             Text {
-                visible: wiz.step === 1 || wiz.step === 3 || wiz.step === 4
+                visible: wiz.step === 1 || wiz.step === 3
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
-                text: wiz.step === 1 ? "LOBS is hearing your room." : wiz.step === 3 ? "Yell, laugh or cheer, like your best moment on stream." : "A game or video, as loud as it gets on stream. Stay quiet."
-            }
-            FCheckbox {
-                visible: wiz.step === 4
-                text: "Also lower game audio while I talk"
-                checked: wiz.duck
-                onClicked: wiz.duck = checked
+                text: wiz.step === 1 ? "LOBS is hearing your room." : wiz.step === 3 ? "Yell, laugh or cheer, like your best moment on stream." : ""
             }
             // The line to read, set apart from the instructions.
             Rectangle {
@@ -210,7 +198,7 @@ FDialog {
                 Layout.fillWidth: true
                 implicitHeight: 18
                 value: 1
-                levels: app.levels[wiz.step === 4 ? wiz.deskId : wiz.micId] || [-60, -60]
+                levels: app.levels[wiz.micId] || [-60, -60]
                 enabled: false
             }
             RowLayout {
@@ -237,7 +225,7 @@ FDialog {
             spacing: 12
             Text {
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
-                text: "Room " + wiz.roomText(wiz.floorDb).toLowerCase() + " · Voice " + wiz.voiceText(wiz.speechDb).toLowerCase() + " · Loud moments limited" + (wiz.measured.desk !== undefined ? (wiz.measured.duck ? " · Game audio ducks under you" : " · Game audio lowered") : "")
+                text: "Room " + wiz.roomText(wiz.floorDb).toLowerCase() + " · Voice " + wiz.voiceText(wiz.speechDb).toLowerCase() + " · Loud moments limited" + ""
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
             }
             // Before / after, the same reading both times. Change an effect below, then record After again.
@@ -303,7 +291,6 @@ FDialog {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            FButton { visible: wiz.step === 4 && wiz.phase !== "listen"; text: "Skip"; variant: "ghost"; onClicked: wiz.tune() }
             FButton { visible: wiz.step === 6; text: "Try again"; variant: "ghost"; onClicked: { app.playClip(""); wiz.revert(); wiz.measured = ({}); wiz.beforeClip = ""; wiz.afterClip = ""; app.setFxBypassed(wiz.micId, true); wiz.begin(1) } }
             Item { Layout.fillWidth: true }
             FButton { visible: wiz.step === 6; text: "Cancel"; variant: "ghost"; tip: "Put the old effects back"; onClicked: { app.playClip(""); wiz.revert(); wiz.close() } }

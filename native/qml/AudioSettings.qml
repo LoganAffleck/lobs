@@ -114,6 +114,7 @@ ColumnLayout {
         au.s.mono ? "Mono" : "",
         (au.s.tracks || []).slice(1).some(t => t) ? "Tracks" : "",
         au.s.mutedHere ? "Muted in this scene" : "",
+        au.s.ducksOthers ? "Ducking" : "",
         au.s.pinned ? "Pinned" : ""].filter(t => t)
     property bool advancedOpen: false
     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
@@ -193,6 +194,13 @@ ColumnLayout {
         checked: !!au.s.mono
         tip: "The same mix on both sides. Fixes a mic heard on one side only."
         onToggled: app.setAudio(au.s.id, "mono", !au.s.mono, true)
+    }
+    OptionRow {
+        visible: au.advancedOpen && au.s.kind === "mic"
+        iconName: "arrow-down"; text: "Duck all other audio"
+        checked: !!au.s.ducksOthers
+        tip: "Other audio sources get quieter while speaking"
+        onToggled: app.setDuckUnder(au.s.id, !au.s.ducksOthers)
     }
     // Mics and desktop audio play in every scene; this keeps one quiet while a scene is on air.
     OptionRow {

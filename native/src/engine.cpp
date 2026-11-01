@@ -304,7 +304,7 @@ static QJsonObject inputSettings(const Doc &doc, const Source &s)
 		return {{"local_file", st.value("file").toString()}, {"looping", st.value("loop").toBool()}};
 	if (s.kind == "game")
 		return {{"capture_mode", st.value("mode", "any_fullscreen").toString()}, {"window", st.value("device").toString()},
-			{"allow_transparency", st.value("transparent").toBool()}}; // keeps the alpha of apps that draw it (VTuber avatars)
+			{"allow_transparency", st.value("transparent").toBool()}, {"capture_audio", true}}; // keeps the alpha of apps that draw it (VTuber avatars)
 #ifndef Q_OS_WIN
 	if (s.kind == "display" || s.kind == "window") { // one ScreenCaptureKit source: 0 display, 1 window
 		QJsonObject o{{"type", s.kind == "display" ? 0 : 1}, {"show_cursor", true}};

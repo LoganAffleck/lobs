@@ -53,7 +53,7 @@ const KindInfo &kindInfo(const QString &kind)
 		{"camera", {"Camera", "video", true, false, 1280, 720}},
 		{"display", {"Display Capture", "monitor", true, false, 0, 0}},
 		{"window", {"Window Capture", "app-window", true, false, 0, 0}},
-		{"game", {"Game Capture", "gamepad-2", true, false, 0, 0}},
+		{"game", {"Game Capture", "gamepad-2", true, true, 0, 0}}, // the game's own sound (OBS 30's capture_audio)
 		{"image", {"Image", "image", true, false, 800, 450}},
 		{"media", {"Media File", "film", true, true, 1280, 720}},
 		{"browser", {"Browser", "globe", true, true, 1920, 1080}},
@@ -735,7 +735,7 @@ QJsonObject Doc::toJson() const
 	for (const auto &k : links)
 		lnks[k.id] = QJsonObject{{"id", k.id}, {"group", groupKey(k.group)}, {"value", propsJson(k.value)[groupKey(k.group)]}};
 	return QJsonObject{{"version", 1}, {"canvas", QJsonObject{{"w", canvasW}, {"h", canvasH}}}, {"vertical", QJsonObject{{"on", verticalOn}, {"w", verticalW}, {"h", verticalH}}}, {"sources", srcs}, {"sourceOrder", QJsonArray::fromStringList(sourceOrder)},
-			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"mixerOrder", QJsonArray::fromStringList(mixerOrder)}, {"backgroundsLocked", backgroundsLocked}, {"mixerPinned", QJsonArray::fromStringList(mixerPinned)}, {"swatches", QJsonArray::fromStringList(swatches)},
+			   {"scenes", scns}, {"sceneOrder", QJsonArray::fromStringList(sceneOrder)}, {"instances", insts}, {"links", lnks}, {"bins", QJsonArray::fromStringList(bins)}, {"mixerOrder", QJsonArray::fromStringList(mixerOrder)}, {"backgroundsLocked", backgroundsLocked}, {"duckUnder", duckUnder}, {"mixerPinned", QJsonArray::fromStringList(mixerPinned)}, {"swatches", QJsonArray::fromStringList(swatches)},
 			   {"transitions", [&] {
 				    QJsonArray a;
 				    for (const Transition &t : transitions)
@@ -775,6 +775,7 @@ Doc Doc::fromJson(const QJsonObject &o)
 	for (const auto &v : o["sources"].toObject()) {
 		const QJsonObject s = v.toObject();
 		Source x{s["id"].toString(), s["name"].toString(), s["kind"].toString(), s["bin"].toString(), s["color"].toString(), s["settings"].toObject().toVariantMap()};
+		x.hasAudio = kindInfo(x.kind).audio; // a game capture saved before it had sound gets it
 		if (s.contains("audio")) {
 			const QJsonObject a = s["audio"].toObject();
 			x.hasAudio = true;
@@ -836,6 +837,7 @@ Doc Doc::fromJson(const QJsonObject &o)
 	d.bins = strings(o["bins"]);
 	d.mixerOrder = strings(o["mixerOrder"]);
 	d.mixerPinned = strings(o["mixerPinned"]);
+	d.duckUnder = o["duckUnder"].toString();
 	if (!o["backgroundsLocked"].toBool()) { // saved before backgrounds started locked: lock them, once
 		for (Instance &i : d.instances)
 			if (i.kind != "group" && d.sources.value(i.sourceId).settings.value("background").toBool())
