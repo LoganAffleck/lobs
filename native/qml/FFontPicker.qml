@@ -24,7 +24,7 @@ FButton {
             color: fp.currentFont ? Pal.fg : Pal.muted
             font.family: fp.currentFont || Pal.font; font.pixelSize: Pal.body + 1
         }
-        Text { id: chev; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "▾"; color: Pal.muted; font.pixelSize: 10 }
+        FIcon { id: chev; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 14; color: Pal.muted }
     }
     onClicked: pop.opened ? pop.close() : pop.open()
     // Picking remembers the font: it tops the list next time, and new text uses it.

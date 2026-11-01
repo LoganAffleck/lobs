@@ -163,9 +163,16 @@ Item {
                                     enabled: mv.canReorder
                                     cursorShape: mv.dragId === row.s.id ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                                     preventStealing: true
-                                    onPressed: mv.dragId = row.s.id
-                                    onPositionChanged: (m) => { if (pressed) mv.dropIndex = Math.max(0, Math.min(mv.count - 1, Math.floor(mapToItem(row.parent, m.x, m.y).y / row.height))) }
-                                    onReleased: { if (mv.dropIndex < 0) mv.inspect(row.s.id); mv.finishDrag() }
+                                    // A click selects; it's a drag only once the mouse has moved 6 px.
+                                    property point from
+                                    onPressed: (m) => from = Qt.point(m.x, m.y)
+                                    onPositionChanged: (m) => {
+                                        if (!pressed) return
+                                        if (mv.dragId !== row.s.id && Math.hypot(m.x - from.x, m.y - from.y) < 6) return
+                                        mv.dragId = row.s.id
+                                        mv.dropIndex = Math.max(0, Math.min(mv.count - 1, Math.floor(mapToItem(row.parent, m.x, m.y).y / row.height)))
+                                    }
+                                    onReleased: { if (mv.dragId !== row.s.id) mv.inspect(row.s.id); mv.finishDrag() }
                                     onCanceled: { mv.dragId = ""; mv.dropIndex = -1 }
                                 }
                             }
@@ -240,9 +247,16 @@ Item {
                                     enabled: mv.canReorder
                                     cursorShape: mv.dragId === strip.s.id ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                                     preventStealing: true
-                                    onPressed: mv.dragId = strip.s.id
-                                    onPositionChanged: (m) => { if (pressed) mv.dropIndex = Math.max(0, Math.min(mv.count - 1, Math.floor((mapToItem(strip.parent, m.x, m.y).x - 6) / (strip.width + 4)))) }
-                                    onReleased: { if (mv.dropIndex < 0) mv.inspect(strip.s.id); mv.finishDrag() }
+                                    // A click selects; it's a drag only once the mouse has moved 6 px.
+                                    property point from
+                                    onPressed: (m) => from = Qt.point(m.x, m.y)
+                                    onPositionChanged: (m) => {
+                                        if (!pressed) return
+                                        if (mv.dragId !== strip.s.id && Math.hypot(m.x - from.x, m.y - from.y) < 6) return
+                                        mv.dragId = strip.s.id
+                                        mv.dropIndex = Math.max(0, Math.min(mv.count - 1, Math.floor((mapToItem(strip.parent, m.x, m.y).x - 6) / (strip.width + 4))))
+                                    }
+                                    onReleased: { if (mv.dragId !== strip.s.id) mv.inspect(strip.s.id); mv.finishDrag() }
                                     onCanceled: { mv.dragId = ""; mv.dropIndex = -1 }
                                 }
                             }

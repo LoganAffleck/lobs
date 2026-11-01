@@ -264,6 +264,16 @@ OBS's main-window calls (Studio Mode, projectors, source dialogs).
 - Update PLAN.md's audit: hotkeys, the status bar, the virtual camera, projectors, transitions and
   Interact have shipped since it was written. Add what's still missing here.
 
+### P3-5. My recordings are clean: no alerts or chat
+- **Sound: done (2026-11-01).** Each audio source has **In recordings**. Off, it's on the stream
+  but not in recordings. Track 6 is the recording's mix (track 1 without those sources), so the
+  track buttons show 1–5.
+- **Picture: later, when there are more users.** It needs a second canvas at the desktop size,
+  with each scene's copy leaving out layers marked **Hide in recording**, built the way the
+  vertical layout is. Sources render once, but the second picture and its own recording encoder
+  add GPU load. Open questions: transitions on that canvas, whether the replay buffer and virtual
+  camera are clean too, and a small Recording view to check it.
+
 ## Reference: OBS with Enhanced Broadcasting, 2026-10-30
 
 From `%APPDATA%\obs-studio\logs\2026-10-30 01-36-07.txt`. A 1920×1080, 60 fps canvas on an

@@ -95,10 +95,10 @@ story("LA-04", "An audio source's mixer settings show in the Inspector", () => {
 	eq("the source is selected", app.inspector.mode, "source");
 	eq("it's the mic", app.inspector.id, k.source);
 	t.click("Inspector"); t.wait(300);
-	check("Inspector shows its audio settings", has("Audio") && has("Monitor off") && has("Effects"));
-	check("and its tracks", has("Tracks"));
+	check("Inspector shows its audio settings", has("Monitor") && has("Effects"));
+	check("and where it goes", has("Active in") && has("Recording"));
 	t.grab("la04-inspector.png");
-	check("no popover over the mixer", ui("Applies to this source in every scene.").length <= 1);
+	check("no popover over the mixer", ui("Active in").length <= 1);
 });
 
 story("LA-05", "Shift-click in Layers selects everything between; Ctrl-click toggles one", () => {

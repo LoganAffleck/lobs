@@ -464,14 +464,17 @@ void Engine::apply(const Doc &doc)
 		if (s.hasAudio) {
 			obs_source_set_volume(in, float(s.audio.volume));
 			m_docMuted[id] = s.audio.muted;
-			obs_source_set_muted(in, s.audio.muted || (m_pttBound.contains(id) && !m_pttHeld.contains(id)));
+			obs_source_set_muted(in, s.audio.muted || mutedOnAir(id) || (m_pttBound.contains(id) && !m_pttHeld.contains(id)));
 			obs_source_set_monitoring_type(in, s.audio.monitor == "monitor_only"          ? OBS_MONITORING_TYPE_MONITOR_ONLY
 							   : s.audio.monitor == "monitor_and_output" ? OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT
 												     : OBS_MONITORING_TYPE_NONE);
 			uint32_t mixers = 0;
-			for (int t = 0; t < s.audio.tracks.size(); t++)
+			for (int t = 0; t < std::min<qsizetype>(kRecordMix, s.audio.tracks.size()); t++)
 				if (s.audio.tracks[t])
 					mixers |= 1u << t;
+			// The recording's mix: every source that goes to recordings, on the stream or not.
+			if (s.audio.inRecording)
+				mixers |= 1u << kRecordMix;
 			obs_source_set_audio_mixers(in, mixers);
 			applyAudioFilters(in, id, s.audio.filters);
 			// Advanced audio: mono downmix, L/R balance, sync offset.
@@ -1015,6 +1018,12 @@ obs_source_t *Engine::ensureTransition()
 	return tr;
 }
 
+bool Engine::inputMuted(const QString &sourceId) const
+{
+	obs_source_t *in = m_inputs.value(sourceId);
+	return in && obs_source_muted(in);
+}
+
 void Engine::setProgramScene(const QString &sceneId, bool animate)
 {
 	const bool changed = sceneId != m_programId;
@@ -1023,6 +1032,8 @@ void Engine::setProgramScene(const QString &sceneId, bool animate)
 		m_parkTimer.start(500); // parks what stopped showing; waits out transitions itself
 	m_programId = sceneId;
 	syncVerticalProgram();
+	if (changed)
+		applyMutes(); // a scene can keep some global audio muted
 	obs_scene_t *s = m_scenes.value(sceneId);
 	obs_source_t *scene = s ? obs_scene_get_source(s) : nullptr;
 	obs_source_t *tr = m_started ? ensureTransition() : nullptr;

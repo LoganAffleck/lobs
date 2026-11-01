@@ -1950,7 +1950,7 @@ ApplicationWindow {
             { help: ["Files: this project's assets folder.", "Add files: drag in from File Explorer or click Add.", "Place it: drag onto the canvas or double-click.", "Right-click: show in File Explorer or move to Recycle Bin."], dock: assetsDock, guest: assetsGuest, icon: "image" },
             { help: ["Order: layers higher in the list draw on top.", "Linked: settings shared with another scene.", chrome.keys("Keys: Ctrl+C copy, Ctrl+V paste, Ctrl+Shift+V paste linked, Ctrl+D duplicate, Ctrl+G group, Delete remove."), "Copy to: copy layers to another scene."], dock: layersDock, guest: layersGuest, icon: "layers" },
             { help: ["This scene: layer changes apply here only.", "Linked: shared with another scene. Unlink to separate.", "Numbers: type math like 1920/2. Up and Down nudge, Shift for 10.", "Source: select it in Sources to edit it in every scene."], dock: inspectorDock, guest: inspectorGuest, icon: "sliders-horizontal" },
-            { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 is the stream. Recordings can use tracks 1–6.", "Monitor: hear it yourself. Monitor only keeps it off the stream and recording.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
+            { help: ["Global: Mic and Desktop Audio play in every scene.", "Scene audio: plays only in scenes that contain it.", "Tracks: track 1 is the stream and the recording. Turn off In recordings to keep a sound, such as alerts, out of recordings.", "Monitor: hear it yourself. Monitor only keeps it off the stream and recording.", "Fader: set the level. Meter shows peak dB."], dock: audioDock, guest: audioGuest, icon: "audio-lines" },
             { help: [chrome.keys("Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y."), "Jump: click a step to go back to it."], dock: historyDock, guest: historyGuest, icon: "history" },
             { help: ["Frames missed: the PC couldn't render in time.", "Frames skipped: the encoder fell behind.", "Dropped frames: the network couldn't keep up.", "Orange: over 1%."], dock: statsDock, guest: statsGuest, icon: "gauge" },
             { help: ["Speech to text from one audio source, on this PC.", "Send to stream: viewers turn on CC to see them.", "Language: pick one or detect it automatically.", "Text appears a few seconds after speech."], dock: captionsDock, guest: captionsGuest, icon: "captions" }
@@ -1987,6 +1987,7 @@ ApplicationWindow {
             ColumnLayout {
                 width: sv.availableWidth
                 spacing: 0
+                Item { implicitHeight: 8 } // room under the panel's tabs for whatever is selected
 
                 // A drawing tool is picked and nothing is selected: its colors and width for the next
                 // thing you draw. (A selected shape shows its own in the layer section instead.)
@@ -2366,7 +2367,6 @@ ApplicationWindow {
                     Row { spacing: 8
                         FIcon { size: 16; name: sv.d.icon || ""; anchors.verticalCenter: parent.verticalCenter }
                         Text { text: sv.d.name || ""; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; anchors.verticalCenter: parent.verticalCenter } }
-                    Caption { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: (sv.d.kindLabel || "Source") + " settings apply in every scene. Size, crop and filters are per layer." }
                     SourceFields { d: sv.d; active: sv.d.mode === "source" }
                     // Sources with sound: what the mixer's "..." used to open, here instead.
                     AudioSettings {
@@ -2375,12 +2375,13 @@ ApplicationWindow {
                         s: entry || ({ id: "", name: "", icon: "", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 })
                         Layout.fillWidth: true; Layout.topMargin: 8
                     }
-                    Text { text: "Used in"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.subtitle; font.weight: 550; Layout.topMargin: 8 }
+                    // Where a picture source is placed (audio-only sources play everywhere: nothing to list).
+                    Text { visible: !!sv.d.video; text: "Used in"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.subtitle; font.weight: 550; Layout.topMargin: 8 }
                     Repeater {
-                        model: sv.d.usedIn || []
+                        model: sv.d.video ? (sv.d.usedIn || []) : []
                         delegate: FButton { required property var modelData; text: modelData.scene; variant: "ghost"; onClicked: { app.editScene(modelData.sceneId); app.selectLayer(modelData.instId, false) } }
                     }
-                    Caption { visible: (sv.d.usedIn || []).length === 0; text: sv.d.video ? "Not in any scene. Drag it onto the canvas." : "Audio source. Plays in every scene."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Caption { visible: !!sv.d.video && (sv.d.usedIn || []).length === 0; text: "Not in any scene. Drag it onto the canvas."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
                 Item { Layout.fillHeight: true }
             }

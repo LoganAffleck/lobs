@@ -23,7 +23,7 @@ Rectangle {
 
     readonly property var sections: [
         { title: "Stream", icon: "radio-tower", desc: "Where LOBS sends your live video." },
-        { title: "Recording", icon: "circle", desc: "Where recordings go and how they're encoded." },
+        { title: "Recording", icon: "record", desc: "Where recordings go and how they're encoded." },
         { title: "Video", icon: "monitor", desc: "Output size, frame rate and encoder." },
         { title: "Audio", icon: "audio-lines", desc: "Devices for your global mic and desktop audio." },
         { title: "Hotkeys", icon: "keyboard", desc: "Work even while a game has focus." },

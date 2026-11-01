@@ -122,6 +122,10 @@ QString obsOutputError(obs_output *out); // ": message" from OBS for a failed ou
 class Engine : public QObject {
 	Q_OBJECT
 public:
+	// Track 6 is the recording's audio: the sources that go to recordings (AudioSettings::inRecording).
+	static constexpr int kRecordMix = 5;
+	// The scene on air keeps this source muted (Scene::mutedAudio).
+	bool mutedOnAir(const QString &sourceId) const { return m_lastDoc.scenes.value(m_programId).mutedAudio.contains(sourceId); }
 	explicit Engine(QObject *parent = nullptr);
 	~Engine() override;
 
@@ -162,6 +166,7 @@ public:
 	// A scene projector keeps its scene showing (and its layers' filters attached) while open.
 	void holdScene(const QString &sceneId, bool on); // keep every scene's sources active (for live thumbnails)
 	QSize sourceSize(const QString &sourceId) const; // natural size, or 0x0 if unknown
+	bool inputMuted(const QString &sourceId) const; // as OBS has it (mute, push-to-talk, the scene on air)
 	// Media sources (video and audio files): {state: playing|paused|stopped|ended|none, timeMs, durationMs}.
 	QVariantMap mediaInfo(const QString &sourceId) const;
 	// cmd: playPause, restart, stop, seek (to ms).

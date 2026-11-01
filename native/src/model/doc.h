@@ -78,6 +78,7 @@ struct AudioSettings {
 	bool mono = false;       // downmix to mono (e.g. a mic that only comes in on one side)
 	double balance = 0.5;    // 0 = left, 0.5 = center, 1 = right
 	int syncMs = 0;          // delay against video, ms (OBS's Sync Offset)
+	bool inRecording = true; // off: on the stream, left out of recordings (alerts, chat sounds)
 	bool operator==(const AudioSettings &) const = default;
 };
 
@@ -125,6 +126,7 @@ struct Scene {
 	// Set on a scene's vertical layout: the scene it belongs to. Vertical layouts aren't in
 	// sceneOrder (not listed); they're the same scene, laid out on the vertical canvas.
 	QString verticalOf;
+	QStringList mutedAudio; // mics and desktop audio kept muted while this scene is on air
 	bool operator==(const Scene &) const = default;
 };
 

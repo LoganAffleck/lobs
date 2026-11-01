@@ -12,6 +12,8 @@ Item {
     property string suffix: ""
     property real displayScale: 1
     property var format: null // optional fn(value) -> string for the value label
+    signal reset() // double-click: back to its default (the caller decides what that is)
+    property real fillFrom: 0 // where the fill starts, 0..1 (0.5: from the middle out, for balance)
     signal moved(real v)
     signal released(real v)
     implicitHeight: Pal.ctl
@@ -33,16 +35,18 @@ Item {
         Behavior on border.color { ColorAnimation { duration: Pal.fast } }
         clip: true
         Rectangle {
-            width: Math.max(0, parent.width * s.frac)
+            x: parent.width * Math.min(s.fillFrom, s.frac)
+            width: Math.max(0, parent.width * Math.abs(s.frac - s.fillFrom))
             height: parent.height
             radius: Pal.radius
             color: Pal.s6
             // Animate value changes only, never layout (a slider appearing in a popup would
             // otherwise grow its fill from zero).
             Behavior on width { enabled: !s.dragging && s.valueMoving; NumberAnimation { duration: Pal.moderate; easing.type: Easing.OutCubic } }
+            Behavior on x { enabled: !s.dragging && s.valueMoving; NumberAnimation { duration: Pal.moderate; easing.type: Easing.OutCubic } }
         }
         Rectangle { // thin grip at the fill edge
-            x: Math.max(4, parent.width * s.frac - 6)
+            x: s.fillFrom > 0 ? Math.max(4, Math.min(parent.width - 6, parent.width * s.frac - 1)) : Math.max(4, parent.width * s.frac - 6) // middle-out: right on the value
             anchors.verticalCenter: parent.verticalCenter
             width: 2; height: parent.height * 0.5; radius: 1
             color: Pal.fg; opacity: mouse.containsMouse || s.dragging ? 0.9 : 0.35
@@ -67,5 +71,6 @@ Item {
         onPositionChanged: (m) => { if (pressed) { s.dragValue = at(m.x); s.moved(s.dragValue) } }
         onReleased: s.released(s.dragValue)
         onCanceled: s.released(s.dragValue) // e.g. focus lost mid-drag: still close the edit
+        onDoubleClicked: s.reset()
     }
 }

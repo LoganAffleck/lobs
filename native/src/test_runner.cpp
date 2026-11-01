@@ -293,6 +293,7 @@ public:
 	Q_INVOKABLE QVariantMap engineStats() const { return QVariantMap{{"stats", m_e.stats()}, {"live", m_e.liveStats()}, {"status", m_e.status()}, {"layers", m_e.layerResources()}}; }
 	Q_INVOKABLE QVariantMap inputFilters() const { return m_e.inputFilters().toVariantMap(); }
 	Q_INVOKABLE QString lastError() const { return m_e.lastError(); }
+	Q_INVOKABLE bool inputMuted(const QString &sourceId) const { return m_e.inputMuted(sourceId); }
 	Q_INVOKABLE QVariantList obsInputs() const
 	{
 		QVariantList out;

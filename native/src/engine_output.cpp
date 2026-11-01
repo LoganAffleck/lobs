@@ -543,22 +543,21 @@ void Engine::startRecording()
 		obs_output_release(m_recOutput);
 		m_recOutput = nullptr;
 	}
-	obs_encoder_t *venc = nullptr, *aenc = nullptr;
-	if (rs.quality == "stream" && m_streaming) {
+	obs_encoder_t *venc = nullptr;
+	obs_encoder_release(m_recVenc);
+	m_recVenc = nullptr;
+	if (rs.quality == "stream" && m_streaming)
 		venc = m_streamVenc;
-		aenc = m_streamAenc;
-	} else {
-		obs_encoder_release(m_recVenc);
-		obs_encoder_release(m_recAenc);
-		m_recVenc = rs.quality != "stream" ? makeVideoEncoder(resolveRecordEncoder(), true, "LOBS record video")
-						   : makeVideoEncoder(resolveEncoder(), false, "LOBS record video");
-		obs_data_t *as = toData({{"bitrate", 192}});
-		m_recAenc = obs_audio_encoder_create("ffmpeg_aac", "LOBS record audio", as, 0, nullptr);
-		obs_data_release(as);
-		obs_encoder_set_audio(m_recAenc, obs_get_audio());
-		venc = m_recVenc;
-		aenc = m_recAenc;
-	}
+	else
+		venc = m_recVenc = rs.quality != "stream" ? makeVideoEncoder(resolveRecordEncoder(), true, "LOBS record video")
+							  : makeVideoEncoder(resolveEncoder(), false, "LOBS record video");
+	// Its own audio always: the recording's mix leaves out sources kept off recordings.
+	obs_encoder_release(m_recAenc);
+	obs_data_t *as = toData({{"bitrate", 192}});
+	m_recAenc = obs_audio_encoder_create("ffmpeg_aac", "LOBS record audio", as, kRecordMix, nullptr);
+	obs_data_release(as);
+	obs_encoder_set_audio(m_recAenc, obs_get_audio());
+	obs_encoder_t *aenc = m_recAenc;
 	obs_data_t *os = toData({{"path", QDir::toNativeSeparators(m_lastRecording)}});
 	m_recOutput = obs_output_create("ffmpeg_muxer", "LOBS recording", os, nullptr);
 	obs_data_release(os);

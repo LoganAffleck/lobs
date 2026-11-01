@@ -3909,9 +3909,9 @@ QVariantList App::mixer() const
 		const bool global = !kindInfo(s.kind).video;
 		if (!global && !placed.contains(id))
 			continue;
-		QVariantList tracks;
-		for (bool t : s.audio.tracks)
-			tracks << t;
+		QVariantList tracks; // 1–5: track 6 is the recording's own mix (Engine::kRecordMix)
+		for (int t = 0; t < std::min<qsizetype>(5, s.audio.tracks.size()); t++)
+			tracks << s.audio.tracks[t];
 		QStringList warn;
 		if (s.kind == "desktop_audio" && s.audio.monitor == "monitor_and_output")
 			warn << "Monitoring desktop audio causes an echo.";
@@ -3921,16 +3921,25 @@ QVariantList App::mixer() const
 			warn << "Monitor only: not in the stream or recording.";
 		if (s.kind == "browser" && s.audio.monitor == "off")
 			warn << "Viewers hear this page but you don't. Turn on monitoring to hear it.";
-		if (!s.audio.tracks.value(0))
-			warn << "Track 1 is off, so it's not in the stream.";
 		QVariantList fx;
 		for (const Filter &f : s.audio.filters) {
 			const FxType *t = audioFx(f.type);
 			QVariantList params;
 			if (t)
-				for (const FxParam &p : t->params)
+				for (const FxParam &p : t->params) {
+					// The control each setting gets: a level bar, a gain bar from 0 dB, ratio chips, a
+					// time field, or a percent bar.
+					const QString kind = p.suffix == " ms" ? "time" : p.suffix == ":1" ? "ratio" : p.min < 0 && p.max > 0 ? "gain"
+							   : p.suffix.isEmpty() && p.max <= 1 ? "percent" : "level";
+					QVariantList presets;
+					if (kind == "ratio")
+						for (double r : t->type == "expander" ? QList<double>{2, 3, 4, 6} : QList<double>{2, 4, 10, 20})
+							if (r >= p.min && r <= p.max)
+								presets << r;
 					params << QVariantMap{{"key", p.key}, {"label", p.label}, {"suffix", p.suffix}, {"min", p.min}, {"max", p.max},
-							      {"decimals", p.decimals}, {"value", f.settings.value(p.key, p.def).toDouble()}};
+							      {"decimals", p.decimals}, {"def", p.def}, {"kind", kind}, {"presets", presets},
+							      {"value", f.settings.value(p.key, p.def).toDouble()}};
+				}
 			const QString plugin = t ? QString() : pluginTypeLabel(f.type);
 			const QString label = t ? t->label : !plugin.isEmpty() ? plugin : f.settings.value("_label", f.type.mid(4)).toString();
 			// A plugin's filter gets the generic editor; one imported from OBS whose module LOBS ships doesn't.
@@ -3938,7 +3947,7 @@ QVariantList App::mixer() const
 					  {"obs", !plugin.isEmpty()}};
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
-				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
+				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"inRecording", s.audio.inRecording}, {"mutedHere", doc().scenes.value(doc().mainScene(m_editScene)).mutedAudio.contains(id)}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
 				   {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"pinned", doc().mixerPinned.contains(id)}};
 	}
 	return out;
@@ -4012,6 +4021,7 @@ void App::setAudio(const QString &sourceId, const QString &field, const QVariant
 		else if (field == "muted") a.muted = value.toBool();
 		else if (field == "monitor") a.monitor = value.toString();
 		else if (field == "mono") a.mono = value.toBool();
+		else if (field == "inRecording") a.inRecording = value.toBool();
 		else if (field == "balance") a.balance = std::clamp(value.toDouble(), 0.0, 1.0);
 		else if (field == "sync") a.syncMs = std::clamp(value.toInt(), -950, 20000);
 		else if (field == "track") {
@@ -4044,6 +4054,17 @@ PreviewLayout App::previewLayout() const
 	l.scale /= d, l.ox = std::round(l.ox) / d, l.oy = std::round(l.oy) / d;
 	l.other = QRectF(l.other.x() / d, l.other.y() / d, l.other.width() / d, l.other.height() / d);
 	return l;
+}
+
+void App::setMutedInScene(const QString &sourceId, bool muted)
+{
+	const QString sc = doc().mainScene(m_editScene);
+	if (!doc().scenes.contains(sc) || doc().scenes[sc].mutedAudio.contains(sourceId) == muted)
+		return;
+	m_store.commit((muted ? "Mute " : "Unmute ") + doc().sources.value(sourceId).name + " in " + doc().scenes[sc].name, [&](Doc &d) {
+		QStringList &m = d.scenes[sc].mutedAudio;
+		muted ? (void)m.append(sourceId) : (void)m.removeAll(sourceId);
+	});
 }
 
 void App::setClickToShow(bool on)

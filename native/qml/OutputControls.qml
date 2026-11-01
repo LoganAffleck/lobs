@@ -92,7 +92,7 @@ RowLayout {
             }
             Rectangle { implicitWidth: 1; implicitHeight: 14; color: Pal.border }
             Seg {
-                iconName: app.recording ? "square" : "circle"
+                iconName: app.recording ? "square" : "record"
                 text: app.recording ? (oc.st.recTime || "00:00:00") : "Record"
                 active: app.recording
                 dot: Pal.live

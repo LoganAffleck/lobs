@@ -700,7 +700,7 @@ QJsonObject Doc::toJson() const
 			for (const Filter &f : s.audio.filters)
 				afx << QJsonObject{{"id", f.id}, {"type", f.type}, {"enabled", f.enabled}, {"settings", QJsonObject::fromVariantMap(f.settings)}};
 			o["audio"] = QJsonObject{{"volume", s.audio.volume}, {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tr}, {"filters", afx},
-				       {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}};
+				       {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"inRecording", s.audio.inRecording}};
 		}
 		srcs[s.id] = o;
 	}
@@ -709,6 +709,8 @@ QJsonObject Doc::toJson() const
 			QJsonObject sc{{"id", s.id}, {"name", s.name}, {"folder", s.folder}, {"favorite", s.favorite}, {"layers", QJsonArray::fromStringList(s.layers)}};
 			if (!s.verticalOf.isEmpty())
 				sc["verticalOf"] = s.verticalOf;
+			if (!s.mutedAudio.isEmpty())
+				sc["mutedAudio"] = QJsonArray::fromStringList(s.mutedAudio);
 			scns[s.id] = sc;
 		}
 	for (const auto &i : instances) {
@@ -782,6 +784,7 @@ Doc Doc::fromJson(const QJsonObject &o)
 			x.audio.mono = a["mono"].toBool();
 			x.audio.balance = a["balance"].toDouble(0.5);
 			x.audio.syncMs = a["syncMs"].toInt();
+			x.audio.inRecording = a["inRecording"].toBool(true);
 			x.audio.tracks.clear();
 			for (const auto &t : a["tracks"].toArray())
 				x.audio.tracks << t.toBool();
@@ -795,7 +798,7 @@ Doc Doc::fromJson(const QJsonObject &o)
 	d.sourceOrder = strings(o["sourceOrder"]);
 	for (const auto &v : o["scenes"].toObject()) {
 		const QJsonObject s = v.toObject();
-		d.scenes[s["id"].toString()] = Scene{s["id"].toString(), s["name"].toString(), s["folder"].toString(), s["favorite"].toBool(), strings(s["layers"]), s["verticalOf"].toString()};
+		d.scenes[s["id"].toString()] = Scene{s["id"].toString(), s["name"].toString(), s["folder"].toString(), s["favorite"].toBool(), strings(s["layers"]), s["verticalOf"].toString(), strings(s["mutedAudio"])};
 	}
 	d.sceneOrder = strings(o["sceneOrder"]);
 	for (const auto &v : o["instances"].toObject()) {

@@ -10,6 +10,7 @@ FButton {
     signal picked(var value)
     variant: "tertiary"
     pressDip: false
+    implicitHeight: Pal.ctl + 4 // as tall as toggle tiles and fields beside it
     readonly property var current: options.find(o => o.value === currentValue)
     text: current ? current.name : placeholder
     leftPadding: 10
@@ -21,7 +22,7 @@ FButton {
             text: sel.text; elide: Text.ElideRight
             color: sel.current ? Pal.fg : Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
         }
-        Text { id: chev; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "▾"; color: Pal.muted; font.pixelSize: 10 }
+        FIcon { id: chev; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 14; color: Pal.muted } // the same chevron as the Inspector's sections
     }
     onClicked: menu.popup(sel, 0, sel.height + 4)
     FMenu {

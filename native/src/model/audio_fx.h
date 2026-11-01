@@ -24,13 +24,13 @@ struct FxType {
 inline const QVector<FxType> &audioFxTypes()
 {
 	static const QVector<FxType> types = {
-		{"noise_suppress", "noise_suppress_filter_v2", "Noise Suppression", {{"suppress_level", "Suppression", " dB", -60, 0, -30, 0}}, {{"method", "rnnoise"}}},
-		{"noise_gate", "noise_gate_filter", "Noise Gate",
+		{"noise_suppress", "noise_suppress_filter_v2", "Noise suppression", {{"suppress_level", "Suppression", " dB", -60, 0, -30, 0}}, {{"method", "rnnoise"}}},
+		{"noise_gate", "noise_gate_filter", "Noise gate",
 		 {{"close_threshold", "Close below", " dB", -96, 0, -32, 1}, {"open_threshold", "Open above", " dB", -96, 0, -26, 1},
 		  {"attack_time", "Attack", " ms", 0, 500, 25, 0}, {"hold_time", "Hold", " ms", 0, 2000, 200, 0}, {"release_time", "Release", " ms", 0, 2000, 150, 0}},
 		 {}},
 		{"gain", "gain_filter", "Gain", {{"db", "Gain", " dB", -30, 30, 0, 1}}, {}},
-		{"eq", "basic_eq_filter", "3-Band EQ", {{"low", "Low", " dB", -20, 20, 0, 1}, {"mid", "Mid", " dB", -20, 20, 0, 1}, {"high", "High", " dB", -20, 20, 0, 1}}, {}},
+		{"eq", "basic_eq_filter", "3-band EQ", {{"low", "Low", " dB", -20, 20, 0, 1}, {"mid", "Mid", " dB", -20, 20, 0, 1}, {"high", "High", " dB", -20, 20, 0, 1}}, {}},
 		{"compressor", "compressor_filter", "Compressor",
 		 {{"threshold", "Threshold", " dB", -60, 0, -18, 1}, {"ratio", "Ratio", ":1", 1, 32, 10, 1}, {"attack_time", "Attack", " ms", 1, 500, 6, 0},
 		  {"release_time", "Release", " ms", 1, 1000, 60, 0}, {"output_gain", "Output gain", " dB", -32, 32, 0, 1}},
@@ -39,8 +39,8 @@ inline const QVector<FxType> &audioFxTypes()
 		 {{"threshold", "Threshold", " dB", -60, 0, -40, 1}, {"ratio", "Ratio", ":1", 1, 20, 2, 1}, {"attack_time", "Attack", " ms", 1, 100, 10, 0},
 		  {"release_time", "Release", " ms", 1, 1000, 50, 0}, {"output_gain", "Output gain", " dB", -32, 32, 0, 1}},
 		 {{"presets", "expander"}}},
-		{"limiter", "limiter_filter", "Limiter", {{"threshold", "Threshold", " dB", -60, 0, -6, 1}, {"release_time", "Release", " ms", 1, 1000, 60, 0}}, {}},
-		{"nvafx", "nvidia_audiofx_filter", "NVIDIA Audio Effects", {{"intensity", "Strength", "", 0, 1, 1, 2}}, {}},
+		{"limiter", "limiter_filter", "Limiter", {{"threshold", "Ceiling", " dB", -60, 0, -6, 1}, {"release_time", "Release", " ms", 1, 1000, 60, 0}}, {}},
+		{"nvafx", "nvidia_audiofx_filter", "NVIDIA noise removal", {{"intensity", "Strength", "", 0, 1, 1, 2}}, {}},
 	};
 	return types;
 }
