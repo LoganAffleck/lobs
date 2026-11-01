@@ -20,9 +20,20 @@ The Sources panel lists inputs only. Image, video and audio files live in [Asset
 
 The scene you edit and the scene on program (the one viewers see) can differ.
 
-- Click a scene to edit it. The program doesn't change.
-- Double-click a scene to edit it and show it.
-- Click **Show** in the canvas header to put the edited scene on program with the current [transition](/docs/transitions/). The toast reads "On program: &lt;scene&gt;". **Show** is hidden when the edited scene is already on program.
+- Click a scene to show it, with the current [transition](/docs/transitions/), as in OBS. You edit what's on air.
+- To set a scene up before viewers see it, right-click it and pick **Edit before showing**. Then click **Show** in the canvas header when it's ready. **Show** is hidden when the edited scene is already on program.
+- Double-click a scene to show it.
+- Prefer OBS's Studio Mode? Turn off **Settings › Video › Clicking a scene shows it**: a click then edits a scene without showing it, and **Show** or a double-click puts it live. Setup copies your OBS choice.
+
+## Vertical stream
+
+Twitch can show a second, tall stream to viewers on phones. Click **+ Vertical** in the canvas header, and each scene gets a vertical layout (1080×1920). **Horizontal** and **Vertical** then switch which one you edit, and the other one sits beside it, at the same height; click or drag in it to work there. When the panel is too narrow for both, only the one you're editing shows.
+
+- The vertical layout starts as a copy of the scene and follows it: move, hide, add, remove or reorder a layer in Horizontal, and Vertical does the same. Groups follow as groups.
+- Change a layer in Vertical and only Vertical changes. That layer keeps its own setting from then on, while the rest keeps following.
+- A background color that covers the whole canvas covers the tall one too, and starts locked. Full-screen pictures, such as a game, are fitted to the width.
+- Picking another scene while in Vertical keeps you in Vertical.
+- Both go out together when you stream to Twitch with Enhanced Broadcasting ([Settings › Stream](/docs/settings/#stream)). Turn the vertical canvas off in [Settings › Video](/docs/settings/#video).
 
 ## Scenes panel
 

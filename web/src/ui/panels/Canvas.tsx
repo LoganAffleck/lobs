@@ -92,6 +92,7 @@ export function CanvasPanel() {
         <span className="title">{scene.name}</span>
         {scene.id === s.programSceneId && <span className={`badge ${live ? 'live' : ''}`}>{live ? 'On air' : 'Showing'}</span>}
         <span className="grow" />
+        <Btn icon="plus" text="Vertical" variant="ghost" />
         <Help title="Canvas" points={HELP.Canvas} align="right" />
         <Btn text={`${s.previewPercent}%`} variant="ghost" sel={[25, 33, 50, 100, 200].includes(s.previewPercent)} />
         <Anchor>

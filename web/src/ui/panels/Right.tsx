@@ -54,7 +54,7 @@ function LayerRow({ l, depth }: { l: Layer; depth: number }) {
       {l.locked && !sel && !hov && <Btn icon="lock" variant="ghost" style={{ marginLeft: -84 }} />}
       <Btn icon={vis ? 'eye' : 'eye-off'} variant="ghost" onClick={() => d({ type: 'toggleVisible', id: l.id })} />
       <Menu id="layer" target={l.id} offset={[60, -6]} entries={[
-        { text: 'Rename…' },
+        { text: 'Rename' },
         { text: 'Copy', kbd: 'Ctrl C' },
         ...(l.background ? [] : [{ text: 'Cut', kbd: 'Ctrl X' }]),
         { text: 'Paste', kbd: 'Ctrl V' },
@@ -181,14 +181,14 @@ function LayerInspector({ l }: { l: Layer }) {
 
       {/* As the app: one labeled row per property, each action beside the value it changes. */}
       <Section title="Transform" group="transform" l={l} changed={!!l.rot}>
+        <div className="kv" style={{ gap: 4 }}><span className="k rl">Layer fit</span>
+          <Btn icon="shrink" text="Fit" variant="ghost" /><Btn icon="expand" text="Fill" variant="ghost" /><Btn icon="ratio" text="Original" variant="ghost" /></div>
         <div className="kv"><span className="k rl">Position</span>
           <NumField label="X" value={l.x} /><NumField label="Y" value={l.y} />
           <Btn icon="crosshair" variant="ghost" /></div>
         <div className="kv"><span className="k rl">Size</span>
           <NumField label="W" value={l.w} /><NumField label="H" value={l.h} />
           <Btn icon={s.lockAspect ? 'link-2' : 'unlink-2'} variant="ghost" sel={s.lockAspect} onClick={() => d({ type: 'set', patch: { lockAspect: !s.lockAspect } })} /></div>
-        <div className="kv" style={{ gap: 4 }}><span className="k rl" />
-          <Btn text="Fit" variant="ghost" /><Btn text="Fill" variant="ghost" /><Btn text="Original" variant="ghost" /></div>
         <div className="kv"><span className="k rl">Rotate</span>
           <NumField label="" suffix="°" value={l.rot ?? 0} />
           <Btn icon="flip-horizontal-2" variant="ghost" sel={l.flipH} onClick={() => d({ type: 'setLayer', id: l.id, patch: { flipH: !l.flipH } })} />
@@ -287,22 +287,75 @@ function MediaControls({ src }: { src: Source }) {
   )
 }
 
+/** A mic or desktop audio's settings, laid out as the app's AudioSettings.qml. */
+function AudioSection({ src }: { src: Source }) {
+  const { s } = useStore()
+  const [l, r] = src.level ?? [-60, -60]
+  const [rec, setRec] = useState(true)
+  const [stream, setStream] = useState(true)
+  const [adv, setAdv] = useState(false)
+  const tile = (icon: 'record' | 'radio-tower', text: string, on: boolean, flip: () => void) => (
+    <button className={`outtile ${on ? 'on' : ''}`} onClick={flip} data-ui={text}><Icon name={icon} color={on ? 'var(--fg)' : 'var(--muted)'} />{text}</button>
+  )
+  return (
+    <>
+      <div className="row" style={{ gap: 6 }}>
+        <Btn icon={src.muted ? 'volume-x' : 'volume-2'} variant="ghost" sel={src.muted} />
+        <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[l, r].map((db, i) => <div key={i} className="mixmeter"><div style={{ width: `${Math.max(0, (db + 60) / 60) * 100}%`, backgroundSize: `${100 / Math.max(0.01, (db + 60) / 60)}% 100%` }} /></div>)}
+        </div>
+        <span className="caption" style={{ width: 52, textAlign: 'right' }}>{src.muted ? 'Muted' : '0.0 dB'}</span>
+      </div>
+      <span className="caption">Active in</span>
+      <div className="row" style={{ gap: 6, marginTop: -4 }}>{tile('record', 'Recording', rec, () => setRec(!rec))}{tile('radio-tower', 'Stream', stream, () => setStream(!stream))}</div>
+      <span className="caption">Monitor</span>
+      <div style={{ marginTop: -4, display: 'flex', flexDirection: 'column' }}><Select value="Off" /></div>
+      <div className="secrow" onClick={() => setAdv(!adv)}>
+        <Icon name="sliders-horizontal" color="var(--muted)" /><span className="grow" style={{ fontWeight: 550 }}>Advanced</span>
+        {!adv && <span className="caption">Mono</span>}<Icon name={adv ? 'chevron-up' : 'chevron-down'} color="var(--muted)" />
+      </div>
+      {adv && (
+        <>
+          <div className="kv"><span className="k rl" style={{ width: 72 }}>Balance</span><div className="grow"><FillSlider label="" frac={0.5} value="Center" /></div></div>
+          <div className="kv"><span className="k rl" style={{ width: 72 }}>Sync offset</span><NumField label="ms" value={0} /></div>
+          <div className="optrow"><Icon name="audio-lines" color="var(--fg)" /><span className="grow">Mono</span><Switch on /></div>
+          <div className="optrow"><Icon name="volume-x" color="var(--muted)" /><span className="grow">{`Always muted in “${editScene(s).name}”`}</span><Switch on={false} /></div>
+          <div className="optrow"><Icon name="pin" color="var(--muted)" /><span className="grow">Pinned to the front of the mixer</span><Switch on={!!src.pinned} /></div>
+        </>
+      )}
+      <div className="secrow" style={{ cursor: 'default' }}>
+        <Icon name="wand-sparkles" color="var(--muted)" /><span style={{ fontWeight: 550 }}>Effects · 2</span>
+        <span className="caption grow ellipsis" style={{ marginLeft: 4 }}>Runs top to bottom</span>
+        <Btn icon="plus" text="Effect" variant="secondary" />
+      </div>
+      <div className="fxrow">
+        <div className="row" style={{ gap: 6 }}><Icon name="grip-vertical" color="var(--muted)" /><span className="grow">Noise suppression</span><Btn icon="ellipsis" variant="ghost" /></div>
+        <div className="row" style={{ gap: 8, paddingLeft: 20 }}><div className="grow"><FillSlider label="" frac={0.5} value="" /></div><NumField label="" value={-30} suffix="dB" /><Switch on /></div>
+      </div>
+      <div className="fxrow">
+        <div className="row" style={{ gap: 6 }}><Icon name="grip-vertical" color="var(--muted)" /><span className="grow">Compressor</span><Btn icon="ellipsis" variant="ghost" /></div>
+        <div className="row" style={{ gap: 8, paddingLeft: 20 }}><span className="caption grow">-18.0 dB · 10.0:1</span><Btn icon="chevron-down" variant="ghost" /><Switch on /></div>
+      </div>
+    </>
+  )
+}
+
 function SourceInspector({ id }: { id: string }) {
   const { s, d } = useStore()
   const src = s.sources.find((x) => x.id === id)!
   const used = scenesUsing(s, id)
-  const kindLabel = ({ camera: 'Camera', display: 'Display capture', window: 'Window capture', game: 'Game capture', browser: 'Browser', mic: 'Microphone', desktop_audio: 'Desktop audio', image: 'Image', media: 'Media' } as const)[src.kind]
   const video = src.kind !== 'mic' && src.kind !== 'desktop_audio'
   return (
-    <div style={{ padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div className="row" style={{ gap: 8, height: 32 }}><Icon name={iconForSource(src.kind)} size={16} /><span style={{ fontSize: 14, fontWeight: 550 }}>{src.name}</span></div>
-      <span className="caption" style={{ lineHeight: 1.4 }}>{kindLabel} · input settings apply to every scene that uses it. Size, crop and filters are set per layer.</span>
       <Select value={src.detail?.split(' · ')[0]} />
       {src.kind === 'camera' && <div className="row" style={{ gap: 6 }}><Select value="1920×1080" /><Select value="30 fps" /></div>}
       {src.kind === 'media' && <MediaControls src={src} />}
-      <span style={{ fontSize: 13, fontWeight: 550, marginTop: 8 }}>Used in</span>
-      {used.map((u) => <Btn key={u.id} text={u.name} variant="ghost" style={{ justifyContent: 'flex-start' }} onClick={() => d({ type: 'editScene', id: u.id })} />)}
-      {used.length === 0 && <span className="caption">{video ? 'Not on any scene yet — drag it onto the canvas.' : 'Audio source — always mixed in.'}</span>}
+      {!video && <AudioSection src={src} />}
+      {/* Where a picture source is placed; audio-only sources play everywhere, so there's nothing to list. */}
+      {video && <span style={{ fontSize: 13, fontWeight: 550, marginTop: 8 }}>Used in</span>}
+      {video && used.map((u) => <Btn key={u.id} text={u.name} variant="ghost" style={{ justifyContent: 'flex-start' }} onClick={() => d({ type: 'editScene', id: u.id })} />)}
+      {video && used.length === 0 && <span className="caption">Not in any scene. Drag it onto the canvas.</span>}
     </div>
   )
 }

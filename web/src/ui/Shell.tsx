@@ -5,19 +5,19 @@ import type { IconName } from './icons.gen'
 
 // Panel help, word for word from PanelDragController's entries in Main.qml.
 export const HELP: Record<string, string[]> = {
-  Scenes: ['Click: edit a scene without showing it.', 'Show or double-click: switch to the scene.', 'Grid: shows live thumbnails of every scene.', 'Right-click: rename, duplicate with linked or independent layers, or delete.'],
-  Sources: ['Inputs: added once, shared by every scene.', 'Place it: drag onto the canvas or double-click.', 'Per scene: size, crop and filters.', 'Files are in Assets. Add text and color from Layers.'],
-  Assets: ["Project files: this project's assets folder.", 'Add files: drag in from File Explorer or use + Asset.', 'Place it: drag onto the canvas or double-click.', 'Right-click: show in File Explorer or move to Recycle Bin.'],
-  Layers: ['Order: layers higher in the list draw on top.', 'Linked: settings shared with another scene.', 'Shortcuts: Ctrl+C / Ctrl+V copy and paste (Ctrl+Shift+V pastes linked), Ctrl+D duplicate, Ctrl+G group, Delete remove.', 'Copy to: copy layers to another scene.'],
-  Inspector: ['This scene: layer changes apply here only.', 'Linked: shared with another scene. Unlink to separate.', 'Numbers: math like 1920/2 works. Up/Down nudge, Shift for 10.', 'Source: select one in Sources to edit its input.'],
-  'Audio Mixer': ['Global: Mic and Desktop Audio play in every scene.', 'Scene audio: plays only in scenes that contain it.', 'Tracks: track 1 goes to the stream; recordings can use tracks 1-6.', 'Monitor: hear it in headphones. Monitor only keeps it out of output.', 'Fader: set the level. Meter shows peak dB.'],
+  Scenes: ['Click: switch to the scene.', 'Right-click › Edit before showing: set one up first.', 'Grid: live thumbnails of every scene.', 'Right-click: rename, duplicate or delete.'],
+  Sources: ['Sources: add once, use in any scene.', 'Place it: drag onto the canvas or double-click.', 'Per layer: size, crop and filters.', 'Files are in Assets. Add text and color from Layers.'],
+  Assets: ["Files: this project's assets folder.", 'Add files: drag in from File Explorer or click Add.', 'Place it: drag onto the canvas or double-click.', 'Right-click: show in File Explorer or move to Recycle Bin.'],
+  Layers: ['Order: layers higher in the list draw on top.', 'Linked: settings shared with another scene.', 'Keys: Ctrl+C copy, Ctrl+V paste, Ctrl+Shift+V paste linked, Ctrl+D duplicate, Ctrl+G group, Delete remove.', 'Copy to: copy layers to another scene.'],
+  Inspector: ['This scene: layer changes apply here only.', 'Linked: shared with another scene. Unlink to separate.', 'Numbers: type math like 1920/2. Up and Down nudge, Shift for 10.', 'Source: select it in Sources to edit it in every scene.'],
+  'Audio mixer': ['Global: Mic and Desktop Audio play in every scene.', 'Scene audio: plays only in scenes that contain it.', 'Active in: Recording and Stream. Turn off Recording to keep a sound, such as alerts, out of recordings.', 'Monitor: hear it yourself. Monitor only keeps it off the stream and recording.', 'Fader: set the level. Meter shows peak dB.'],
   History: ['Undo: Ctrl+Z; redo: Ctrl+Shift+Z or Ctrl+Y.', 'Jump: click a step to go back to it.'],
-  Stats: ["Frames missed: the PC couldn't render in time.", 'Frames skipped: the encoder fell behind.', "Dropped frames: the network couldn't keep up.", 'Orange: more than 1%, worth a look.'],
-  Captions: ['Speech to text from one audio source, on this PC.', 'Send to stream: viewers turn on CC to see them.', 'Language: pick it, or let LOBS detect it.', 'Text shows up a few seconds after speech.'],
-  Canvas: ['Move: drag a layer. Snaps to edges and layers.', 'Resize: drag a corner. Shift: free resize.', 'Ctrl: drag without snapping.', 'Groups: click selects the group. Each double-click goes one level deeper.', 'Nudge: arrow keys move 1 px, Shift+arrows 10 px.', 'Live lock: hold Alt to move layers while live.', 'Show: switch to this scene.'],
+  Stats: ["Frames missed: the PC couldn't render in time.", 'Frames skipped: the encoder fell behind.', "Dropped frames: the network couldn't keep up.", 'Orange: over 1%.'],
+  Captions: ['Speech to text from one audio source, on this PC.', 'Send to stream: viewers turn on CC to see them.', 'Language: pick one or detect it automatically.', 'Text appears a few seconds after speech.'],
+  Canvas: ['Move: drag a layer. Snaps to edges and layers.', 'Resize: drag a corner. Shift: free resize.', 'Ctrl: drag without snapping.', 'Groups: click selects the group. Double-click to go one level deeper.', 'Nudge: arrow keys move 1 px, Shift+arrows 10 px.', 'Live lock: hold Alt to move layers while live.', 'Show: switch to this scene.'],
 }
 
-const PANELS = ['Scenes', 'Sources', 'Assets', 'Layers', 'Inspector', 'Audio Mixer', 'History', 'Stats', 'Captions', 'Chat', 'Stream info']
+const PANELS = ['Scenes', 'Sources', 'Assets', 'Layers', 'Inspector', 'Audio mixer', 'History', 'Stats', 'Captions', 'Chat', 'Stream info']
 // Closed in the default layout (the Window menu opens them).
 const CLOSED = ['Stats', 'Captions', 'Chat', 'Stream info']
 
@@ -58,6 +58,7 @@ export function Header() {
         ]} />
       </Anchor>
       <Btn text="Save" variant="ghost" hov={hov('Save')} />
+      <Btn text="Profile" variant="ghost" hov={hov('Profile')} />
       <span className="vsep" />
       <Anchor>
         <Btn text="Window" variant="ghost" sel={s.menu?.id === 'window'} onClick={() => menu('window')} />
@@ -79,7 +80,7 @@ export function Header() {
           <span className="div" />
           <Seg icon="video" text="Virtual cam" on={o.vcam} onClick={() => d({ type: 'toggleVcam' })} />
           <span className="div" />
-          <Seg icon={o.recording ? 'square' : 'circle'} text={o.recording ? o.recTime ?? '00:00:00' : 'Record'} on={o.recording} dot="var(--live)" onClick={() => d({ type: 'toggleRecording' })} />
+          <Seg icon={o.recording ? 'square' : 'record'} text={o.recording ? o.recTime ?? '00:00:00' : 'Record'} on={o.recording} dot="var(--live)" onClick={() => d({ type: 'toggleRecording' })} />
         </div>
         <button className={`golive ${o.streaming ? 'on' : ''} ${o.confirmingEnd ? 'confirm' : ''}`} data-ui="Go live" onClick={() => d({ type: 'toggleStreaming' })}>
           {o.streaming ? <span className="livedot" /> : <Icon name="radio-tower" color="var(--s1)" />}

@@ -33,7 +33,7 @@ Click **Record** to start. The button becomes a red timer, and its tooltip shows
 
 - Files go to the recordings folder (default `Videos\LOBS`) and are named by date and time, for example `LOBS 2026-10-20 18-30-05.mp4`.
 - The format and quality come from [Settings > Recording](/docs/settings/#recording).
-- Audio is AAC at 192 kbps. Recordings contain [audio track 1](/docs/audio/#monitoring-tracks-and-effects) only.
+- Audio is AAC at 192 kbps. Recordings get their own mix: every source [active in Recording](/docs/audio/#audio-settings).
 
 ## Replay
 

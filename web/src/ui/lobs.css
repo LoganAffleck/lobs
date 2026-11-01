@@ -284,3 +284,10 @@
 .lobs .mixrow { display: flex; flex-direction: column; gap: 6px; }
 .lobs .mixmeter { height: 6px; border-radius: 3px; background: var(--s4); position: relative; overflow: hidden; }
 .lobs .mixmeter > div { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #22c55e 0 70%, #f59e0b 70% 90%, #ef4444 90%); }
+
+/* The audio Inspector (AudioSettings.qml): output tiles, section rows, option rows, effect rows. */
+.lobs .outtile { flex: 1; height: calc(var(--ctl) + 4px); display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: var(--r); border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.lobs .outtile.on { border-color: var(--link); background: color-mix(in srgb, var(--link) 20%, transparent); color: var(--fg); }
+.lobs .secrow { display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); cursor: pointer; min-height: 30px; }
+.lobs .optrow { display: flex; align-items: center; gap: 8px; height: 28px; }
+.lobs .fxrow { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-top: 1px solid var(--border); }

@@ -14,7 +14,7 @@ export interface Source {
   kind: SourceKind
   /** Shown under the name: the device and size, e.g. "Logitech Brio · 1920×1080". */
   detail?: string
-  /** Pinned to the front of the Audio Mixer. */
+  /** Pinned to the front of the Audio mixer. */
   pinned?: boolean
   /** Media files: playback position and length, ms. */
   media?: { playing: boolean; timeMs: number; durationMs: number }
@@ -140,7 +140,7 @@ export interface UiState {
   poolFilter: 'all' | 'video' | 'audio'
   poolSearch: string | null
   /** Current tab of each tabbed panel group. */
-  leftTab: 'Sources' | 'Audio Mixer'
+  leftTab: 'Sources' | 'Audio mixer'
   rightTab: 'Inspector' | 'History'
   sourceSectionOpen: boolean
   lockAspect: boolean

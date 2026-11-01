@@ -89,7 +89,8 @@ export const SHOTS: Record<string, Shot> = {
   'window-menu': { title: 'Window menu', state: with_({ menu: { id: 'window', hover: 'Reset layout' } }) },
   import: { title: 'Import from OBS', state: with_({ menu: { id: 'import', hover: 'OBS: Untitled  ·  6 scenes' } }) },
   'copy-menu': { title: 'Copy to another scene', state: with_({ menu: { id: 'copy', sub: 'Gameplay', hover: 'Linked copy' } }) },
-  mixer: { title: 'Audio mixer', state: with_({ leftTab: 'Audio Mixer' }) },
+  mixer: { title: 'Audio mixer', state: with_({ leftTab: 'Audio mixer' }) },
+  'audio-inspector': { title: 'A mic in the Inspector', state: with_({ leftTab: 'Audio mixer', selection: [], selectedSourceId: 'src_mic' }) },
   history: { title: 'History', state: with_({ rightTab: 'History', historyIndex: 4 }) },
   'help-card': { title: 'Panel help', state: with_({ help: 'Layers' }) },
   'canvas-help': { title: 'Canvas help', state: with_({ help: 'Canvas' }) },
@@ -118,7 +119,7 @@ export const SHOTS: Record<string, Shot> = {
   'panel-scenes': { title: 'Scenes', view: 'scenes', size: [320, 220], state: base() },
   'panel-scenes-grid': { title: 'Scene grid', view: 'scenes', size: [320, 420], state: with_({ sceneView: 'grid', layout: { ...base().layout, left: 320 } }) },
   'panel-canvas': { title: 'Canvas', view: 'canvas', size: [1100, 700], state: base() },
-  'panel-mixer': { title: 'Mixer', view: 'sources', size: [340, 300], state: with_({ leftTab: 'Audio Mixer' }) },
+  'panel-mixer': { title: 'Mixer', view: 'sources', size: [340, 300], state: with_({ leftTab: 'Audio mixer' }) },
   'panel-crop': { title: 'Crop section', view: 'inspector', size: [340, 760], state: with_({ editSceneId: 'sc_game', selection: ['ly_game_cam'], cropMode: true }) },
 }
 

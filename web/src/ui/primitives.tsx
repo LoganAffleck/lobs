@@ -96,9 +96,10 @@ export function Check({ on, text }: { on: boolean; text: string }) {
 
 export function Select({ value, placeholder = 'Choose…', onClick }: { value?: string; placeholder?: string; onClick?: () => void }) {
   return (
-    <button className="btn tertiary fill" style={{ justifyContent: 'space-between', paddingRight: 8 }} onClick={onClick}>
+    // As tall as the toggle tiles and fields beside it, with the same chevron as sections (FSelect.qml).
+    <button className="btn tertiary fill" style={{ justifyContent: 'space-between', paddingRight: 8, height: 'calc(var(--ctl) + 4px)', flex: '1 0 auto' }} onClick={onClick}>
       <span className={`ellipsis ${value ? '' : 'muted'}`} style={{ fontWeight: 400 }}>{value ?? placeholder}</span>
-      <span className="muted" style={{ fontSize: 10 }}>▾</span>
+      <Icon name="chevron-down" size={14} color="var(--muted)" />
     </button>
   )
 }

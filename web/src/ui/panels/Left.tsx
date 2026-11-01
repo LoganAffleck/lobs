@@ -23,15 +23,17 @@ export function ScenesPanel({ style }: { style?: React.CSSProperties }) {
         <div className="list">
           {s.scenes.map((sc) => (
             <div key={sc.id} className={`lrow ${sc.id === s.editSceneId ? 'sel' : ''}`} data-scene={sc.name}
-              onClick={() => d({ type: 'editScene', id: sc.id })}
+              onClick={() => { d({ type: 'editScene', id: sc.id }); d({ type: 'take' }) }} // a click shows it, as in OBS
               onDoubleClick={() => { d({ type: 'editScene', id: sc.id }); d({ type: 'take' }) }}
-              onContextMenu={(e) => { e.preventDefault(); d({ type: 'editScene', id: sc.id }); d({ type: 'menu', menu: { id: 'scene', target: sc.id } }) }}>
+              onContextMenu={(e) => { e.preventDefault(); d({ type: 'menu', menu: { id: 'scene', target: sc.id } }) }}>
               <span className="name grow ellipsis">{sc.name}</span>
               {sc.id === s.programSceneId && showBadge}
               <span className="count">{flatLayers(sc.layers).length}</span>
               <Menu id="scene" target={sc.id} offset={[40, -6]} entries={[
-                { text: 'Show this scene', onClick: () => d({ type: 'take' }) },
-                { text: 'Rename…' },
+                { text: 'Show this scene', onClick: () => { d({ type: 'editScene', id: sc.id }); d({ type: 'take' }) } },
+                { text: 'Edit before showing', onClick: () => d({ type: 'editScene', id: sc.id }) },
+                { text: 'Rename' },
+                { text: `Show in ${editScene(s).name}`, disabled: sc.id === s.editSceneId },
                 { text: 'Duplicate with linked layers' },
                 { text: 'Duplicate' },
                 { sep: true },
@@ -44,7 +46,7 @@ export function ScenesPanel({ style }: { style?: React.CSSProperties }) {
         <div className="list"><div className="grid">
           {s.scenes.map((sc) => (
             <div key={sc.id} className={`tile ${sc.id === s.programSceneId ? 'prog' : sc.id === s.editSceneId ? 'edit' : ''}`} data-scene={sc.name}
-              onClick={() => d({ type: 'editScene', id: sc.id })} onDoubleClick={() => d({ type: 'take' })}>
+              onClick={() => { d({ type: 'editScene', id: sc.id }); d({ type: 'take' }) }} onDoubleClick={() => d({ type: 'take' })}>
               <div className="thumb"><ScenePicture scene={sc} sources={s.sources} width={(s.layout.left - 46) / 2} uid={`grid-${sc.id}`} /></div>
               <div className="lbl"><span className="grow ellipsis" style={{ fontWeight: sc.id === s.editSceneId ? 550 : 400 }}>{sc.name}</span>{sc.id === s.programSceneId && showBadge}</div>
             </div>
@@ -94,7 +96,7 @@ function SourceRow({ src }: { src: Source }) {
         <Menu id="pool" target={src.id} align="right" entries={[
           ...(video ? [{ text: inScene ? `Remove from ${scene.name}` : `Add to ${scene.name}`, onClick: () => d({ type: 'toggleInScene', id: src.id }) }] : []),
           { text: 'Settings…', onClick: () => d({ type: 'selectSource', id: src.id }) },
-          { text: 'Rename…' },
+          { text: 'Rename' },
           { sep: true },
           { text: !video ? 'Plays in every scene' : used.length ? `Used in ${used.join(', ')}` : 'Not used in any scene yet', disabled: true },
           { sep: true },
@@ -148,7 +150,7 @@ function MixerBody() {
   return (
     <>
       <div className="phead">
-        <span className="meta" style={{ marginLeft: 0 }}>{audio.length === 1 ? '1 input' : `${audio.length} inputs`}</span>
+        <span className="meta" style={{ marginLeft: 0 }}>{audio.length === 1 ? '1 source' : `${audio.length} sources`}</span>
         <span className="grow" />
         <Btn icon="search" variant="ghost" />
         {/* Shows the layout in use (rows here) and flips to the other. */}
@@ -181,7 +183,7 @@ function MixerBody() {
 export function SourcesPanel({ style }: { style?: React.CSSProperties }) {
   const { s, d } = useStore()
   return (
-    <Group tabs={['Sources', 'Audio Mixer']} current={s.leftTab} onTab={(t) => d({ type: 'set', patch: { leftTab: t as 'Sources' | 'Audio Mixer' } })} style={style}>
+    <Group tabs={['Sources', 'Audio mixer']} current={s.leftTab} onTab={(t) => d({ type: 'set', patch: { leftTab: t as 'Sources' | 'Audio mixer' } })} style={style}>
       {s.leftTab === 'Sources' ? <SourcesBody /> : <MixerBody />}
     </Group>
   )

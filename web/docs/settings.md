@@ -68,11 +68,14 @@ Each preset maps to the encoder's own settings:
 
 Keyframes are every 2 seconds.
 
+- **Clicking a scene shows it**: on (default), a click in Scenes switches to the scene, as in OBS. Off, a click edits a scene without showing it, like OBS's Studio Mode. Setup copies your OBS choice. See [Editing vs. showing](/docs/scenes-and-sources/#editing-vs-showing).
+- **Vertical canvas**: a tall 1080×1920 layout of each scene for Twitch's vertical stream. See [Vertical stream](/docs/scenes-and-sources/#vertical-stream).
+
 ## Audio
 
 "Devices for your global mic and desktop audio."
 
-One row per [global source](/docs/audio/#global-and-scene-audio), each with a device list (**Default device** follows Windows). Global sources are always mixed in, in every scene. Levels, monitoring and tracks are in the [Audio Mixer](/docs/audio/).
+One row per [global source](/docs/audio/#global-and-scene-audio), each with a device list (**Default device** follows Windows). Global sources are always mixed in, in every scene. If the show has no mic or no desktop audio, the page says so and offers **Add mic** or **Add desktop audio**. Levels, monitoring and where each sound goes are in the [Audio mixer](/docs/audio/).
 
 ## Hotkeys
 
