@@ -18,35 +18,49 @@ ColumnLayout {
     function dbAt(x, w) { return lo + Math.max(0, Math.min(1, x / w)) * (hi - lo) }
     function set(p, v, final) { app.setAudioFilterValue(sourceId, fxIndex, p.key, Math.round(v * 10) / 10, final) }
     readonly property var lv: app.levels[sourceId] || [-60, -60]
-    readonly property real level: Math.max(lv[0], lv[1])
+    readonly property real level: Math.max(lv[0], lv[1]) <= -59 ? lo : Math.max(lv[0], lv[1]) // the meters bottom out at -60: that's silence, not a level
 
     Rectangle {
         id: track
         Layout.fillWidth: true
-        implicitHeight: Pal.ctl + 4
+        implicitHeight: Pal.ctl + 8
         radius: Pal.radius
         color: Pal.s1
         border.width: 1; border.color: drag.containsMouse || drag.pressed ? Pal.borderStrong : Pal.border
         clip: true
         readonly property color accent: Pal.link
-        // Open above the right marker.
+        readonly property real xClose: track.width * gb.frac(gb.close.value)
+        readonly property real xOpen: track.width * gb.frac(gb.open.value)
+        // The live level fills the bar like a meter: blue while the gate is open, grey while closed.
         Rectangle {
-            x: track.width * gb.frac(gb.open.value); width: track.width - x; height: parent.height
-            color: Qt.rgba(track.accent.r, track.accent.g, track.accent.b, 0.18)
+            width: track.width * gb.frac(gb.level); height: parent.height
+            color: gb.level >= gb.open.value ? Qt.rgba(track.accent.r, track.accent.g, track.accent.b, 0.35) : Pal.s4
+            Behavior on width { NumberAnimation { duration: 60 } }
         }
-        // The live level, under the markers.
-        Rectangle {
-            width: track.width * gb.frac(gb.level); height: 4; radius: 2
-            anchors.bottom: parent.bottom; anchors.bottomMargin: 4
-            color: gb.level >= gb.open.value ? Pal.link : Pal.muted
+        // The two zones, named where there's room: closed below the left handle, open above the right.
+        Text {
+            visible: track.xClose > implicitWidth + 16
+            anchors.verticalCenter: parent.verticalCenter; x: 10
+            text: "Closed"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
         }
+        Rectangle { x: track.xOpen; width: track.width - x; height: parent.height; color: Qt.rgba(track.accent.r, track.accent.g, track.accent.b, 0.10) }
+        Text {
+            visible: track.width - track.xOpen > implicitWidth + 16
+            anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; anchors.rightMargin: 10
+            text: "Open"; color: Pal.link; font.family: Pal.font; font.pixelSize: Pal.caption
+        }
+        // The handles: a knob for each threshold.
         Repeater {
             model: [gb.close, gb.open]
             delegate: Rectangle {
                 required property var modelData
-                x: track.width * gb.frac(modelData.value) - 1.5
-                y: 4; width: 3; height: parent.height - 8; radius: 1.5
+                required property int index
+                x: track.width * gb.frac(modelData.value) - width / 2
+                anchors.verticalCenter: parent.verticalCenter
+                width: 10; height: parent.height - 6; radius: 5
                 color: Pal.fg
+                border.width: 1; border.color: Pal.s1
+                Rectangle { anchors.centerIn: parent; width: 2; height: parent.height * 0.4; radius: 1; color: Pal.s3 } // grip
             }
         }
         MouseArea {

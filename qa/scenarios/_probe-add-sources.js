@@ -29,7 +29,7 @@ story("AS-01u", "Add Source dialog: every kind on Windows", () => {
 	fresh();
 	const canvas = t.doc().canvas;
 	const kinds = [["Camera", "camera"], ["Display", "display"], ["Window", "window"], ["Game", "game"],
-		["Browser", "browser"], ["Mic", "mic"], ["Desktop", "desktop_audio"]];
+		["Browser", "browser"], ["Mic", "mic"], ["Sound", "desktop_audio"]];
 	check("dialog opens", openAdd());
 	for (const [label, kind] of kinds)
 		check("kind tile '" + label + "' is offered", has(label));

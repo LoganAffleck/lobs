@@ -258,6 +258,24 @@ public:
 		QCoreApplication::processEvents();
 		return mb() - m0;
 	}
+	// Puts a QML snippet in the window and keeps it there (for screens a test can't reach by
+	// clicking, like the mic wizard's results without a real voice).
+	Q_INVOKABLE bool mount(const QString &qml)
+	{
+		QQuickWindow *w = m_qml.rootObjects().isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(m_qml.rootObjects().first());
+		if (!w)
+			return false;
+		auto *comp = new QQmlComponent(&m_qml, this);
+		comp->setData((QStringLiteral("import QtQuick\nimport QtQuick.Controls\nimport LOBS\n") + qml).toUtf8(), QUrl("qrc:/qt/qml/LOBS/qml/mount.qml"));
+		if (comp->isError()) {
+			qWarning("[mount] %s", qPrintable(comp->errorString()));
+			return false;
+		}
+		QObject *o = comp->create(m_qml.rootContext());
+		if (auto *it = qobject_cast<QQuickItem *>(o))
+			it->setParentItem(w->contentItem());
+		return o != nullptr;
+	}
 	Q_INVOKABLE void gc() { m_js.collectGarbage(); m_qml.collectGarbage(); }
 	// Which heap a long collection is in: the test script's own, or the app's QML engine.
 	Q_INVOKABLE QVariantMap gcTimed()

@@ -167,6 +167,7 @@ public:
 	void holdScene(const QString &sceneId, bool on); // keep every scene's sources active (for live thumbnails)
 	QSize sourceSize(const QString &sourceId) const; // natural size, or 0x0 if unknown
 	bool inputMuted(const QString &sourceId) const; // as OBS has it (mute, push-to-talk, the scene on air)
+	void setFxBypassed(const QString &sourceId, bool on); // effects off while the mic wizard measures
 	// Media sources (video and audio files): {state: playing|paused|stopped|ended|none, timeMs, durationMs}.
 	QVariantMap mediaInfo(const QString &sourceId) const;
 	// cmd: playPause, restart, stop, seek (to ms).
@@ -392,6 +393,7 @@ private:
 	// the preview, and its canvas size. Shown while vertical is on.
 	obs_source *m_otherSource = nullptr;
 	std::atomic<int> m_otherW{0}, m_otherH{0};
+	QSet<QString> m_fxBypass; // sources whose effects are off for now (mic wizard)
 	std::atomic<bool> m_otherLeft{false}; // editing vertical: the horizontal layout is on its left
 	void drawOtherLayout(const QRectF &r);
 	QSet<QString> m_showingAll;         // scenes held showing for thumbnails

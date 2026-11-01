@@ -22,6 +22,9 @@ class SourcePreview : public QQuickPaintedItem {
 	Q_PROPERTY(QString sourceId READ sourceId WRITE setSourceId NOTIFY sourceIdChanged)
 	Q_PROPERTY(bool ready READ ready NOTIFY readyChanged) // a first frame arrived
 	Q_PROPERTY(double level READ level NOTIFY levelChanged) // audio peak, dBFS (-60 = silence)
+	// Each side, so a mic heard on one side only (it needs Mono) shows at a glance.
+	Q_PROPERTY(double levelL READ levelL NOTIFY levelChanged)
+	Q_PROPERTY(double levelR READ levelR NOTIFY levelChanged)
 public:
 	explicit SourcePreview(QQuickItem *parent = nullptr);
 	~SourcePreview() override;
@@ -38,6 +41,8 @@ public:
 	void setLive(bool on);
 	bool ready() const { return m_ready; }
 	double level() const { return m_level; }
+	double levelL() const { return m_side[0]; }
+	double levelR() const { return m_side[1]; }
 	Q_INVOKABLE void reload(); // browser: fetch the page again, skipping the cache
 
 	void paint(QPainter *p) override;
@@ -60,9 +65,10 @@ private:
 	QVariantMap m_settings;
 	bool m_live = false, m_ready = false;
 	double m_level = -60;
+	double m_side[2] = {-60, -60};
 	obs_source *m_src = nullptr;
 	obs_volmeter *m_meter = nullptr;
-	std::atomic<float> m_peak{-60.0f};
+	std::atomic<float> m_peak[3] = {-60.0f, -60.0f, -60.0f}; // both sides, left, right (the meter callback)
 	QImage m_frame;
 	QTimer m_timer, m_restart;
 };

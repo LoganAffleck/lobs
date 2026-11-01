@@ -2589,20 +2589,36 @@ ApplicationWindow {
                             onClicked: addPreview.reload()
                         }
                     }
-                    // Audio: a live meter, so you can tell it's the right one, and mono for one-sided mics.
+                    // Audio: a live meter per side, so you can tell it's the right one, and see a mic
+                    // that only comes in on one side (that's what Mono fixes).
                     RowLayout {
                         visible: addDialog.audioKind
                         Layout.fillWidth: true
                         spacing: 10
-                        Rectangle {
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            implicitHeight: 8; radius: 4
-                            color: Pal.s1
-                            border.color: Pal.border
-                            Rectangle {
-                                readonly property real f: Math.max(0, Math.min(1, (audioMeter.level + 60) / 60))
-                                width: (parent.width - 2) * f; height: parent.height - 2; x: 1; y: 1; radius: 3
-                                color: audioMeter.level > -9 ? "#e5484d" : audioMeter.level > -20 ? "#f5a524" : "#30a46c"
+                            spacing: 3
+                            Repeater {
+                                model: [{ side: "L", db: audioMeter.levelL }, { side: "R", db: audioMeter.levelR }]
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Caption { text: modelData.side; Layout.preferredWidth: 10 }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        implicitHeight: 8; radius: 4
+                                        color: Pal.s1
+                                        border.color: Pal.border
+                                        Rectangle {
+                                            // Mono on: both sides carry the mix, as they will once it's added.
+                                            readonly property real db: addDialog.mono ? audioMeter.level : modelData.db
+                                            readonly property real f: Math.max(0, Math.min(1, (db + 60) / 60))
+                                            width: (parent.width - 2) * f; height: parent.height - 2; x: 1; y: 1; radius: 3
+                                            color: db > -9 ? "#e5484d" : db > -20 ? "#f5a524" : "#30a46c"
+                                        }
+                                    }
+                                }
                             }
                             SourcePreview {
                                 id: audioMeter
@@ -2614,6 +2630,22 @@ ApplicationWindow {
                         }
                         Caption { text: audioMeter.level > -59 ? Math.round(audioMeter.level) + " dB" : addDialog.kind === "mic" ? "Say something" : "Play something"; Layout.preferredWidth: 84 }
                         FCheckbox { text: "Mono"; checked: addDialog.mono; onClicked: addDialog.mono = checked }
+                    }
+                    Caption {
+                        // Sound on one side only, for a second: suggest the fix. It keeps its space
+                        // while hidden, so the dialog doesn't jump as the hint comes and goes.
+                        readonly property bool lopsidedNow: audioMeter.level > -45 && Math.abs(audioMeter.levelL - audioMeter.levelR) > 15
+                        id: oneSide
+                        property bool lopsided: false
+                        // On after a second of it, off after two seconds without (no flicker).
+                        onLopsidedNowChanged: { lopsidedTimer.restart() }
+                        Timer { id: lopsidedTimer; interval: oneSide.lopsidedNow ? 1000 : 2000; onTriggered: oneSide.lopsided = oneSide.lopsidedNow }
+                        visible: addDialog.audioKind && addDialog.kind === "mic"
+                        opacity: !addDialog.mono && lopsided ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Pal.fast } }
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        text: "Only one side has sound. Turn on Mono so viewers hear it in both ears."
+                        color: "#fbbf24"
                     }
                     BrowserOptions {
                         visible: addDialog.kind === "browser"

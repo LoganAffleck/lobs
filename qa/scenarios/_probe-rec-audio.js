@@ -73,7 +73,7 @@ story("RA-03", "Effects are flat rows: one-setting effects inline, others open w
 story("RA-04", "Each setting gets its control: gate bar, EQ faders, ratio chips, time fields", () => {
 	fresh();
 	t.resizeWindow(1600, 1300);
-	addKind("mic", "Mic", "", false); t.wait(300);
+	addKind("desktop_audio", "Mic", "", false); t.wait(300); // no Tune button: the EQ stays in view
 	const k = app.mixer.find(m => m.name === "Mic").id;
 	app.addAudioFilter(k, "noise_gate"); app.addAudioFilter(k, "eq");
 	app.selectSource(k); t.waitFrames(5, 2000);
@@ -94,4 +94,92 @@ story("RA-04", "Each setting gets its control: gate bar, EQ faders, ratio chips,
 	const insp = t.items("Inspector")[0], add = t.items("Effect").find(i => i.text === "Effect");
 	t.metric("edges", { insp: insp, add: add });
 	t.grab("fx-narrow.png");
+});
+
+story("RA-05", "Effect chains copy, paste, save, load, and start from presets", () => {
+	fresh();
+	addKind("mic", "Mic", "", false); addKind("desktop_audio", "Desktop", "", false); t.wait(300);
+	const mic = app.mixer.find(m => m.name === "Mic").id, desk = app.mixer.find(m => m.name === "Desktop").id;
+	const fx = (id) => app.mixer.find(m => m.id === id).fx;
+	eq("four presets", app.audioPresets().length, 4);
+	app.applyAudioPreset(mic, "broadcast");
+	eq("broadcast chain", fx(mic).map(f => f.type).join(","), "noise_suppress,noise_gate,eq,compressor,limiter");
+	eq("its settings", fx(mic)[3].params.find(p => p.key === "ratio").value, 4);
+	app.undo();
+	eq("one undo step", fx(mic).length, 0);
+	app.redo();
+	app.copyAudioFilters(mic);
+	check("clipboard has a chain", app.canPasteAudioFilters());
+	app.pasteAudioFilters([desk], true);
+	eq("pasted", fx(desk).map(f => f.type).join(","), fx(mic).map(f => f.type).join(","));
+	app.pasteAudioFilters([desk], false);
+	eq("added to the end", fx(desk).length, 10);
+	const path = t.out("mic.lobsfx");
+	check("saved", app.saveAudioFilters(mic, path, "My mic"));
+	check("a lobsfx file", JSON.parse(t.readFile(path)).format === "lobsfx");
+	check("loaded", app.loadAudioFilters([desk], path, true));
+	eq("replaced", fx(desk).length, 5);
+	t.writeFile(t.out("junk.lobsfx"), "{}");
+	check("junk refused", !app.loadAudioFilters([desk], t.out("junk.lobsfx"), true));
+	eq("and nothing changed", fx(desk).length, 5);
+});
+
+story("RA-06", "Tune my mic: what it heard becomes an ordinary chain, one undo step", () => {
+	fresh();
+	addKind("mic", "Mic", "", false); addKind("desktop_audio", "Desktop", "", false); t.wait(300);
+	const mic = app.mixer.find(m => m.name === "Mic").id, desk = app.mixer.find(m => m.name === "Desktop").id;
+	const fx = () => app.mixer.find(m => m.id === mic).fx;
+	const val = (type, key) => { const f = fx().find(f => f.type === type); return f && f.params.find(p => p.key === key).value; };
+	// A quiet room: no noise processing at all, just level and gentle compression.
+	app.applyMicTuning(mic, { floor: -70, speech: -24, loud: -14 });
+	eq("quiet room: no noise processing", fx().map(f => f.type).join(","), "gain,compressor,limiter");
+	app.undo();
+	// A noisy room, a soft voice, big yells, loud game audio.
+	app.applyMicTuning(mic, { floor: -48, speech: -30, loud: -10, desk: -6, deskId: desk });
+	eq("chain", fx().map(f => f.type).join(","), "noise_suppress,noise_gate,gain,compressor,limiter");
+	check("gate opens well under the voice", val("noise_gate", "open_threshold") <= -48, val("noise_gate", "open_threshold"));
+	check("soft voice raised", val("gain", "db") > 10, val("gain", "db"));
+	check("gentle ratio, even with big yells", val("compressor", "ratio") <= 4, val("compressor", "ratio"));
+	check("attack keeps consonants", val("compressor", "attack_time") >= 10);
+	check("a little makeup", val("compressor", "output_gain") >= 0 && val("compressor", "output_gain") <= 3);
+	eq("limiter at -1", val("limiter", "threshold"), -1);
+	const dv = app.mixer.find(m => m.id === desk).volume;
+	check("game audio turned down", dv < 0.5, dv);
+	app.undo();
+	eq("one undo step", fx().length, 0);
+	eq("desktop volume back", app.mixer.find(m => m.id === desk).volume, 1);
+	// The wizard opens from the mic's settings.
+	app.selectSource(mic); t.waitFrames(5, 2000);
+	if (t.items("Sync offset").length) { t.clickItem("Advanced", 0); t.waitFrames(5, 2000); }
+	check("Tune my mic offered", t.items("Tune my mic").length >= 1);
+	t.clickItem("Tune my mic", 0); t.waitFrames(10, 2000);
+	check("wizard opens", t.waitUntil(() => t.items("Tune your mic").length >= 1, 3000));
+	check("shows its steps", t.items("Quiet").length >= 1 && t.items("Compare").length >= 1 && t.items("Game").length >= 1);
+	t.grab("wizard.png");
+	t.clickItem("Start", t.items("Start").length - 1); t.waitFrames(5, 2000);
+	if (t.waitUntil(() => t.items("Get ready").length >= 1, 2000)) t.grab("wizard-ready.png");
+	check("quiet step counts itself in", t.waitUntil(() => t.items("Starting in").length >= 1 || t.items("Listening").length >= 1, 3000));
+	t.grab("wizard-quiet.png");
+	t.key("Escape"); t.wait(400);
+	check("Esc doesn't close it mid-run", t.items("Stay quiet").length >= 1);
+	// A clip records and saves.
+	app.startClip(mic); t.wait(600);
+	const clip = app.stopClip("probe");
+	t.metric("clip", { path: clip, bytes: clip ? t.fileSize(clip) : 0 });
+});
+
+story("RA-07", "Tune my mic: the results screen, with the effects to adjust", () => {
+	fresh();
+	t.resizeWindow(1600, 1100);
+	addKind("mic", "Mic", "", false); t.wait(300);
+	const mic = app.mixer.find(m => m.name === "Mic").id;
+	app.applyMicTuning(mic, { floor: -55, speech: -22, loud: -8 });
+	t.clickItem("Cancel", t.items("Cancel").length - 1); t.wait(600); // the wizard from RA-06
+	const ok = t.mount('Item { MicWizard { id: w; Component.onCompleted: { w.micId = "' + mic + '"; w.measured = ({ floor: -55, speech: -22, loud: -8 }); w.step = 6; w.open() } } }');
+	check("mounted", ok);
+	t.waitFrames(10, 2000);
+	check("shows the effects", t.waitUntil(() => t.items("Edit filters").length >= 1, 3000));
+	t.grab("wizard-results.png");
+	t.clickItem("Edit filters", t.items("Edit filters").length - 1); t.waitFrames(5, 2000);
+	check("Edit filters opens the effects", t.waitUntil(() => t.items("Noise gate").length >= 1 && t.items("Record After again").length >= 1, 3000));
 });

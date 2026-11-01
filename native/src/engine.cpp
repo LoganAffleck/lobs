@@ -1671,7 +1671,7 @@ void Engine::applyAudioFilters(obs_source_t *in, const QString &sourceId, const 
 			obs_data_release(d);
 			if (!fsrc)
 				continue; // filter module not available on this PC (e.g. NVIDIA effects)
-			obs_source_set_enabled(fsrc, f.enabled);
+			obs_source_set_enabled(fsrc, f.enabled && !m_fxBypass.contains(sourceId));
 			obs_source_filter_add(in, fsrc);
 			obs_source_release(fsrc);
 		}
@@ -1685,10 +1685,19 @@ void Engine::applyAudioFilters(obs_source_t *in, const QString &sourceId, const 
 		obs_data_t *d = toData(QJsonObject::fromVariantMap(f.settings));
 		obs_source_update(fsrc, d);
 		obs_data_release(d);
-		if (obs_source_enabled(fsrc) != f.enabled)
-			obs_source_set_enabled(fsrc, f.enabled);
+		const bool on = f.enabled && !m_fxBypass.contains(sourceId);
+		if (obs_source_enabled(fsrc) != on)
+			obs_source_set_enabled(fsrc, on);
 		obs_source_release(fsrc);
 	}
+}
+
+// The mic wizard measures the raw signal: the source's effects are off while it listens.
+void Engine::setFxBypassed(const QString &sourceId, bool on)
+{
+	on ? (void)m_fxBypass.insert(sourceId) : (void)m_fxBypass.remove(sourceId);
+	if (obs_source_t *in = m_inputs.value(sourceId))
+		applyAudioFilters(in, sourceId, m_lastDoc.sources.value(sourceId).audio.filters);
 }
 
 obs_source *Engine::inputSource(const QString &sourceId) const

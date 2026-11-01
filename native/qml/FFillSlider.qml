@@ -38,7 +38,7 @@ Item {
             x: parent.width * Math.min(s.fillFrom, s.frac)
             width: Math.max(0, parent.width * Math.abs(s.frac - s.fillFrom))
             height: parent.height
-            radius: Pal.radius
+            radius: s.fillFrom > 0 ? 0 : Pal.radius // from the middle: square ends (the bar clips the outer corners)
             color: Pal.s6
             // Animate value changes only, never layout (a slider appearing in a popup would
             // otherwise grow its fill from zero).

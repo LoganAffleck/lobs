@@ -5,9 +5,11 @@
 #include "engine.h"
 #include "eyedropper.h"
 #include "hotkeys.h"
+#include <QJsonObject>
 #include "model/obs_import.h"
 #include "model/store.h"
 
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QObject>
 #include <QPointer>
@@ -128,6 +130,24 @@ public:
 	// macOS allowed Screen Recording (nothing to list then). Not an undo step.
 	void fillMissingDevices();
 	Q_INVOKABLE void addAudioFilter(const QString &sourceId, const QString &type);
+	// Effect chains: copy and paste, .lobsfx files, presets (P2-8).
+	Q_INVOKABLE void copyAudioFilters(const QString &sourceId);
+	Q_INVOKABLE bool canPasteAudioFilters() const;
+	Q_INVOKABLE void pasteAudioFilters(const QStringList &sourceIds, bool replace);
+	Q_INVOKABLE bool saveAudioFilters(const QString &sourceId, const QString &path, const QString &name = {});
+	Q_INVOKABLE bool loadAudioFilters(const QStringList &sourceIds, const QString &path, bool replace);
+	Q_INVOKABLE QVariantList audioPresets() const;
+	Q_INVOKABLE void applyAudioPreset(const QString &sourceId, const QString &presetId);
+	// Mic wizard (P2-9): its effects off while measuring, then the tuned chain applied as one step.
+	Q_INVOKABLE void setFxBypassed(const QString &sourceId, bool on) { m_engine->setFxBypassed(sourceId, on); }
+	Q_INVOKABLE void applyMicTuning(const QString &micId, const QVariantMap &measured);
+	// Before / after clips: record a source (after its effects), save it as a WAV, play it back.
+	Q_INVOKABLE void startClip(const QString &sourceId);
+	Q_INVOKABLE QString stopClip(const QString &name = {}); // the WAV's path, or "" (nothing heard)
+	Q_INVOKABLE void playClip(const QString &path);         // "" stops playback
+	struct ClipRec;
+	QJsonObject effectsJson(const QString &sourceId, const QString &name) const;
+	bool applyEffects(const QStringList &sourceIds, const QJsonObject &chain, bool replace, const QString &what);
 	Q_INVOKABLE void removeAudioFilter(const QString &sourceId, int index);
 	Q_INVOKABLE void moveAudioFilter(const QString &sourceId, int index, int delta);
 	Q_INVOKABLE void setAudioFilterEnabled(const QString &sourceId, int index, bool on);
@@ -624,6 +644,8 @@ private:
 	int m_placeTries = 0;
 	void resolvePlacements(bool last);
 	QSizeF m_previewSize;
+	ClipRec *m_clip = nullptr; // kept for the app's life: the audio thread may still hold it briefly
+	QString m_clipSource;
 	QString m_penGroup; // this pencil session's strokes go in one group (a new one each time the pencil is picked)
 	PreviewLayout previewLayout() const; // where the edited canvas (and the other layout) sit
 	double m_previewDpr = 1;

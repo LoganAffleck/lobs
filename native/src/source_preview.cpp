@@ -26,11 +26,15 @@ static bool isAudio(const QString &kind) { return kind == "mic" || kind == "desk
 
 static void onPeak(void *data, const float *, const float peak[MAX_AUDIO_CHANNELS], const float *)
 {
-	float m = -60.0f;
+	float m = -60.0f, side[2] = {-60.0f, -60.0f};
 	for (int c = 0; c < 2; c++)
 		if (std::isfinite(peak[c]))
-			m = std::max(m, peak[c]);
-	static_cast<std::atomic<float> *>(data)->store(m);
+			side[c] = std::max(-60.0f, peak[c]), m = std::max(m, peak[c]);
+	// data is SourcePreview::m_peak: both sides, left, right.
+	auto *p = static_cast<std::atomic<float> *>(data);
+	p[0].store(m);
+	p[1].store(side[0]);
+	p[2].store(side[1]);
 }
 
 SourcePreview::SourcePreview(QQuickItem *parent) : QQuickPaintedItem(parent)
@@ -93,7 +97,7 @@ void SourcePreview::release()
 	m_restart.stop();
 	m_timer.stop();
 	if (m_meter) {
-		obs_volmeter_remove_callback(m_meter, onPeak, &m_peak);
+		obs_volmeter_remove_callback(m_meter, onPeak, m_peak);
 		obs_volmeter_destroy(m_meter);
 		m_meter = nullptr;
 	}
@@ -103,7 +107,9 @@ void SourcePreview::release()
 		m_src = nullptr;
 	}
 	m_frame = {};
-	m_peak = -60.0f;
+	for (auto &p : m_peak)
+		p = -60.0f;
+	m_side[0] = m_side[1] = -60;
 	if (m_level != -60) {
 		m_level = -60;
 		emit levelChanged();
@@ -133,7 +139,7 @@ void SourcePreview::restart()
 	if (isAudio(m_kind)) {
 		m_meter = obs_volmeter_create(OBS_FADER_LOG);
 		obs_volmeter_attach_source(m_meter, m_src);
-		obs_volmeter_add_callback(m_meter, onPeak, &m_peak);
+		obs_volmeter_add_callback(m_meter, onPeak, m_peak);
 	}
 	m_timer.start();
 }
@@ -167,10 +173,11 @@ void SourcePreview::tick()
 		return;
 	if (m_meter) {
 		// Falls back slowly, like the mixer's meters, so short sounds are easy to see.
-		const double now = m_peak.load();
-		const double next = now >= m_level ? now : std::max(now, m_level - 2.0);
-		if (std::abs(next - m_level) > 0.05) {
-			m_level = next;
+		auto fall = [](double now, double was) { return now >= was ? now : std::max(now, was - 2.0); };
+		const double next = fall(m_peak[0].load(), m_level);
+		const double l = fall(m_peak[1].load(), m_side[0]), r = fall(m_peak[2].load(), m_side[1]);
+		if (std::abs(next - m_level) > 0.05 || std::abs(l - m_side[0]) > 0.05 || std::abs(r - m_side[1]) > 0.05) {
+			m_level = next, m_side[0] = l, m_side[1] = r;
 			emit levelChanged();
 		}
 		if (!m_ready) {

@@ -264,6 +264,25 @@ OBS's main-window calls (Studio Mode, projectors, source dialogs).
 - Update PLAN.md's audit: hotkeys, the status bar, the virtual camera, projectors, transitions and
   Interact have shipped since it was written. Add what's still missing here.
 
+### P2-8. I can reuse a good mic sound (effect sharing)
+- **Copy effects / Paste effects** in the Effects menu (replace or add to the end), onto one
+  source or several.
+- **Save effects as… / Load effects…**: a `.lobsfx` file (JSON: name, effects, settings,
+  order). Dropping one on a source loads it. Effects LOBS doesn't know come along, marked as
+  needing their plugin.
+- Presets at the top of **+ Effect**: Clean voice, Broadcast voice, Noisy room, Loud moments.
+
+### P2-9. My mic sounds professional without learning audio (mic setup wizard)
+- Five steps, each with a live meter: **Silence** (noise floor → suppression and gate),
+  **Talk normally** (average and peaks → gain to about −18 dB, compressor), **Get loud**
+  (limiter at −1 dB, tighter compressor), **Game audio** (desktop audio under the voice,
+  optional ducking while you talk), **Listen back** (before / after, keep, retry or save as a
+  preset).
+- Results are ordinary effects, one undo step, plain readouts ("Room noise: quiet").
+- Measures the raw signal: the chain is bypassed while measuring.
+- Offered in setup after picking a mic, and as **Tune my mic** on a mic's Effects header.
+- Ducking needs the compressor's sidechain source (OBS's `sidechain_source`).
+
 ### P3-5. My recordings are clean: no alerts or chat
 - **Sound: done (2026-11-01).** Each audio source has **In recordings**. Off, it's on the stream
   but not in recordings. Track 6 is the recording's mix (track 1 without those sources), so the

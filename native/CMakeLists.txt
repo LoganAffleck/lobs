@@ -81,7 +81,7 @@ endif()
 qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     qml/Main.qml
     # Fluid Functionalism components (QML port)
-    qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FxControl.qml qml/FxGateBar.qml qml/FxEqFaders.qml qml/FSwitch.qml qml/FCheckbox.qml
+    qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FxControl.qml qml/FxGateBar.qml qml/FxEqFaders.qml qml/MicWizard.qml qml/FxChain.qml qml/FSwitch.qml qml/FCheckbox.qml
     qml/FTabs.qml qml/FMenu.qml qml/FMenuItem.qml qml/FSelect.qml qml/FDialog.qml qml/FluidList.qml
     qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/AudioSettings.qml qml/AudioMath.js qml/InlineRename.qml qml/StatsView.qml qml/CaptionsPanel.qml
     qml/SettingsPage.qml qml/MixerView.qml qml/FIcon.qml qml/FHelp.qml qml/FScrollView.qml qml/CanvasArea.qml qml/StatusBar.qml qml/OutputControls.qml qml/AssetMouse.qml qml/MeterFader.qml qml/ToolTipStyle.qml qml/SourceFields.qml qml/BrowserOptions.qml qml/SourceSection.qml qml/FFontPicker.qml qml/FColorField.qml qml/FSearchField.qml qml/GraphicTools.qml
@@ -112,7 +112,7 @@ target_link_libraries(LOBS PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg Qt6::
 if(WIN32)
     target_compile_definitions(LOBS PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/whisper/lib/whisper.lib ${LIBOBS_IMPLIB}
-        crypt32 version delayimp shell32 ole32 propsys dwmapi dbghelp wintrust d3d11 dxgi)
+        crypt32 version delayimp shell32 ole32 propsys dwmapi dbghelp wintrust d3d11 dxgi winmm) # winmm: mic wizard playback
     # libobs is loaded from the engine folder chosen at startup (<app>/engine/<version>), so it
     # must not be resolved before main() runs.
     target_link_options(LOBS PRIVATE "/DELAYLOAD:obs.dll")

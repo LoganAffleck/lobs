@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "AudioMath.js" as AudioMath
 
@@ -235,212 +236,73 @@ ColumnLayout {
         Text { text: "Effects" + (au.s.fx.length ? " · " + au.s.fx.length : ""); color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
         // Gives way first when the panel is narrow.
         Text { text: au.s.fx.length > 1 ? "Runs top to bottom" : ""; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.leftMargin: 4; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
+        // The whole chain: copy and paste it, or keep it in a .lobsfx file to share (P2-8).
+        FButton {
+            id: chainMore
+            iconName: "ellipsis"; variant: "ghost"; tip: "Copy, paste, save or load these effects"
+            onClicked: chainMenu.popup(chainMore, 0, chainMore.height + 4)
+            FMenu {
+                id: chainMenu
+                property bool canPaste: false
+                onAboutToShow: canPaste = app.canPasteAudioFilters()
+                FMenuItem { text: "Copy effects"; enabled: au.s.fx.length > 0; onTriggered: app.copyAudioFilters(au.s.id) }
+                FMenuItem { text: "Paste effects"; enabled: chainMenu.canPaste; onTriggered: app.pasteAudioFilters([au.s.id], true) }
+                FMenuItem { text: "Add pasted effects to the end"; enabled: chainMenu.canPaste && au.s.fx.length > 0; onTriggered: app.pasteAudioFilters([au.s.id], false) }
+                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
+                FMenuItem { text: "Save effects as…"; enabled: au.s.fx.length > 0; onTriggered: fxSaveDialog.open() }
+                FMenuItem { text: "Load effects…"; onTriggered: fxLoadDialog.open() }
+            }
+        }
         FButton {
             id: addFx
             iconName: "plus"; text: "Effect"; variant: "secondary"
-            tip: "Add an audio effect"
+            tip: "Add an audio effect, or start from a preset"
             onClicked: fxMenu.popup(addFx, 0, addFx.height + 4)
             FMenu {
                 id: fxMenu
+                // Presets replace the chain (one undo step brings it back).
+                FMenu {
+                    id: presetMenu
+                    title: "Start from a preset"
+                    Instantiator {
+                        active: fxMenu.populated
+                        model: app.audioPresets()
+                        delegate: FMenuItem { required property var modelData; text: modelData.name; onTriggered: app.applyAudioPreset(au.s.id, modelData.id) }
+                        onObjectAdded: (i, o) => presetMenu.insertItem(i, o)
+                        onObjectRemoved: (i, o) => presetMenu.removeItem(o)
+                    }
+                }
+                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                 Instantiator {
                     active: fxMenu.populated // built while the menu is open
                     model: app.audioFxTypes()
                     delegate: FMenuItem { required property var modelData; text: modelData.label; onTriggered: app.addAudioFilter(au.s.id, modelData.type) }
-                    onObjectAdded: (i, o) => fxMenu.insertItem(i, o)
+                    onObjectAdded: (i, o) => fxMenu.insertItem(i + 2, o) // after the presets and the line
                     onObjectRemoved: (i, o) => fxMenu.removeItem(o)
                 }
             }
         }
     }
-    // Dragging an effect by its grip: it follows the cursor and the others slide aside to show
-    // where it lands (as tabs do when they're dragged).
-    ColumnLayout {
-        id: fxChain
+    // Mics: let LOBS listen and set the effects up (P2-9).
+    FButton {
+        visible: au.s.kind === "mic"
         Layout.fillWidth: true
-        spacing: 0
-        property int dragIndex: -1
-        property real dragDy: 0
-        property int dropIndex: -1
-        function rowAt(i) { return fxRep.itemAt(i) }
-        function updateDrop() {
-            const me = rowAt(dragIndex)
-            if (!me) return
-            const mid = me.y + dragDy + me.height / 2
-            let to = dragIndex
-            for (let i = 0; i < fxRep.count; i++) {
-                const r = rowAt(i)
-                if (!r || i === dragIndex) continue
-                const c = r.y + r.height / 2
-                if (i < dragIndex && mid < c) to = Math.min(to, i)
-                if (i > dragIndex && mid > c) to = Math.max(to, i)
-            }
-            dropIndex = to
-        }
-        function finish() {
-            const from = dragIndex, to = dropIndex
-            dragIndex = -1; dropIndex = -1; dragDy = 0
-            for (let k = from; to >= 0 && k !== to; k += (to > k ? 1 : -1))
-                app.moveAudioFilter(au.s.id, k, to > k ? 1 : -1)
-        }
-        Repeater {
-            id: fxRep
-            model: au.s.fx.length // by position, so sliders survive edits
-            delegate: ColumnLayout {
-                id: fxRow
-                required property int index
-                readonly property var fx: au.s.fx[fxRow.index] || ({ label: "", enabled: false, params: [], known: true })
-                readonly property var params: fx.params || []
-                readonly property bool inline: params.length === 1 && !fx.obs && fx.known !== false // its one slider on the row
-                readonly property bool expandable: !inline && (params.length > 0 || !!fx.obs || fx.known === false)
-                property bool open: false
-                function fmt(p) { return p.kind === "percent" ? Math.round(p.value * 100) + "%" : Number(p.value).toFixed(p.decimals) + p.suffix }
-                readonly property bool dragged: fxChain.dragIndex === index
-                // While another row is dragged past this one, it slides a row's height out of the way.
-                readonly property real shift: {
-                    const d = fxChain.dragIndex, t = fxChain.dropIndex, me = fxChain.rowAt(d)
-                    if (d < 0 || t < 0 || dragged || !me) return 0
-                    if (d < t && index > d && index <= t) return -me.height
-                    if (d > t && index < d && index >= t) return me.height
-                    return 0
-                }
-                Layout.fillWidth: true
-                spacing: 8
-                z: dragged ? 2 : 0
-                opacity: fx.enabled ? 1 : 0.55
-                transform: Translate {
-                    y: fxRow.dragged ? fxChain.dragDy : fxRow.shift
-                    Behavior on y { enabled: !fxRow.dragged; NumberAnimation { duration: Pal.fast; easing.type: Easing.OutCubic } }
-                }
-                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border; visible: fxRow.index > 0 && !fxRow.dragged }
-                Rectangle { // the row being dragged lifts off the list
-                    Layout.fillWidth: true
-                    implicitHeight: head.implicitHeight
-                    radius: Pal.radius
-                    color: fxRow.dragged ? Pal.s3 : "transparent"
-                    border.width: fxRow.dragged ? 1 : 0; border.color: Pal.borderStrong
-                    // Line 1: grip, the effect's name across the row, its menu. Line 2: its one slider
-                    // (or, with several settings, a summary that opens them) and its switch.
-                    MouseArea {
-                        id: head
-                        anchors.fill: parent
-                        implicitHeight: headCol.implicitHeight + 8
-                        hoverEnabled: true
-                        cursorShape: fxRow.expandable ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: if (fxRow.expandable) fxRow.open = !fxRow.open
-                        ColumnLayout {
-                            id: headCol
-                            anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                            anchors.leftMargin: 2; anchors.rightMargin: 2
-                            spacing: 2
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-                                FIcon {
-                                    name: "grip-vertical"; size: 14
-                                    color: grip.containsMouse || grip.pressed ? Pal.fg : Pal.muted
-                                    visible: au.s.fx.length > 1
-                                    MouseArea {
-                                        id: grip
-                                        anchors.fill: parent; anchors.margins: -6
-                                        hoverEnabled: true
-                                        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-                                        preventStealing: true
-                                        property real startY: 0
-                                        onPressed: (m) => { startY = mapToItem(fxChain, m.x, m.y).y; fxChain.dragIndex = fxRow.index; fxChain.dropIndex = fxRow.index }
-                                        onPositionChanged: (m) => { if (pressed) { fxChain.dragDy = mapToItem(fxChain, m.x, m.y).y - startY; fxChain.updateDrop() } }
-                                        onReleased: fxChain.finish()
-                                        onCanceled: { fxChain.dragIndex = -1; fxChain.dropIndex = -1; fxChain.dragDy = 0 }
-                                    }
-                                }
-                                Text {
-                                    text: fxRow.fx.label; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                FButton {
-                                    id: fxMore
-                                    iconName: "ellipsis"; variant: "ghost"; tip: "More"
-                                    onClicked: rowMenu.popup(fxMore, 0, fxMore.height + 4)
-                                    FMenu {
-                                        id: rowMenu
-                                        FMenuItem { text: "Move up"; enabled: fxRow.index > 0; onTriggered: app.moveAudioFilter(au.s.id, fxRow.index, -1) }
-                                        FMenuItem { text: "Move down"; enabled: fxRow.index < au.s.fx.length - 1; onTriggered: app.moveAudioFilter(au.s.id, fxRow.index, 1) }
-                                        FMenuItem { text: "Remove"; onTriggered: app.removeAudioFilter(au.s.id, fxRow.index) }
-                                    }
-                                }
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: au.s.fx.length > 1 ? 20 : 0 // under the name, past the grip
-                                spacing: 8
-                                // One setting: its control, unlabeled (the effect's name says it).
-                                FxControl {
-                                    visible: fxRow.inline
-                                    Layout.fillWidth: true
-                                    p: fxRow.params[0] || ({ key: "", label: "", suffix: "", min: 0, max: 1, decimals: 0, def: 0, kind: "level", presets: [], value: 0 })
-                                    sourceId: au.s.id; fxIndex: fxRow.index
-                                    showLabel: false
-                                }
-                                // Several: what they're set to, and the way to open them.
-                                Text {
-                                    visible: !fxRow.inline
-                                    Layout.fillWidth: true
-                                    text: fxRow.expandable && !fxRow.open ? fxRow.params.slice(0, 2).map(p => fxRow.fmt(p)).join(" · ") : ""
-                                    elide: Text.ElideRight
-                                    color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-                                }
-                                FButton {
-                                    visible: fxRow.expandable
-                                    iconName: fxRow.open ? "chevron-up" : "chevron-down"; variant: "ghost"
-                                    tip: fxRow.open ? "Close" : "Open"
-                                    onClicked: fxRow.open = !fxRow.open
-                                }
-                                FSwitch { checkable: false; checked: fxRow.fx.enabled; onClicked: app.setAudioFilterEnabled(au.s.id, fxRow.index, !fxRow.fx.enabled) }
-                            }
-                        }
-                    }
-                }
-                // Open: its settings, each labeled (there are several), labels outside the controls.
-                // A noise gate's thresholds share one bar over the live level; an EQ gets faders.
-                readonly property bool gate: fx.type === "noise_gate" && params.length >= 2
-                readonly property bool eq: fx.type === "eq"
-                FxGateBar {
-                    visible: fxRow.open && fxRow.gate
-                    Layout.fillWidth: true; Layout.leftMargin: au.s.fx.length > 1 ? 20 : 0
-                    close: fxRow.params[0] || ({ key: "", min: -96, max: 0, value: -32 })
-                    open: fxRow.params[1] || ({ key: "", min: -96, max: 0, value: -26 })
-                    sourceId: au.s.id; fxIndex: fxRow.index
-                }
-                FxEqFaders {
-                    visible: fxRow.open && fxRow.eq
-                    Layout.fillWidth: true; Layout.leftMargin: au.s.fx.length > 1 ? 20 : 0
-                    bands: fxRow.eq ? fxRow.params : []
-                    sourceId: au.s.id; fxIndex: fxRow.index
-                }
-                Repeater {
-                    model: fxRow.open && !fxRow.inline && !fxRow.eq ? fxRow.params.length : 0
-                    delegate: FxControl {
-                        required property int index
-                        visible: !(fxRow.gate && index < 2) // the gate's thresholds are on its bar
-                        Layout.fillWidth: true; Layout.leftMargin: au.s.fx.length > 1 ? 20 : 0
-                        p: fxRow.params[index] || ({ key: "", label: "", suffix: "", min: 0, max: 1, decimals: 0, def: 0, kind: "level", presets: [], value: 0 })
-                        sourceId: au.s.id; fxIndex: fxRow.index
-                    }
-                }
-                ObsProperties {
-                    visible: fxRow.open && !!fxRow.fx.obs
-                    active: visible
-                    Layout.leftMargin: 22
-                    scope: "audio"; targetId: au.s.id; index: fxRow.index
-                }
-                Text {
-                    visible: fxRow.open && fxRow.fx.known === false
-                    Layout.fillWidth: true; Layout.leftMargin: au.s.fx.length > 1 ? 20 : 0; wrapMode: Text.WordWrap
-                    color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-                    text: "Imported from OBS. No controls in LOBS yet."
-                }
-                Item { implicitHeight: 2 }
-            }
-        }
+        iconName: "wand-sparkles"; text: au.s.fx.length ? "Tune my mic again" : "Tune my mic"
+        variant: "secondary"
+        tip: "Set up your mic in 30 seconds"
+        onClicked: micWizard.openFor(au.s.id)
+    }
+    MicWizard { id: micWizard }
+    FxChain { s: au.s; Layout.fillWidth: true }
+    FileDialog {
+        id: fxSaveDialog
+        fileMode: FileDialog.SaveFile; nameFilters: ["LOBS effects (*.lobsfx)"]; defaultSuffix: "lobsfx"
+        currentFile: "file:///" + (au.s.name || "Effects") + ".lobsfx"
+        onAccepted: app.saveAudioFilters(au.s.id, selectedFile.toString().replace(/^file:\/{3}/, ""))
+    }
+    FileDialog {
+        id: fxLoadDialog
+        fileMode: FileDialog.OpenFile; nameFilters: ["LOBS effects (*.lobsfx)", "All files (*)"]
+        onAccepted: app.loadAudioFilters([au.s.id], selectedFile.toString().replace(/^file:\/{3}/, ""), true)
     }
 }

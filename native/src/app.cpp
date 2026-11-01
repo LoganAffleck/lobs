@@ -37,6 +37,15 @@
 #include "frontend.h"
 #include <QTemporaryDir>
 #include <QStandardPaths>
+#include <QDataStream>
+#include <QMutex>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <mmsystem.h> // PlaySound: the mic wizard's before / after
+#endif
 #include <QCoreApplication>
 #include <QImageReader>
 #include <QProcess>
@@ -3977,6 +3986,292 @@ void App::addAudioFilter(const QString &sourceId, const QString &type)
 	m_store.commit("Add " + label, [&](Doc &d) { d.sources[sourceId].audio.filters << Filter{uid("afx_"), type, true, audioFxDefaults(type)}; });
 	if (type.startsWith("obs:"))
 		settleObsLists("audio", sourceId, int(doc().sources[sourceId].audio.filters.size()) - 1);
+}
+
+// ---------- sharing effect chains (.lobsfx) and presets ----------
+// A chain as JSON: {"format": "lobsfx", "version": 1, "name", "effects": [{type, enabled, settings}]}.
+// Plugin effects (type "obs:<id>") travel as they are; without the plugin they show as imported.
+QJsonObject App::effectsJson(const QString &sourceId, const QString &name) const
+{
+	QJsonArray fx;
+	for (const Filter &f : doc().sources.value(sourceId).audio.filters)
+		fx << QJsonObject{{"type", f.type}, {"enabled", f.enabled}, {"settings", QJsonObject::fromVariantMap(f.settings)}};
+	return {{"format", "lobsfx"}, {"version", 1}, {"name", name.isEmpty() ? doc().sources.value(sourceId).name : name}, {"effects", fx}};
+}
+
+static bool isEffectsJson(const QJsonObject &o) { return o.value("format").toString() == "lobsfx" && o.value("effects").isArray(); }
+
+bool App::applyEffects(const QStringList &sourceIds, const QJsonObject &o, bool replace, const QString &what)
+{
+	if (!isEffectsJson(o))
+		return false;
+	QVector<Filter> chain;
+	for (const QJsonValue v : o.value("effects").toArray()) {
+		const QJsonObject e = v.toObject();
+		const QString type = e.value("type").toString();
+		if (type.isEmpty())
+			continue;
+		QVariantMap st = audioFxDefaults(type); // missing keys fall back to the effect's defaults
+		const QVariantMap given = e.value("settings").toObject().toVariantMap();
+		for (auto it = given.cbegin(); it != given.cend(); ++it)
+			st[it.key()] = it.value();
+		chain << Filter{QString(), type, e.value("enabled").toBool(true), st};
+	}
+	QStringList targets;
+	for (const QString &id : sourceIds)
+		if (doc().sources.contains(id) && doc().sources[id].hasAudio)
+			targets << id;
+	if (targets.isEmpty())
+		return false;
+	m_store.commit(what, [&](Doc &d) {
+		for (const QString &id : targets) {
+			QVector<Filter> &fl = d.sources[id].audio.filters;
+			if (replace)
+				fl.clear();
+			for (Filter f : chain) {
+				f.id = uid("afx_");
+				fl << f;
+			}
+		}
+	});
+	return true;
+}
+
+void App::copyAudioFilters(const QString &sourceId)
+{
+	if (!doc().sources.contains(sourceId))
+		return;
+	QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(effectsJson(sourceId, {})).toJson(QJsonDocument::Compact)));
+	showToast("Copied " + QString::number(doc().sources[sourceId].audio.filters.size()) + " effects from " + doc().sources[sourceId].name);
+}
+
+bool App::canPasteAudioFilters() const
+{
+	return isEffectsJson(QJsonDocument::fromJson(QGuiApplication::clipboard()->text().toUtf8()).object());
+}
+
+void App::pasteAudioFilters(const QStringList &sourceIds, bool replace)
+{
+	const QJsonObject o = QJsonDocument::fromJson(QGuiApplication::clipboard()->text().toUtf8()).object();
+	if (!applyEffects(sourceIds, o, replace, replace ? "Paste effects" : "Add pasted effects"))
+		showToast("Nothing to paste. Copy effects from a source first.");
+}
+
+bool App::saveAudioFilters(const QString &sourceId, const QString &path, const QString &name)
+{
+	QFile f(path);
+	if (!doc().sources.contains(sourceId) || !f.open(QIODevice::WriteOnly)) {
+		showToast("Couldn't save the effects there.");
+		return false;
+	}
+	f.write(QJsonDocument(effectsJson(sourceId, name)).toJson());
+	showToast("Saved " + QFileInfo(path).fileName());
+	return true;
+}
+
+bool App::loadAudioFilters(const QStringList &sourceIds, const QString &path, bool replace)
+{
+	QFile f(path);
+	const QJsonObject o = f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll()).object() : QJsonObject();
+	if (!applyEffects(sourceIds, o, replace, "Load " + o.value("name").toString(QFileInfo(path).completeBaseName()))) {
+		showToast("That file isn't a LOBS effects file.");
+		return false;
+	}
+	return true;
+}
+
+// Starting points, tuned for a typical USB or XLR mic at speaking distance. They're ordinary
+// effects: the wizard (P2-9) fills the same chain in, measured for your mic.
+static const QList<QPair<QStringList, QJsonObject>> &audioPresetTable()
+{
+	auto fx = [](const QString &type, const QJsonObject &settings) { return QJsonObject{{"type", type}, {"enabled", true}, {"settings", settings}}; };
+	auto chain = [](const QString &name, const QJsonArray &effects) { return QJsonObject{{"format", "lobsfx"}, {"version", 1}, {"name", name}, {"effects", effects}}; };
+	static const QList<QPair<QStringList, QJsonObject>> table = {
+		{{"clean", "Clean voice", "Takes out steady background noise and evens out your level."},
+		 chain("Clean voice", {fx("noise_suppress", {{"suppress_level", -30}}),
+				       fx("compressor", {{"threshold", -20}, {"ratio", 3}, {"attack_time", 6}, {"release_time", 60}, {"output_gain", 2}})})},
+		{{"broadcast", "Broadcast voice", "Quiet between words, a fuller tone, and no clipping."},
+		 chain("Broadcast voice", {fx("noise_suppress", {{"suppress_level", -30}}),
+					   fx("noise_gate", {{"close_threshold", -45}, {"open_threshold", -38}, {"attack_time", 10}, {"hold_time", 150}, {"release_time", 120}}),
+					   fx("eq", {{"low", -2}, {"mid", 1}, {"high", 2}}),
+					   fx("compressor", {{"threshold", -18}, {"ratio", 4}, {"attack_time", 5}, {"release_time", 80}, {"output_gain", 4}}),
+					   fx("limiter", {{"threshold", -1}, {"release_time", 60}})})},
+		{{"noisy", "Noisy room", "Stronger noise removal and a tighter gate for fans, keyboards and traffic."},
+		 chain("Noisy room", {fx("noise_suppress", {{"suppress_level", -45}}),
+				      fx("noise_gate", {{"close_threshold", -36}, {"open_threshold", -30}, {"attack_time", 10}, {"hold_time", 200}, {"release_time", 150}}),
+				      fx("compressor", {{"threshold", -20}, {"ratio", 3}, {"attack_time", 6}, {"release_time", 60}, {"output_gain", 2}})})},
+		{{"loud", "Loud moments", "Keeps yells and laughs from blasting your viewers."},
+		 chain("Loud moments", {fx("compressor", {{"threshold", -24}, {"ratio", 6}, {"attack_time", 2}, {"release_time", 120}, {"output_gain", 3}}),
+					fx("limiter", {{"threshold", -1}, {"release_time", 60}})})},
+	};
+	return table;
+}
+
+QVariantList App::audioPresets() const
+{
+	QVariantList out;
+	for (const auto &p : audioPresetTable())
+		out << QVariantMap{{"id", p.first[0]}, {"name", p.first[1]}, {"desc", p.first[2]}};
+	return out;
+}
+
+void App::applyAudioPreset(const QString &sourceId, const QString &presetId)
+{
+	for (const auto &p : audioPresetTable())
+		if (p.first[0] == presetId)
+			applyEffects({sourceId}, p.second, true, "Preset " + p.first[1]);
+}
+
+// The mic wizard's result (P2-9): from what it heard, an ordinary chain of effects (suppression,
+// gate, gain, compressor, limiter) on the mic, and optionally desktop audio set under the
+// voice. Measured levels are peak dBFS as the meter shows them; the mic's own volume is taken
+// out so they're the raw signal. One undo step.
+void App::applyMicTuning(const QString &micId, const QVariantMap &m)
+{
+	if (!doc().sources.contains(micId))
+		return;
+	const double vol = std::max(1e-4, doc().sources[micId].audio.volume);
+	const double volDb = 20 * std::log10(vol);
+	const double floor = m.value("floor", -60).toDouble() - volDb;   // room noise while quiet
+	const double speech = m.value("speech", -20).toDouble() - volDb; // typical peaks while talking
+	const double loud = std::max(speech, m.value("loud", speech).toDouble() - volDb); // the loudest moment
+	auto clamp = [](double v, double lo, double hi) { return std::max(lo, std::min(hi, v)); };
+	auto r1 = [](double v) { return std::round(v * 10) / 10; };
+
+	// Only what the room needs (see below): decided first, since noise removal changes how far
+	// the voice can be raised.
+	const bool needGate = floor >= -65, needSuppress = floor >= -52;
+	// Speech peaks land near -12 dB. Without noise removal, the gain can't push the room past
+	// -50 dB (it would be heard between words).
+	double gain = clamp(-12 - speech, -10, 24);
+	if (!needSuppress && floor + gain > -50 && floor > -80)
+		gain = std::max(std::min(gain, -50 - floor), std::min(0.0, gain));
+	// Only what the room needs, the way an engineer would set up a streamed voice: a quiet room
+	// gets no noise processing (each stage colours the voice a little), a moderate one a gentle
+	// gate, a noisy one noise removal and the gate.
+	const double suppress = floor < -45 ? -30 : -40;
+	// The gate opens well under the voice and closes just above the room, so soft words and word
+	// endings get through.
+	const double open = clamp(floor + 10, -70, speech - 18);
+	const double close = clamp(floor + 4, -75, open - 4);
+	// Gentle compression: 3:1 (4:1 when the loud moments are far above everyday speech), about
+	// 3 dB of reduction on normal speech peaks, a 10 ms attack that keeps consonants crisp, and a
+	// little makeup so it's no quieter than before.
+	const double spread = loud - speech;
+	const double ratio = spread > 12 ? 4 : 3;
+	const double threshold = clamp(speech + gain - 5, -40, -6);
+	const double reduction = (speech + gain - threshold) * (1 - 1 / ratio);
+	const double makeup = clamp(std::round(reduction * 0.6), 0, 3);
+
+	auto fx = [](const QString &type, const QVariantMap &settings) {
+		QVariantMap st = audioFxDefaults(type);
+		for (auto it = settings.cbegin(); it != settings.cend(); ++it)
+			st[it.key()] = it.value();
+		return Filter{uid("afx_"), type, true, st};
+	};
+	QVector<Filter> chain;
+	if (needSuppress)
+		chain << fx("noise_suppress", {{"suppress_level", suppress}});
+	if (needGate)
+		chain << fx("noise_gate", {{"close_threshold", r1(close)}, {"open_threshold", r1(open)}, {"attack_time", 5}, {"hold_time", 250}, {"release_time", 200}});
+	if (std::abs(gain) >= 0.5)
+		chain << fx("gain", {{"db", r1(gain)}});
+	// The limiter is the safety net (-1 dB, just under clipping), not a sound.
+	chain << fx("compressor", {{"threshold", r1(threshold)}, {"ratio", ratio}, {"attack_time", 10}, {"release_time", 100}, {"output_gain", makeup}})
+	      << fx("limiter", {{"threshold", -1}, {"release_time", 60}});
+
+	// Desktop audio: its peaks sit about 8 dB under the voice after tuning.
+	const QString deskId = m.value("deskId").toString();
+	const bool desk = !deskId.isEmpty() && doc().sources.contains(deskId) && m.contains("desk");
+	double deskVol = desk ? doc().sources[deskId].audio.volume : 1;
+	if (desk) {
+		const double deskRaw = m.value("desk").toDouble() - 20 * std::log10(std::max(1e-4, deskVol));
+		const double want = (speech + gain) - 8;
+		deskVol = std::pow(10.0, clamp(want - deskRaw, -40, 0) / 20); // never louder than it was at full
+	}
+	m_store.commit("Tune " + doc().sources[micId].name, [&](Doc &d) {
+		d.sources[micId].audio.filters = chain;
+		if (desk)
+			d.sources[deskId].audio.volume = deskVol;
+	});
+}
+
+// ---------- mic wizard: before / after clips ----------
+// A short recording of one source (mono, after its effects: with the wizard's bypass on, that's
+// the raw mic), written as a WAV and played back to the default output.
+struct App::ClipRec {
+	QMutex lock;
+	std::vector<float> samples;
+	bool on = false;
+};
+
+static void clipTap(void *param, const float *const *data, int channels, int frames, bool muted)
+{
+	auto *c = static_cast<App::ClipRec *>(param);
+	QMutexLocker l(&c->lock);
+	if (!c->on || !data || !data[0])
+		return;
+	for (int i = 0; i < frames; ++i) {
+		float v = 0;
+		for (int ch = 0; ch < channels && data[ch]; ++ch)
+			v += data[ch][i];
+		c->samples.push_back(muted ? 0.f : v / std::max(1, channels));
+	}
+}
+
+void App::startClip(const QString &sourceId)
+{
+	stopClip();
+	if (!m_clip)
+		m_clip = new ClipRec;
+	{
+		QMutexLocker l(&m_clip->lock);
+		m_clip->samples.clear();
+		m_clip->on = true;
+	}
+	m_clipSource = sourceId;
+	m_engine->addAudioTap(sourceId, clipTap, m_clip);
+}
+
+QString App::stopClip(const QString &name)
+{
+	if (!m_clip || m_clipSource.isEmpty())
+		return {};
+	m_engine->removeAudioTap(m_clipSource, clipTap, m_clip);
+	m_clipSource.clear();
+	std::vector<float> s;
+	{
+		QMutexLocker l(&m_clip->lock);
+		m_clip->on = false;
+		s.swap(m_clip->samples);
+	}
+	if (name.isEmpty() || s.empty())
+		return {};
+	const QString path = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath("lobs-" + name + ".wav");
+	QFile f(path);
+	if (!f.open(QIODevice::WriteOnly))
+		return {};
+	const quint32 rate = quint32(m_engine->audioSampleRate()), bytes = quint32(s.size() * 2);
+	QDataStream out(&f);
+	out.setByteOrder(QDataStream::LittleEndian);
+	f.write("RIFF");
+	out << quint32(36 + bytes);
+	f.write("WAVEfmt ");
+	out << quint32(16) << quint16(1) << quint16(1) << rate << quint32(rate * 2) << quint16(2) << quint16(16);
+	f.write("data");
+	out << bytes;
+	for (float v : s)
+		out << qint16(std::lround(std::max(-1.f, std::min(1.f, v)) * 32767));
+	return path;
+}
+
+void App::playClip(const QString &path)
+{
+#ifdef Q_OS_WIN
+	PlaySoundW(path.isEmpty() ? nullptr : reinterpret_cast<const wchar_t *>(QDir::toNativeSeparators(path).utf16()), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+#else
+	Q_UNUSED(path);
+#endif
 }
 
 void App::removeAudioFilter(const QString &sourceId, int index)
