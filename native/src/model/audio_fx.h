@@ -40,6 +40,12 @@ inline const QVector<FxType> &audioFxTypes()
 		  {"release_time", "Release", " ms", 1, 1000, 50, 0}, {"output_gain", "Output gain", " dB", -32, 32, 0, 1}},
 		 {{"presets", "expander"}}},
 		{"limiter", "limiter_filter", "Limiter", {{"threshold", "Ceiling", " dB", -60, 0, -6, 1}, {"release_time", "Release", " ms", 1, 1000, 60, 0}}, {}},
+		// Ducking: OBS's compressor keyed by another source (its "sidechain_source", a LOBS source id,
+		// which is the engine input's name). Game audio drops while you talk.
+		{"duck", "compressor_filter", "Duck under voice",
+		 {{"threshold", "Voice above", " dB", -60, 0, -30, 1}, {"ratio", "Ratio", ":1", 1, 32, 6, 1}, {"attack_time", "Attack", " ms", 1, 100, 10, 0},
+		  {"release_time", "Release", " ms", 1, 1000, 400, 0}},
+		 {}},
 		{"nvafx", "nvidia_audiofx_filter", "NVIDIA noise removal", {{"intensity", "Strength", "", 0, 1, 1, 2}}, {}},
 	};
 	return types;

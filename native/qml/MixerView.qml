@@ -53,7 +53,7 @@ Item {
     }
     function src(i) { return mix[i] || ({ id: "", name: "", icon: "", color: "#555", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 }) }
     function monitorIcon(m) { return m === "off" ? "headphone-off" : "headphones" }
-    function monitorTip(m) { return m === "off" ? "Not monitored" : m === "monitor_only" ? "Monitor only: you hear it, viewers don't" : "Monitored: you and viewers hear it" }
+    function monitorTip(m) { return m === "off" ? "Monitor off" : m === "monitor_only" ? "Monitor only" : "Monitor and output" } // the Inspector's words
     function toggleMonitor(s) { app.setAudio(s.id, "monitor", s.monitor === "off" ? "monitor_and_output" : "off", true) }
 
     component IconToggle: AbstractButton {

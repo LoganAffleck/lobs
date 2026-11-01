@@ -100,6 +100,13 @@ ColumnLayout {
         currentValue: au.s.monitor
         onPicked: (v) => app.setAudio(au.s.id, "monitor", v, true)
     }
+    // What the monitor choice means (all the warnings are about it), right under it.
+    Repeater {
+        model: au.s.warnings
+        delegate: RowLayout { required property var modelData; Layout.fillWidth: true; Layout.topMargin: -6; spacing: 6
+            FIcon { name: "triangle-alert"; color: "#fbbf24"; size: 12; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
+            Text { text: modelData; color: "#fbbf24"; font.family: Pal.font; font.pixelSize: Pal.caption; wrapMode: Text.WordWrap; Layout.fillWidth: true } }
+    }
     // Set once, if ever: closed, it names what isn't at its default.
     readonly property var advancedChanged: [
         Math.abs((au.s.balance === undefined ? 0.5 : au.s.balance) - 0.5) > 0.001 ? "Balance" : "",
@@ -218,12 +225,6 @@ ColumnLayout {
                 ToolTip.text: "Track " + (index + 2) + ", for multitrack recordings and plugins"
             }
         }
-    }
-    Repeater {
-        model: au.s.warnings
-        delegate: RowLayout { required property var modelData; Layout.fillWidth: true; spacing: 6
-            FIcon { name: "triangle-alert"; color: "#fbbf24"; size: 12; Layout.alignment: Qt.AlignTop; Layout.topMargin: 2 }
-            Text { text: modelData; color: "#fbbf24"; font.family: Pal.font; font.pixelSize: Pal.caption; wrapMode: Text.WordWrap; Layout.fillWidth: true } }
     }
     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
     // Effects: the source's audio filter chain, top to bottom = processing order. Flat rows, like

@@ -183,3 +183,18 @@ story("RA-07", "Tune my mic: the results screen, with the effects to adjust", ()
 	t.clickItem("Edit filters", t.items("Edit filters").length - 1); t.waitFrames(5, 2000);
 	check("Edit filters opens the effects", t.waitUntil(() => t.items("Noise gate").length >= 1 && t.items("Record After again").length >= 1, 3000));
 });
+
+story("RA-08", "Ducking: tuning can make game audio dip under the voice", () => {
+	fresh();
+	addKind("mic", "Mic", "", false); addKind("desktop_audio", "Desktop", "", false); t.wait(300);
+	const mic = app.mixer.find(m => m.name === "Mic").id, desk = app.mixer.find(m => m.name === "Desktop").id;
+	const dfx = () => app.mixer.find(m => m.id === desk).fx;
+	app.applyMicTuning(mic, { floor: -60, speech: -22, loud: -10, desk: -8, deskId: desk, duck: true });
+	const d = dfx().find(f => f.type === "duck");
+	check("a ducker on desktop audio", !!d);
+	eq("keyed to the mic", d && d.sidechain, mic);
+	app.applyMicTuning(mic, { floor: -60, speech: -22, loud: -10, desk: -8, deskId: desk, duck: true });
+	eq("tuning again replaces it", dfx().filter(f => f.type === "duck").length, 1);
+	app.addAudioFilter(desk, "duck");
+	eq("also addable by hand", dfx().filter(f => f.type === "duck").length, 2);
+});

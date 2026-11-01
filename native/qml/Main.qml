@@ -2498,8 +2498,12 @@ ApplicationWindow {
             const name = nameField.text || (kind === "window" ? deviceName.slice(0, 48) : "")
             const extra = picksDevice ? device : kind === "browser" ? (browserSt.url || "") : extraField.text
             const more = kind === "browser" ? browserSt : audioKind ? ({ mono: mono }) : ({})
+            const before = app.mixer.map(m => m.id)
             app.addSource(kind, name, extra, placeBox.checked, more)
+            const added = kind === "mic" && tuneBox.checked ? app.mixer.find(m => m.kind === "mic" && before.indexOf(m.id) < 0) : null
             nameField.text = ""; extraField.text = ""; close()
+            if (added)
+                Qt.callLater(() => addMicWizard.openFor(added.id)) // once this dialog is gone
         }
         ColumnLayout {
             anchors.fill: parent
@@ -2719,6 +2723,8 @@ ApplicationWindow {
                 onAccepted: addDialog.create()
             }
             FCheckbox { id: placeBox; checked: true; text: "Also place on " + app.editSceneName; visible: ["mic", "desktop_audio"].indexOf(addDialog.kind) < 0 }
+            // A new mic: set it up right away (P2-9).
+            FCheckbox { id: tuneBox; checked: true; text: "Tune it after adding (30 seconds)"; visible: addDialog.kind === "mic" }
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 4
@@ -2735,6 +2741,7 @@ ApplicationWindow {
         }
     }
 
+    MicWizard { id: addMicWizard; fromAdd: true } // straight after adding a mic: closing is skipping
     SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500; // below the top bar: it drags the window and has its buttons
         onUpdateRequested: { open = false; updateDialog.open() }
         onTwitchConnectRequested: twitchSignIn.begin() }

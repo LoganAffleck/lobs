@@ -152,6 +152,7 @@ public:
 	Q_INVOKABLE void moveAudioFilter(const QString &sourceId, int index, int delta);
 	Q_INVOKABLE void setAudioFilterEnabled(const QString &sourceId, int index, bool on);
 	Q_INVOKABLE void setAudioFilterValue(const QString &sourceId, int index, const QString &key, double value, bool final);
+	Q_INVOKABLE void setAudioFilterText(const QString &sourceId, int index, const QString &key, const QString &value); // e.g. a ducker's voice source
 	Q_INVOKABLE void refreshBrowser(const QString &id) { m_engine->refreshBrowser(id); }
 	// layers
 	Q_INVOKABLE void selectLayer(const QString &id, bool additive);

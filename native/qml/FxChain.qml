@@ -43,7 +43,7 @@ ColumnLayout {
             readonly property var fx: fxChain.s.fx[fxRow.index] || ({ label: "", enabled: false, params: [], known: true })
             readonly property var params: fx.params || []
             readonly property bool inline: params.length === 1 && !fx.obs && fx.known !== false // its one slider on the row
-            readonly property bool expandable: !inline && (params.length > 0 || !!fx.obs || fx.known === false)
+            readonly property bool expandable: (params.length > 0 || !!fx.obs || fx.known === false)
             property bool open: false
             function fmt(p) { return p.kind === "percent" ? Math.round(p.value * 100) + "%" : Number(Number(p.value).toFixed(p.decimals)) + p.suffix } // -50, not -50.0
             readonly property bool dragged: fxChain.dragIndex === index
@@ -70,8 +70,8 @@ ColumnLayout {
                 radius: Pal.radius
                 color: fxRow.dragged ? Pal.s3 : "transparent"
                 border.width: fxRow.dragged ? 1 : 0; border.color: Pal.borderStrong
-                // Line 1: grip, the effect's name across the row, its menu. Line 2: its one slider
-                // (or, with several settings, a summary that opens them) and its switch.
+                // Closed, one line: grip, name, what it's set to, open, menu, switch.
+                // Open, a one-setting effect gets its control on a second line.
                 MouseArea {
                     id: head
                     anchors.fill: parent
@@ -107,7 +107,21 @@ ColumnLayout {
                             Text {
                                 text: fxRow.fx.label; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body
                                 elide: Text.ElideRight
+                                Layout.minimumWidth: Math.min(implicitWidth, 60) // the name keeps its width; the summary gives way first
+                            }
+                            Text {
                                 Layout.fillWidth: true
+                                text: !fxRow.expandable || fxRow.open ? ""
+                                    : fxRow.fx.type === "duck" ? ((app.mixer.find(m => m.id === fxRow.fx.sidechain) || {}).name ? "Under " + app.mixer.find(m => m.id === fxRow.fx.sidechain).name : "No voice chosen")
+                                    : fxRow.params.slice(0, 2).map(p => fxRow.fmt(p)).join(" · ")
+                                elide: Text.ElideRight
+                                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+                            }
+                            FButton {
+                                visible: fxRow.expandable
+                                iconName: fxRow.open ? "chevron-up" : "chevron-down"; variant: "ghost"
+                                tip: fxRow.open ? "Close" : "Open"
+                                onClicked: fxRow.open = !fxRow.open
                             }
                             FButton {
                                 visible: !fxChain.review
@@ -121,8 +135,10 @@ ColumnLayout {
                                     FMenuItem { text: "Remove"; onTriggered: app.removeAudioFilter(fxChain.s.id, fxRow.index) }
                                 }
                             }
+                            FSwitch { visible: !fxChain.review; checkable: false; checked: fxRow.fx.enabled; onClicked: app.setAudioFilterEnabled(fxChain.s.id, fxRow.index, !fxRow.fx.enabled) }
                         }
                         RowLayout {
+                            visible: fxRow.open && fxRow.inline
                             Layout.fillWidth: true
                             Layout.leftMargin: fxChain.s.fx.length > 1 && !fxChain.review ? 20 : 0 // under the name, past the grip
                             spacing: 8
@@ -134,24 +150,18 @@ ColumnLayout {
                                 sourceId: fxChain.s.id; fxIndex: fxRow.index
                                 showLabel: false
                             }
-                            // Several: what they're set to, and the way to open them.
-                            Text {
-                                visible: !fxRow.inline
-                                Layout.fillWidth: true
-                                text: fxRow.expandable && !fxRow.open ? fxRow.params.slice(0, 2).map(p => fxRow.fmt(p)).join(" · ") : ""
-                                elide: Text.ElideRight
-                                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
-                            }
-                            FButton {
-                                visible: fxRow.expandable
-                                iconName: fxRow.open ? "chevron-up" : "chevron-down"; variant: "ghost"
-                                tip: fxRow.open ? "Close" : "Open"
-                                onClicked: fxRow.open = !fxRow.open
-                            }
-                            FSwitch { visible: !fxChain.review; checkable: false; checked: fxRow.fx.enabled; onClicked: app.setAudioFilterEnabled(fxChain.s.id, fxRow.index, !fxRow.fx.enabled) }
                         }
                     }
                 }
+            }
+            // Ducking: which voice it ducks under.
+            FSelect {
+                visible: fxRow.open && fxRow.fx.type === "duck"
+                Layout.fillWidth: true; Layout.leftMargin: fxChain.s.fx.length > 1 && !fxChain.review ? 20 : 0
+                placeholder: "Choose the voice to duck under"
+                options: app.mixer.filter(m => m.id !== fxChain.s.id).map(m => ({ name: "Under " + m.name, value: m.id }))
+                currentValue: fxRow.fx.sidechain || ""
+                onPicked: (v) => app.setAudioFilterText(fxChain.s.id, fxRow.index, "sidechain_source", v)
             }
             // Open: its settings, each labeled (there are several), labels outside the controls.
             // A noise gate's thresholds share one bar over the live level; an EQ gets faders.

@@ -15,6 +15,7 @@ FDialog {
     closePolicy: Popup.NoAutoClose
     property string micId: ""
     property string deskId: "" // desktop audio, if the show has one
+    property bool fromAdd: false // opened right after adding the mic: its close button reads "Skip"
     readonly property var mic: app.mixer.find(m => m.id === micId) || ({ name: "Mic" })
     // About 12 seconds read aloud: long enough to measure, the same both times.
     readonly property string line: "Hey chat, welcome in! Grab a snack and get comfy. Today we're trying something brand new, and I want to hear what you think. If you're new here, say hi in chat, and let's have some fun."
@@ -35,6 +36,7 @@ FDialog {
     property string afterClip: ""
     property string playing: "" // "before" | "after" | ""
     property bool again: false // recording After again from the results
+    property bool duck: true // game step: lower game audio while you talk
     property int before: -1 // the history step before tuning: Undo and Try again go back to it, tweaks and all
 
     function openFor(id) {
@@ -71,7 +73,7 @@ FDialog {
         if (step === 1) m.floor = pct(samples, 0.5)
         if (step === 2) { const voiced = samples.filter(v => v > floorDb + 10); m.speech = pct(voiced.length > 10 ? voiced : samples, 0.9); beforeClip = app.stopClip("mic-before") }
         if (step === 3) m.loud = pct(samples, 1)
-        if (step === 4) { m.desk = pct(samples, 0.9); m.deskId = deskId }
+        if (step === 4) { m.desk = pct(samples, 0.9); m.deskId = deskId; m.duck = duck }
         if (step === 5) afterClip = app.stopClip("mic-after")
         measured = m
         if (step === 3 && !deskId) return tune()
@@ -182,6 +184,12 @@ FDialog {
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
                 text: wiz.step === 1 ? "LOBS is hearing your room." : wiz.step === 3 ? "Yell, laugh or cheer, like your best moment on stream." : "A game or video, as loud as it gets on stream. Stay quiet."
             }
+            FCheckbox {
+                visible: wiz.step === 4
+                text: "Also lower game audio while I talk"
+                checked: wiz.duck
+                onClicked: wiz.duck = checked
+            }
             // The line to read, set apart from the instructions.
             Rectangle {
                 visible: wiz.step === 2 || wiz.step === 5
@@ -229,7 +237,7 @@ FDialog {
             spacing: 12
             Text {
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
-                text: "Room " + wiz.roomText(wiz.floorDb).toLowerCase() + " · Voice " + wiz.voiceText(wiz.speechDb).toLowerCase() + " · Loud moments limited" + (wiz.measured.desk !== undefined ? " · Game audio lowered" : "")
+                text: "Room " + wiz.roomText(wiz.floorDb).toLowerCase() + " · Voice " + wiz.voiceText(wiz.speechDb).toLowerCase() + " · Loud moments limited" + (wiz.measured.desk !== undefined ? (wiz.measured.duck ? " · Game audio ducks under you" : " · Game audio lowered") : "")
                 color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
             }
             // Before / after, the same reading both times. Change an effect below, then record After again.
@@ -299,7 +307,7 @@ FDialog {
             FButton { visible: wiz.step === 6; text: "Try again"; variant: "ghost"; onClicked: { app.playClip(""); wiz.revert(); wiz.measured = ({}); wiz.beforeClip = ""; wiz.afterClip = ""; app.setFxBypassed(wiz.micId, true); wiz.begin(1) } }
             Item { Layout.fillWidth: true }
             FButton { visible: wiz.step === 6; text: "Cancel"; variant: "ghost"; tip: "Put the old effects back"; onClicked: { app.playClip(""); wiz.revert(); wiz.close() } }
-            FButton { visible: wiz.step < 6; text: "Cancel"; variant: "ghost"; onClicked: { if (wiz.step === 5 && !wiz.again) wiz.revert(); wiz.close() } } // re-recording After keeps the effects
+            FButton { visible: wiz.step < 6; text: wiz.fromAdd ? "Skip" : "Cancel"; variant: "ghost"; onClicked: { if (wiz.step === 5 && !wiz.again) wiz.revert(); wiz.close() } } // re-recording After keeps the effects
             FButton { visible: wiz.step === 6; text: "Keep it"; variant: "primary"; onClicked: wiz.close() }
             FButton { visible: wiz.step === 0; text: "Start"; variant: "primary"; onClicked: wiz.begin(1) }
         }

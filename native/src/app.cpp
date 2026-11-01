@@ -3925,7 +3925,7 @@ QVariantList App::mixer() const
 		if (s.kind == "desktop_audio" && s.audio.monitor == "monitor_and_output")
 			warn << "Monitoring desktop audio causes an echo.";
 		if (s.kind == "mic" && s.audio.monitor == "monitor_and_output") // LOBS-029
-			warn << "You'll hear your own mic. Use headphones to avoid feedback.";
+			warn << "You're monitoring your mic.";
 		if (s.audio.monitor == "monitor_only")
 			warn << "Monitor only: not in the stream or recording.";
 		if (s.kind == "browser" && s.audio.monitor == "off")
@@ -3952,7 +3952,7 @@ QVariantList App::mixer() const
 			const QString plugin = t ? QString() : pluginTypeLabel(f.type);
 			const QString label = t ? t->label : !plugin.isEmpty() ? plugin : f.settings.value("_label", f.type.mid(4)).toString();
 			// A plugin's filter gets the generic editor; one imported from OBS whose module LOBS ships doesn't.
-			fx << QVariantMap{{"type", f.type}, {"label", label}, {"enabled", f.enabled}, {"params", params}, {"known", t != nullptr || !plugin.isEmpty()},
+			fx << QVariantMap{{"type", f.type}, {"label", label}, {"enabled", f.enabled}, {"params", params}, {"sidechain", f.settings.value("sidechain_source").toString()}, {"known", t != nullptr || !plugin.isEmpty()},
 					  {"obs", !plugin.isEmpty()}};
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
@@ -4189,10 +4189,18 @@ void App::applyMicTuning(const QString &micId, const QVariantMap &m)
 		const double want = (speech + gain) - 8;
 		deskVol = std::pow(10.0, clamp(want - deskRaw, -40, 0) / 20); // never louder than it was at full
 	}
+	// Ducking (asked for in the game step): desktop audio dips while the tuned voice is above
+	// -30 dB, which after tuning means while you talk. Replaces an earlier ducker on it.
+	const bool duck = desk && m.value("duck").toBool();
 	m_store.commit("Tune " + doc().sources[micId].name, [&](Doc &d) {
 		d.sources[micId].audio.filters = chain;
 		if (desk)
 			d.sources[deskId].audio.volume = deskVol;
+		if (duck) {
+			QVector<Filter> &df = d.sources[deskId].audio.filters;
+			df.erase(std::remove_if(df.begin(), df.end(), [](const Filter &f) { return f.type == "duck"; }), df.end());
+			df << fx("duck", {{"threshold", -30}, {"ratio", 6}, {"attack_time", 10}, {"release_time", 400}, {"sidechain_source", micId}});
+		}
 	});
 }
 
@@ -4304,6 +4312,13 @@ void App::setAudioFilterValue(const QString &sourceId, int index, const QString 
 		return;
 	liveEdit(QString("afx:%1:%2:%3").arg(sourceId).arg(index).arg(key), "Edit audio effect",
 		 [&](Doc &d) { d.sources[sourceId].audio.filters[index].settings[key] = value; }, final);
+}
+
+void App::setAudioFilterText(const QString &sourceId, int index, const QString &key, const QString &value)
+{
+	if (!doc().sources.contains(sourceId) || index < 0 || index >= doc().sources[sourceId].audio.filters.size())
+		return;
+	m_store.commit("Edit audio effect", [&](Doc &d) { d.sources[sourceId].audio.filters[index].settings[key] = value; });
 }
 
 void App::setAudio(const QString &sourceId, const QString &field, const QVariant &value, bool final)
