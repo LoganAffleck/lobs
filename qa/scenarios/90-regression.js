@@ -82,23 +82,29 @@ story("RG-04", "Live lock: Alt overrides, as the toast promises", () => {
 	liveTeardown();
 });
 
-story("RG-05", "Leak: memory stays flat over 100 switches and 100 clicks (heavy)", () => {
+story("RG-05", "Leak: memory stays flat over 300 switches and 100 clicks (heavy)", () => {
 	app.open(t.url(t.scriptDir() + "/../runs/fixtures/heavy/heavy.lobs.json")); t.waitFrames(2, 5000); t.wait(1000);
 	const ids = t.doc().sceneOrder;
-	const m0 = settledMB(), sw = [];
-	for (let k = 0; k < 100; ++k) { const a = t.now(); app.editScene(ids[(k * 37) % ids.length]); t.waitFrames(1, 1000); sw.push(t.now() - a); }
-	const m1 = settledMB();
+	// Memory swings by a couple of hundred MB as scenes come and go (2026-11-01: 2000–2250 MB over
+	// 400 switches, no climb), so one reading before and after can't tell a leak. Warm up with a
+	// pass over the scenes, then compare the lowest readings early and late: a leak lifts the floor.
+	const sw = [], marks = [];
+	for (let k = 0; k < 300; ++k) {
+		const a = t.now(); app.editScene(ids[(k * 37) % ids.length]); t.waitFrames(1, 1000); sw.push(t.now() - a);
+		if (k >= 99 && k % 50 === 49) marks.push(settledMB());
+	}
+	const m0 = Math.min(marks[0], marks[1]), m1 = Math.min(marks[3], marks[4]);
 	app.editScene(ids[1]); t.wait(200);
 	const L = app.layers.map(l => l.id), cl = [];
 	for (let k = 0; k < 100; ++k) { const a = t.now(); app.selectLayer(L[k % L.length], false); t.waitFrames(1, 1000); cl.push(t.now() - a); }
 	const m2 = settledMB();
 	t.metric("switch", stats(sw)); t.metric("click", stats(cl));
-	t.metric("memory", { start: Math.round(m0), after100Switches: Math.round(m1), after100Clicks: Math.round(m2) });
-	check("≤ 0.5 MB retained per switch", (m1 - m0) / 100 <= 0.5, ((m1 - m0) / 100).toFixed(2) + " MB/switch");
+	t.metric("memory", { readings: marks.map(Math.round), early: Math.round(m0), late: Math.round(m1), after100Clicks: Math.round(m2) });
+	check("≤ 0.5 MB retained per switch", (m1 - m0) / 150 <= 0.5, ((m1 - m0) / 150).toFixed(2) + " MB/switch");
 	check("≤ 0.5 MB retained per click", (m2 - m1) / 100 <= 0.5, ((m2 - m1) / 100).toFixed(2) + " MB/click");
 	check("switch + frame p95 ≤ 100 ms", stats(sw).p95 <= 100, stats(sw));
 	check("click + frame p95 ≤ 100 ms", stats(cl).p95 <= 100, stats(cl));
-	check("no slowdown: last 20 switches no slower than first 20 (×1.5)", stats(sw.slice(80)).p50 <= stats(sw.slice(0, 20)).p50 * 1.5 + 5, [stats(sw.slice(0, 20)).p50, stats(sw.slice(80)).p50]);
+	check("no slowdown: last 20 switches no slower than first 20 (×1.5)", stats(sw.slice(-20)).p50 <= stats(sw.slice(0, 20)).p50 * 1.5 + 5, [stats(sw.slice(0, 20)).p50, stats(sw.slice(-20)).p50]);
 });
 
 story("RG-06", "UI still updates after the per-list signals change (no stale panels)", () => {
