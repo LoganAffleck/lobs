@@ -37,8 +37,15 @@ FDialog {
     property bool again: false // recording After again from the results
     property int before: -1 // the history step before tuning: Undo and Try again go back to it, tweaks and all
 
-    function openFor(id) {
+    PresetNameDialog { id: presetName } // Save as preset, on the results
+
+    // From Setup, the mic was never chosen: the first screen picks it and checks both sides.
+    property bool pickMic: false
+    property var micDevices: []
+    function openFor(id, pick) {
         micId = id
+        pickMic = !!pick
+        if (pickMic) micDevices = app.devices(id)
         measured = ({}); beforeClip = ""; afterClip = ""; playing = ""
         step = 0
         app.setFxBypassed(micId, true)
@@ -145,6 +152,66 @@ FDialog {
             Layout.fillWidth: true; wrapMode: Text.WordWrap
             text: "Automatically set up your mic. Listens to background noise, your talking and shouting, and applies filters at recommended levels."
             color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+        }
+
+        // From Setup: which mic, and does it come through on both sides?
+        ColumnLayout {
+            visible: wiz.step === 0 && wiz.pickMic
+            Layout.fillWidth: true
+            spacing: 8
+            Text { text: "Your mic"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
+            FSelect {
+                Layout.fillWidth: true
+                placeholder: "Choose your mic…"
+                options: wiz.micDevices
+                currentValue: wiz.micId && wiz.mic ? (app.sourceSetting(wiz.micId, "device") || "") : "" // wiz.mic: re-read when the show changes
+                onDownChanged: if (down) wiz.micDevices = app.devices(wiz.micId, true)
+                onPicked: (v) => app.setSourceSetting(wiz.micId, "device", v)
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 3
+                    Repeater {
+                        model: ["L", "R"]
+                        delegate: RowLayout {
+                            required property string modelData
+                            required property int index
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text { text: modelData; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 10 }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 8; radius: 4
+                                color: Pal.s1; border.color: Pal.border
+                                Rectangle {
+                                    readonly property real db: (app.levels[wiz.micId] || [-60, -60])[index]
+                                    readonly property real f: Math.max(0, Math.min(1, (db + 60) / 60))
+                                    width: (parent.width - 2) * f; height: parent.height - 2; x: 1; y: 1; radius: 3
+                                    color: db > -9 ? "#e5484d" : db > -20 ? "#f5a524" : "#30a46c"
+                                }
+                            }
+                        }
+                    }
+                }
+                Text { text: wiz.level(wiz.micId) > -59 ? Math.round(wiz.level(wiz.micId)) + " dB" : "Say something"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 84 }
+                FCheckbox { text: "Mono"; checked: !!wiz.mic.mono; onClicked: app.setAudio(wiz.micId, "mono", checked, true) }
+            }
+            Text {
+                // One side only, for a second: suggest Mono (keeps its space, so nothing jumps).
+                id: oneSide
+                readonly property var lv: app.levels[wiz.micId] || [-60, -60]
+                readonly property bool lopsidedNow: Math.max(lv[0], lv[1]) > -45 && Math.abs(lv[0] - lv[1]) > 15
+                property bool lopsided: false
+                onLopsidedNowChanged: sideTimer.restart()
+                Timer { id: sideTimer; interval: oneSide.lopsidedNow ? 1000 : 2000; onTriggered: oneSide.lopsided = oneSide.lopsidedNow }
+                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                opacity: !wiz.mic.mono && lopsided ? 1 : 0
+                text: "Only one side has sound. Turn on Mono so viewers hear it in both ears."
+                color: "#fbbf24"; font.family: Pal.font; font.pixelSize: Pal.caption
+            }
         }
 
         // A step in progress.
@@ -295,6 +362,7 @@ FDialog {
             Item { Layout.fillWidth: true }
             FButton { visible: wiz.step === 6; text: "Cancel"; variant: "ghost"; tip: "Put the old effects back"; onClicked: { app.playClip(""); wiz.revert(); wiz.close() } }
             FButton { visible: wiz.step < 6; text: wiz.fromAdd ? "Skip" : "Cancel"; variant: "ghost"; onClicked: { if (wiz.step === 5 && !wiz.again) wiz.revert(); wiz.close() } } // re-recording After keeps the effects
+            FButton { visible: wiz.step === 6; text: "Save as preset"; variant: "ghost"; tip: "Use this sound on another mic, or after a reinstall"; onClicked: presetName.ask(wiz.micId, wiz.mic.name) }
             FButton { visible: wiz.step === 6; text: "Keep it"; variant: "primary"; onClicked: wiz.close() }
             FButton { visible: wiz.step === 0; text: "Start"; variant: "primary"; onClicked: wiz.begin(1) }
         }

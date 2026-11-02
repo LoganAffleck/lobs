@@ -207,3 +207,21 @@ story("RA-08", "Ducking: a mic option that makes other audio dip under it", () =
 	addKind("desktop_audio", "Later", "", false); t.wait(300);
 	check("and new audio stops ducking", !fxOf("Later").some(f => f.type === "duck"));
 });
+
+story("RA-09", "Presets of your own, and pasting onto every mic", () => {
+	fresh();
+	addKind("mic", "Mic", "", false); addKind("mic", "Guest", "", false); t.wait(300);
+	const fxOf = (n) => app.mixer.find(m => m.name === n).fx;
+	const mic = app.mixer.find(m => m.name === "Mic").id, guest = app.mixer.find(m => m.name === "Guest").id;
+	app.applyAudioPreset(mic, "broadcast");
+	check("saves a preset", app.saveAudioPreset(mic, "QA voice"));
+	const mine = app.audioPresets().find(p => p.name === "QA voice");
+	check("listed after the built-in ones", app.audioPresets().findIndex(p => p.name === "QA voice") >= 4);
+	app.applyAudioPreset(guest, mine.id);
+	eq("applies to another mic", fxOf("Guest").length, fxOf("Mic").length);
+	app.undo();
+	eq("one undo step", fxOf("Guest").length, 0);
+	app.copyAudioFilters(mic);
+	app.pasteAudioFilters(app.mixer.filter(m => m.kind === "mic").map(m => m.id), true);
+	eq("paste onto every mic", fxOf("Guest").length, fxOf("Mic").length);
+});

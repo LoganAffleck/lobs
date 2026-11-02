@@ -4124,19 +4124,48 @@ static const QList<QPair<QStringList, QJsonObject>> &audioPresetTable()
 	return table;
 }
 
+// Presets you save (the wizard's results, or any chain) are .lobsfx files here.
+static QString userPresetDir()
+{
+	return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/effects";
+}
+
 QVariantList App::audioPresets() const
 {
 	QVariantList out;
 	for (const auto &p : audioPresetTable())
 		out << QVariantMap{{"id", p.first[0]}, {"name", p.first[1]}, {"desc", p.first[2]}};
+	for (const QFileInfo &f : QDir(userPresetDir()).entryInfoList({"*.lobsfx"}, QDir::Files, QDir::Name))
+		out << QVariantMap{{"id", "file:" + f.absoluteFilePath()}, {"name", f.completeBaseName()}, {"desc", QString()}, {"mine", true}};
 	return out;
 }
 
 void App::applyAudioPreset(const QString &sourceId, const QString &presetId)
 {
+	if (presetId.startsWith("file:")) {
+		loadAudioFilters({sourceId}, presetId.mid(5), true);
+		return;
+	}
 	for (const auto &p : audioPresetTable())
 		if (p.first[0] == presetId)
 			applyEffects({sourceId}, p.second, true, "Preset " + p.first[1]);
+}
+
+bool App::saveAudioPreset(const QString &sourceId, const QString &name)
+{
+	QString n = name.trimmed();
+	n.replace(QRegularExpression(R"([\\/:*?"<>|])"), "-");
+	if (n.isEmpty() || !doc().sources.contains(sourceId))
+		return false;
+	QDir().mkpath(userPresetDir());
+	QFile f(userPresetDir() + "/" + n + ".lobsfx");
+	if (!f.open(QIODevice::WriteOnly)) {
+		showToast("Couldn't save the preset.");
+		return false;
+	}
+	f.write(QJsonDocument(effectsJson(sourceId, n)).toJson());
+	showToast(QStringLiteral(u"Saved \u201c") + n + QStringLiteral(u"\u201d to + Effect \u2192 Start from a preset"));
+	return true;
 }
 
 // The mic wizard's result (P2-9): from what it heard, an ordinary chain of effects (suppression,

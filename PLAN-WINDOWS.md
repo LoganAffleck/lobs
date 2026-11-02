@@ -265,23 +265,30 @@ OBS's main-window calls (Studio Mode, projectors, source dialogs).
   Interact have shipped since it was written. Add what's still missing here.
 
 ### P2-8. I can reuse a good mic sound (effect sharing)
-- **Copy effects / Paste effects** in the Effects menu (replace or add to the end), onto one
-  source or several.
+**Done (2026-11-01).**
+- **Copy effects / Paste effects** in the Effects menu (replace or add to the end), and **Paste
+  onto all mics** (or all desktop audio sources) when there are several.
 - **Save effects as… / Load effects…**: a `.lobsfx` file (JSON: name, effects, settings,
-  order). Dropping one on a source loads it. Effects LOBS doesn't know come along, marked as
-  needing their plugin.
-- Presets at the top of **+ Effect**: Clean voice, Broadcast voice, Noisy room, Loud moments.
+  order). Dropping one on a source's Effects loads it. Effects LOBS doesn't know come along,
+  marked as needing their plugin.
+- **+ Effect → Start from a preset**: Clean voice, Broadcast voice, Noisy room, Loud moments,
+  then your own (**Save as a preset…**, kept as `.lobsfx` files in LOBS's data folder).
 
 ### P2-9. My mic sounds professional without learning audio (mic setup wizard)
-- Five steps, each with a live meter: **Silence** (noise floor → suppression and gate),
-  **Talk normally** (average and peaks → gain to about −18 dB, compressor), **Get loud**
-  (limiter at −1 dB, tighter compressor), **Game audio** (desktop audio under the voice,
-  optional ducking while you talk), **Listen back** (before / after, keep, retry or save as a
-  preset).
-- Results are ordinary effects, one undo step, plain readouts ("Room noise: quiet").
+**Done (2026-11-01).**
+- Steps, each with a live meter and a 3 s "Get ready": **Room noise** (noise floor →
+  suppression and gate only as needed), **Talking** (a 12 s line read aloud → gain, compressor),
+  **Get loud!** (limiter at −1 dB), **Compare** (the same line again with the new effects;
+  before / after playback).
+- Results are ordinary effects, one undo step, plain readouts. Edit filters, record After again,
+  Try again, Cancel (puts the old effects back), **Save as preset**, Keep it.
 - Measures the raw signal: the chain is bypassed while measuring.
-- Offered in setup after picking a mic, and as **Tune my mic** on a mic's Effects header.
-- Ducking needs the compressor's sidechain source (OBS's `sidechain_source`).
+- Offered after adding a mic (Add Source), at the end of Setup, and as **Tune my mic** on a
+  mic's Effects.
+- Changed from the first plan: no game-audio step. **Ducking** is a mic option instead (Advanced
+  → **Duck all other audio**: every non-mic source, including ones added later, dips while you
+  talk), and a **Duck** effect for one source. Game Capture now has its own sound (starting
+  muted while Desktop audio already hears it).
 
 ### P3-5. My recordings are clean: no alerts or chat
 - **Sound: done (2026-11-01).** Each audio source has **In recordings**. Off, it's on the stream

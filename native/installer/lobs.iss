@@ -11,6 +11,7 @@
 #define Dist "..\dist"
 
 [Setup]
+ChangesAssociations=yes
 ; ISCC /DUpdateTrial builds a copy with its own identity, so the update path can be tried
 ; end to end without touching a real install.
 #ifdef UpdateTrial
@@ -60,6 +61,13 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#Dist}\LOBS\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion; \
   Excludes: "\lobs.log,\autotest.json,\engine\install.log,\engine\*.partial,\obs-*.exe,\vc_redist.x64.exe"
 Source: "{#Dist}\redist\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+
+[Registry]
+; .lobsfx (shared audio effects): LOBS's icon, and opening one adds it to your presets.
+Root: HKCU; Subkey: "Software\Classes\.lobsfx"; ValueType: string; ValueName: ""; ValueData: "LOBS.Effects"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\LOBS.Effects"; ValueType: string; ValueName: ""; ValueData: "LOBS audio effects"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\LOBS.Effects\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\LOBS.exe,0"
+Root: HKCU; Subkey: "Software\Classes\LOBS.Effects\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\LOBS.exe"" ""%1"""
 
 [Icons]
 Name: "{group}\LOBS"; Filename: "{app}\LOBS.exe"

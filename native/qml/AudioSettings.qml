@@ -235,6 +235,36 @@ ColumnLayout {
         }
     }
     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
+    // The effects section takes a dropped .lobsfx file (P2-8), so it's one item with a drop area over it.
+    Item {
+    Layout.fillWidth: true
+    implicitHeight: fxSection.implicitHeight
+    DropArea {
+        id: fxDrop
+        anchors.fill: parent; anchors.margins: -4
+        z: 2
+        function effectsFile(d) {
+            for (let i = 0; d.hasUrls && i < d.urls.length; i++)
+                if (d.urls[i].toString().toLowerCase().endsWith(".lobsfx")) return d.urls[i].toString()
+            return ""
+        }
+        onEntered: (d) => d.accepted = effectsFile(d) !== ""
+        onDropped: (d) => {
+            const u = effectsFile(d)
+            if (u) { app.loadAudioFilters([au.s.id], decodeURIComponent(u.replace(/^file:\/{3}/, "")), true); d.acceptProposedAction() }
+        }
+        Rectangle {
+            visible: fxDrop.containsDrag && au.s.fx.length > 0
+            anchors.fill: parent
+            radius: Pal.radius + 2
+            color: Qt.rgba(0.36, 0.55, 1, 0.10); border.width: 1; border.color: Pal.link
+            Text { anchors.centerIn: parent; text: "Drop to use these effects"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body }
+        }
+    }
+    ColumnLayout {
+    id: fxSection
+    width: parent.width
+    spacing: au.spacing
     // Effects: the source's audio filter chain, top to bottom = processing order. Flat rows, like
     // Advanced: the name and menu on one line, then its slider (or a summary) and switch. One with
     // several settings opens (and closes) with a click.
@@ -248,18 +278,27 @@ ColumnLayout {
         // The whole chain: copy and paste it, or keep it in a .lobsfx file to share (P2-8).
         FButton {
             id: chainMore
-            iconName: "ellipsis"; variant: "ghost"; tip: "Copy, paste, save or load these effects"
+            iconName: "ellipsis"; variant: "ghost"
             onClicked: chainMenu.popup(chainMore, 0, chainMore.height + 4)
             FMenu {
                 id: chainMenu
                 property bool canPaste: false
                 onAboutToShow: canPaste = app.canPasteAudioFilters()
                 FMenuItem { text: "Copy effects"; enabled: au.s.fx.length > 0; onTriggered: app.copyAudioFilters(au.s.id) }
-                FMenuItem { text: "Paste effects"; enabled: chainMenu.canPaste; onTriggered: app.pasteAudioFilters([au.s.id], true) }
-                FMenuItem { text: "Add pasted effects to the end"; enabled: chainMenu.canPaste && au.s.fx.length > 0; onTriggered: app.pasteAudioFilters([au.s.id], false) }
+                FMenuItem { visible: chainMenu.canPaste; height: visible ? implicitHeight : 0; text: "Paste effects"; onTriggered: app.pasteAudioFilters([au.s.id], true) }
+                FMenuItem { visible: chainMenu.canPaste && au.s.fx.length > 0; height: visible ? implicitHeight : 0; text: "Add pasted effects to the end"; onTriggered: app.pasteAudioFilters([au.s.id], false) }
+                // Several at once: every source of this kind (all your mics, say).
+                FMenuItem {
+                    readonly property var same: app.mixer.filter(m => m.kind === au.s.kind).map(m => m.id)
+                    visible: chainMenu.canPaste && same.length > 1 && (au.s.kind === "mic" || au.s.kind === "desktop_audio")
+                    height: visible ? implicitHeight : 0
+                    text: "Paste onto all " + same.length + (au.s.kind === "mic" ? " mics" : " desktop audio sources")
+                    onTriggered: app.pasteAudioFilters(same, true)
+                }
                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                 FMenuItem { text: "Save effects as…"; enabled: au.s.fx.length > 0; onTriggered: fxSaveDialog.open() }
                 FMenuItem { text: "Load effects…"; onTriggered: fxLoadDialog.open() }
+                FMenuItem { text: "Save as a preset…"; enabled: au.s.fx.length > 0; onTriggered: presetName.ask(au.s.id, au.s.name) }
             }
         }
         FButton {
@@ -269,13 +308,15 @@ ColumnLayout {
             onClicked: fxMenu.popup(addFx, 0, addFx.height + 4)
             FMenu {
                 id: fxMenu
+                property var presets: []
+                onAboutToShow: presets = app.audioPresets()
                 // Presets replace the chain (one undo step brings it back).
                 FMenu {
                     id: presetMenu
                     title: "Start from a preset"
                     Instantiator {
                         active: fxMenu.populated
-                        model: app.audioPresets()
+                        model: fxMenu.presets
                         delegate: FMenuItem { required property var modelData; text: modelData.name; onTriggered: app.applyAudioPreset(au.s.id, modelData.id) }
                         onObjectAdded: (i, o) => presetMenu.insertItem(i, o)
                         onObjectRemoved: (i, o) => presetMenu.removeItem(o)
@@ -303,6 +344,24 @@ ColumnLayout {
     }
     MicWizard { id: micWizard }
     FxChain { s: au.s; Layout.fillWidth: true }
+    Rectangle {
+        visible: au.s.fx.length === 0
+        Layout.fillWidth: true
+        implicitHeight: 64
+        radius: Pal.radius
+        color: fxDrop.containsDrag ? Qt.rgba(0.36, 0.55, 1, 0.10) : "transparent"
+        border.width: 1; border.color: fxDrop.containsDrag ? Pal.link : Pal.border
+        Text {
+            anchors.centerIn: parent; width: parent.width - 24
+            horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+            text: fxDrop.containsDrag ? "Drop to use these effects" : "No effects. Add one, or drop a .lobsfx file here."
+            color: fxDrop.containsDrag ? Pal.fg : Pal.muted; font.family: Pal.font; font.pixelSize: fxDrop.containsDrag ? Pal.body : Pal.caption
+        }
+    }
+    }
+    }
+    // Naming a preset (Save as a preset…, here and on the wizard's results).
+    PresetNameDialog { id: presetName }
     FileDialog {
         id: fxSaveDialog
         fileMode: FileDialog.SaveFile; nameFilters: ["LOBS effects (*.lobsfx)"]; defaultSuffix: "lobsfx"

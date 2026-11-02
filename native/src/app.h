@@ -138,6 +138,7 @@ public:
 	Q_INVOKABLE bool loadAudioFilters(const QStringList &sourceIds, const QString &path, bool replace);
 	Q_INVOKABLE QVariantList audioPresets() const;
 	Q_INVOKABLE void applyAudioPreset(const QString &sourceId, const QString &presetId);
+	Q_INVOKABLE bool saveAudioPreset(const QString &sourceId, const QString &name); // one of your own, in + Effect
 	// Mic wizard (P2-9): its effects off while measuring, then the tuned chain applied as one step.
 	Q_INVOKABLE void setFxBypassed(const QString &sourceId, bool on) { m_engine->setFxBypassed(sourceId, on); }
 	Q_INVOKABLE void applyMicTuning(const QString &micId, const QVariantMap &measured);

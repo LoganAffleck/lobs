@@ -6,6 +6,8 @@
 #include "frontend.h"
 #include "plugin_panel.h"
 #include <QApplication>
+#include <QMessageBox>
+#include <QStandardPaths>
 #include "websocket_server.h"
 #include "crash_report.h"
 #include "dock_tabs.h"
@@ -756,6 +758,21 @@ int main(int argc, char *argv[])
 	if (scenario)
 		lobs_test::isolateProfile(app.arguments()[scenarioAt + 2]);
 #endif
+
+	// LOBS.exe <file.lobsfx> (opened from Explorer): add it to your presets, say so, and exit.
+	// A second LOBS isn't started; the preset shows in + Effect the next time it opens.
+	for (const QString &a : app.arguments().mid(1)) {
+		if (!a.endsWith(".lobsfx", Qt::CaseInsensitive) || !QFileInfo::exists(a))
+			continue;
+		const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/effects";
+		QDir().mkpath(dir);
+		const QString to = dir + "/" + QFileInfo(a).fileName();
+		QFile::remove(to);
+		const bool ok = QFile::copy(a, to);
+		QMessageBox::information(nullptr, "LOBS", ok ? QStringLiteral(u"Added \u201c") + QFileInfo(a).completeBaseName() + QStringLiteral(u"\u201d to your presets.\n\nIn LOBS: select an audio source, then + Effect \u2192 Start from a preset.")
+							      : QStringLiteral(u"Couldn't add that preset."));
+		return ok ? 0 : 1;
+	}
 
 	// --render-svg <in.svg> <out.png> <size>: rasterize an SVG (used to build the app icon).
 	if (const int at = int(app.arguments().indexOf("--render-svg")); at > 0 && at + 3 < app.arguments().size()) {

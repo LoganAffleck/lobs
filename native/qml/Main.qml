@@ -215,7 +215,18 @@ ApplicationWindow {
     }
     TransitionsDialog { id: trDialog }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
-    SetupWizard { id: setupWizard; onAddPanels: (chat, info) => win.openTwitchPanels(chat, info); onTwitchConnectRequested: twitchSignIn.begin() }
+    SetupWizard {
+        id: setupWizard
+        onAddPanels: (chat, info) => win.openTwitchPanels(chat, info)
+        onTwitchConnectRequested: twitchSignIn.begin()
+        // The show's mic (added if it has none), straight into Tune my mic.
+        onTuneMicRequested: {
+            if (!app.mixer.some(m => m.kind === "mic"))
+                app.addSource("mic", "", "", false)
+            const mic = app.mixer.find(m => m.kind === "mic")
+            if (mic) Qt.callLater(() => addMicWizard.openFor(mic.id, true)) // once Setup is gone; it picks the device first
+        }
+    }
     // Stable models for the big lists: rows are updated in place instead of rebuilt (LOBS-022).
     RowsModel { id: sceneRows; rows: app.scenes }
     function openSetup() { setupWizard.open() }

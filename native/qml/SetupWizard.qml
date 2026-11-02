@@ -15,6 +15,8 @@ FDialog {
     topPadding: 12
     signal addPanels(bool chat, bool info)
     signal twitchConnectRequested() // the sign-in window lives in the main window
+    signal tuneMicRequested() // after Finish: the mic wizard (P2-9), in the main window
+    property bool tuneMic: true
     Connections { target: twitch; function onChanged() { if (twitch.connected) wiz.channel = twitch.login } }
 
     // ---- choices ----
@@ -112,6 +114,7 @@ FDialog {
         app.setUiFlag("setup/done", true)
         if (twitch) addPanels(chatPanel, infoPanel)
         close()
+        if (tuneMic) tuneMicRequested()
     }
     function loadChoices() {
         const st = app.settings
@@ -563,6 +566,33 @@ FDialog {
             visible: wiz.step === "done"
             width: parent.width; spacing: 8
             Body { text: "Finish to save." }
+            Rectangle {
+                id: tuneBanner
+                readonly property color accent: Pal.link // a color, so its channels can be read
+                Layout.fillWidth: true; Layout.topMargin: 6; Layout.bottomMargin: 4
+                implicitHeight: tuneRow.implicitHeight + 24
+                radius: Pal.radius + 2
+                color: Qt.rgba(accent.r, accent.g, accent.b, wiz.tuneMic ? 0.16 : 0.06)
+                border.width: 1; border.color: wiz.tuneMic ? Pal.link : Pal.border
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: wiz.tuneMic = !wiz.tuneMic }
+                RowLayout {
+                    id: tuneRow
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
+                    spacing: 12
+                    FIcon { name: "wand-sparkles"; size: 22; color: Pal.fg }
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { text: "Next: tune your mic"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 600 }
+                        Text {
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: (app.mixer.some(m => m.kind === "mic") ? "" : "Adds your mic, then ") + "30 seconds: LOBS listens and sets up noise removal and levels."
+                            color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption
+                        }
+                    }
+                    FSwitch { checkable: false; checked: wiz.tuneMic; onClicked: wiz.tuneMic = !wiz.tuneMic }
+                }
+            }
             ColumnLayout {
                 visible: !!wiz.importResult
                 Layout.fillWidth: true; spacing: 4; Layout.topMargin: 4
