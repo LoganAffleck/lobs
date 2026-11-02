@@ -53,7 +53,7 @@ KDDW.TabBarBase {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        width: tabRow.x + tabRow.width
+        width: Math.min(tabClip.x + tabRow.width, tabClip.x + tabClip.width)
         enabled: root.inMainWindow
         hoverEnabled: false
         property point pressAt
@@ -89,10 +89,17 @@ KDDW.TabBarBase {
     }
     Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Pal.border }
 
-    Row {
-        id: tabRow
+    // The tabs stop short of the close button (its own space, even with many tabs): past that
+    // they're clipped, never drawn under it.
+    Item {
+        id: tabClip
         z: root.mouseAreaZ.z + 1
         x: 6
+        width: closeButton.x - 4 - x
+        height: parent.height
+        clip: true
+    Row {
+        id: tabRow
         height: parent.height
         spacing: 2
         property int hoveredIndex: -1
@@ -162,6 +169,7 @@ KDDW.TabBarBase {
             target: root.tabBarCpp
             function onHoveredTabIndexChanged(index) { tabRow.hoveredIndex = index }
         }
+    }
     }
 
     FButton {
