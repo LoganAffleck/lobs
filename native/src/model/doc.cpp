@@ -699,7 +699,7 @@ QJsonObject Doc::toJson() const
 			QJsonArray afx;
 			for (const Filter &f : s.audio.filters)
 				afx << QJsonObject{{"id", f.id}, {"type", f.type}, {"enabled", f.enabled}, {"settings", QJsonObject::fromVariantMap(f.settings)}};
-			o["audio"] = QJsonObject{{"volume", s.audio.volume}, {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tr}, {"filters", afx},
+			o["audio"] = QJsonObject{{"volume", s.audio.volume}, {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"monitorMutes", s.audio.monitorMutes}, {"tracks", tr}, {"filters", afx},
 				       {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"inRecording", s.audio.inRecording}};
 		}
 		srcs[s.id] = o;
@@ -782,6 +782,7 @@ Doc Doc::fromJson(const QJsonObject &o)
 			x.audio.volume = a["volume"].toDouble(1);
 			x.audio.muted = a["muted"].toBool();
 			x.audio.monitor = a["monitor"].toString("off");
+			x.audio.monitorMutes = a["monitorMutes"].toBool();
 			x.audio.mono = a["mono"].toBool();
 			x.audio.balance = a["balance"].toDouble(0.5);
 			x.audio.syncMs = a["syncMs"].toInt();

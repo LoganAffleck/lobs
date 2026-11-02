@@ -100,6 +100,14 @@ ColumnLayout {
         currentValue: au.s.monitor
         onPicked: (v) => app.setAudio(au.s.id, "monitor", v, true)
     }
+    OptionRow {
+        visible: au.s.monitor !== "off"
+        Layout.topMargin: -6
+        iconName: "headphone-off"; text: "Mute monitoring when muted"
+        checked: !!au.s.monitorMutes
+        tip: "When this source is muted, you don't hear it in your headphones either. Off: you still hear it while it's muted."
+        onToggled: app.setAudio(au.s.id, "monitorMutes", !au.s.monitorMutes, true)
+    }
     // What the monitor choice means (all the warnings are about it), right under it.
     Repeater {
         model: au.s.warnings

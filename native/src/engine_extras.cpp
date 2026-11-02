@@ -307,5 +307,5 @@ void Engine::applyMutes()
 	// A push-to-talk source is muted unless its key is held (and the show doesn't mute it).
 	for (auto it = m_docMuted.begin(); it != m_docMuted.end(); ++it)
 		if (obs_source_t *in = m_inputs.value(it.key()))
-			obs_source_set_muted(in, it.value() || mutedOnAir(it.key()) || (m_pttBound.contains(it.key()) && !m_pttHeld.contains(it.key())));
+			applyMute(it.key(), in);
 }

@@ -381,6 +381,16 @@ static void setMonitoring(obs_source_t *in, const QString &mode)
 										  : OBS_MONITORING_TYPE_NONE);
 }
 
+// A source's mute (the show's, live mute and push-to-talk) and, when the source asks for it,
+// its monitoring: muted means silent in your headphones too.
+void Engine::applyMute(const QString &id, obs_source_t *in)
+{
+	const bool muted = m_docMuted.value(id) || mutedOnAir(id) || (m_pttBound.contains(id) && !m_pttHeld.contains(id));
+	obs_source_set_muted(in, muted);
+	const auto [mode, mutes] = m_docMonitor.value(id, {"off", false});
+	setMonitoring(in, muted && mutes ? "off" : mode);
+}
+
 static QString transitionSig(const Transition &t);
 
 // A white rounded rectangle on transparent, for the mask filter that rounds a layer's corners.
@@ -484,8 +494,8 @@ void Engine::apply(const Doc &doc)
 		if (s.hasAudio) {
 			obs_source_set_volume(in, float(s.audio.volume));
 			m_docMuted[id] = s.audio.muted;
-			obs_source_set_muted(in, s.audio.muted || mutedOnAir(id) || (m_pttBound.contains(id) && !m_pttHeld.contains(id)));
-			setMonitoring(in, s.audio.monitor);
+			m_docMonitor[id] = {s.audio.monitor, s.audio.monitorMutes};
+			applyMute(id, in);
 			uint32_t mixers = 0;
 			for (int t = 0; t < std::min<qsizetype>(kRecordMix, s.audio.tracks.size()); t++)
 				if (s.audio.tracks[t])

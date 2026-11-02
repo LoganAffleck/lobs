@@ -73,6 +73,7 @@ struct AudioSettings {
 	double volume = 1;
 	bool muted = false;
 	QString monitor = "off"; // off | monitor_only | monitor_and_output
+	bool monitorMutes = false; // muting the source silences its monitoring too (a muted mic you can't hear)
 	QVector<bool> tracks = {true, false, false, false, false, false};
 	QVector<Filter> filters; // audio effects, in processing order (see audio_fx.h)
 	bool mono = false;       // downmix to mono (e.g. a mic that only comes in on one side)

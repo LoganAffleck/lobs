@@ -323,7 +323,9 @@ public:
 						     {"active", obs_source_active(s)},
 						     {"showing", obs_source_showing(s)},
 						     {"width", int(obs_source_get_width(s))},
-						     {"height", int(obs_source_get_height(s))}};
+						     {"height", int(obs_source_get_height(s))},
+						     {"monitoring", int(obs_source_get_monitoring_type(s))}, // 0 off; on OBS 33, 2 for any monitoring
+						     {"mixers", int(obs_source_get_audio_mixers(s))}};
 				return true;
 			},
 			&out);

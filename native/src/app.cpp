@@ -3973,7 +3973,7 @@ QVariantList App::mixer() const
 					  {"obs", !plugin.isEmpty()}};
 		}
 		out << QVariantMap{{"id", id}, {"name", s.name}, {"icon", kindInfo(s.kind).icon}, {"color", s.color}, {"volume", s.audio.volume},
-				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"tracks", tracks}, {"inRecording", s.audio.inRecording}, {"mutedHere", doc().scenes.value(doc().mainScene(m_editScene)).mutedAudio.contains(id)}, {"ducksOthers", doc().duckUnder == id}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
+				   {"muted", s.audio.muted}, {"monitor", s.audio.monitor}, {"monitorMutes", s.audio.monitorMutes}, {"tracks", tracks}, {"inRecording", s.audio.inRecording}, {"mutedHere", doc().scenes.value(doc().mainScene(m_editScene)).mutedAudio.contains(id)}, {"ducksOthers", doc().duckUnder == id}, {"global", global}, {"kind", s.kind}, {"warnings", warn}, {"fx", fx},
 				   {"mono", s.audio.mono}, {"balance", s.audio.balance}, {"syncMs", s.audio.syncMs}, {"pinned", doc().mixerPinned.contains(id)}};
 	}
 	return out;
@@ -4368,6 +4368,7 @@ void App::setAudio(const QString &sourceId, const QString &field, const QVariant
 		if (field == "volume") a.volume = value.toDouble();
 		else if (field == "muted") a.muted = value.toBool();
 		else if (field == "monitor") a.monitor = value.toString();
+		else if (field == "monitorMutes") a.monitorMutes = value.toBool();
 		else if (field == "mono") a.mono = value.toBool();
 		else if (field == "inRecording") a.inRecording = value.toBool();
 		else if (field == "balance") a.balance = std::clamp(value.toDouble(), 0.0, 1.0);

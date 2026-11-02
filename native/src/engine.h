@@ -504,6 +504,8 @@ private:
 	QSet<QString> m_pttBound, m_pttHeld;
 	QHash<QString, bool> m_docMuted; // the show's mute state per audio source
 	void applyMutes();
+	void applyMute(const QString &id, obs_source *in);
+	QHash<QString, QPair<QString, bool>> m_docMonitor; // monitor mode, and whether muting silences it
 	QColor m_laserColor = QColor(255, 60, 60);
 	int m_laserLife = 500;
 	obs_source *m_ghost = nullptr;
