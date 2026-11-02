@@ -4588,6 +4588,7 @@ Qt::CursorShape App::cursorAt(QPointF p) const
 
 void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 {
+	mods |= QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier; // see canvasMove
 	endTextEdit(); // clicking anywhere finishes typing
 	// A press on the other layout switches to it and carries on there: select, drag, draw.
 	if (verticalOn() && !otherLayoutId().isEmpty() && previewLayout().other.contains(p))
@@ -4701,6 +4702,8 @@ void App::canvasPress(QPointF p, Qt::KeyboardModifiers mods, bool dbl)
 
 void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 {
+	// Windows leaves Alt out of mouse messages to the preview's native window: read the keyboard.
+	mods |= QGuiApplication::queryKeyboardModifiers() & Qt::AltModifier;
 	QElapsedTimer perf;
 	perf.start();
 	struct PerfScope {
@@ -4902,17 +4905,28 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 		const Transform t0 = base.transform(base.instances[id]);
 		const bool page = pageFollowsLayer(base, id);
 		if (m_handle >= 4) {
-			// An edge stretches its side (Alt: both sides, around the middle).
+			// An edge scales the layer from the opposite edge, keeping its shape (never a stretch):
+			// the other side grows evenly about its middle. Alt: from the center. A browser
+			// layer's page is the exception: its edge resizes the page, like a browser window's.
 			const bool centered = mods & Qt::AltModifier, horiz = m_handle == 4 || m_handle == 6;
+			const double aspect = t0.w / std::max(1.0, t0.h);
 			Transform t = t0;
 			if (horiz) {
 				const double fixed = centered ? t0.x + t0.w / 2 : m_handle == 4 ? t0.x + t0.w : t0.x;
 				const double w = std::max(8.0, std::abs(c.x() - fixed) * (centered ? 2 : 1));
 				t.x = std::round(centered ? fixed - w / 2 : m_handle == 4 ? fixed - w : fixed), t.w = std::round(w);
+				if (!page) {
+					const double h = w / aspect, cy = t0.y + t0.h / 2;
+					t.y = std::round(cy - h / 2), t.h = std::round(h);
+				}
 			} else {
 				const double fixed = centered ? t0.y + t0.h / 2 : m_handle == 5 ? t0.y + t0.h : t0.y;
 				const double h = std::max(8.0, std::abs(c.y() - fixed) * (centered ? 2 : 1));
 				t.y = std::round(centered ? fixed - h / 2 : m_handle == 5 ? fixed - h : fixed), t.h = std::round(h);
+				if (!page) {
+					const double w = h * aspect, cx = t0.x + t0.w / 2;
+					t.x = std::round(cx - w / 2), t.w = std::round(w);
+				}
 			}
 			m_store.gesture([&](Doc &d) { d.setTransform(id, t); if (page) sizePage(d, id, t); });
 			return;

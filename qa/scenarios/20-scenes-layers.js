@@ -482,3 +482,24 @@ story("LY-09", "A layer shown again or faded under others keeps its place in the
 	sel(low); app.setOpacity(0.5, true); t.waitFrames(4, 3000);
 	eq("a faded lower layer stays under the others", pixelAt(A, "ly09-faded.png", 500, 400).hex, want);
 });
+
+story("TR-01", "Edge handles scale without stretching; Alt scales from the center", () => {
+	fresh();
+	app.editScene(t.doc().sceneOrder[0]);
+	const a = placeColor("Box", "#ff00ff");
+	setT(a, "x", 100); setT(a, "y", 100); setT(a, "w", 400); setT(a, "h", 200);
+	sel(a); t.wait(200);
+	const tr = () => eff(a, "transform");
+	t.canvasDrag(500, 200, 700, 200, 10); t.wait(100);
+	let r = tr();
+	eq("right edge: wider", r.w, 600);
+	eq("…and taller by the same factor", r.h, 300);
+	eq("left edge stays", r.x, 100);
+	eq("grows evenly about its middle", r.y, 50);
+	app.undo(); t.wait(100);
+	t.canvasDrag(300, 300, 300, 400, 10, "alt"); t.wait(100);
+	r = tr();
+	eq("Alt bottom edge: twice the change in height", r.h, 400);
+	eq("…keeping its shape", r.w, 800);
+	eq("…around the center", [r.x, r.y], [-100, 0]);
+});
