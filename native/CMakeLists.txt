@@ -9,7 +9,7 @@ set(LOBS_ENGINE_VERSION 32.2.2)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2 Svg Network Widgets) # Widgets: plugin panels
+find_package(Qt6 6.5 REQUIRED COMPONENTS Quick QuickControls2 Svg Network Widgets ShaderTools) # Widgets: plugin panels
 # KDDockWidgets (QtQuick frontend), built into deps/kddw by deps/build-kddw.bat
 find_package(KDDockWidgets-qt6 REQUIRED PATHS ${CMAKE_SOURCE_DIR}/deps/kddw NO_DEFAULT_PATH)
 qt_standard_project_setup(REQUIRES 6.5)
@@ -78,10 +78,12 @@ elseif(APPLE)
     target_sources(LOBS PRIVATE src/platform_mac.mm src/window_chrome_mac.mm src/shellmeta_mac.mm
         src/crash_report_mac.cpp src/engine_manager_mac.cpp)
 endif()
+# The gem's animation frames (web/scripts/gem-frames.mjs renders them from the site's ray tracer).
+file(GLOB LOBS_GEM_FRAMES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS resources/gem/*.jpg)
 qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     qml/Main.qml
     # Fluid Functionalism components (QML port)
-    qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FxControl.qml qml/FxGateBar.qml qml/FxEqFaders.qml qml/MicWizard.qml qml/PresetNameDialog.qml qml/FxChain.qml qml/FSwitch.qml qml/FCheckbox.qml
+    qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FxControl.qml qml/FxGateBar.qml qml/FxEqFaders.qml qml/MicWizard.qml qml/PresetNameDialog.qml qml/Gem.qml qml/FxChain.qml qml/FSwitch.qml qml/FCheckbox.qml
     qml/FTabs.qml qml/FMenu.qml qml/FMenuItem.qml qml/FSelect.qml qml/FDialog.qml qml/FluidList.qml
     qml/FSection.qml qml/FBadge.qml qml/FPanelHeader.qml qml/FCopyToMenu.qml qml/MediaControls.qml qml/AudioSettings.qml qml/AudioMath.js qml/InlineRename.qml qml/StatsView.qml qml/CaptionsPanel.qml
     qml/SettingsPage.qml qml/MixerView.qml qml/FIcon.qml qml/FHelp.qml qml/FScrollView.qml qml/CanvasArea.qml qml/StatusBar.qml qml/OutputControls.qml qml/AssetMouse.qml qml/MeterFader.qml qml/ToolTipStyle.qml qml/SourceFields.qml qml/BrowserOptions.qml qml/SourceSection.qml qml/FFontPicker.qml qml/FColorField.qml qml/FSearchField.qml qml/GraphicTools.qml
@@ -92,7 +94,10 @@ qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
         qml/TwitchPanel.qml
         qml/PermissionsBar.qml
     qml/dock/DockTabBar.qml qml/dock/DockTitleBar.qml qml/dock/DockGroup.qml qml/dock/DockFloatingWindow.qml qml/dock/DockSeparator.qml qml/dock/DockWidgetBg.qml qml/dock/PanelDragController.qml
-    RESOURCES resources/icon/lobs-32.png resources/icon/lobs-64.png)
+    RESOURCES resources/icon/lobs-32.png resources/icon/lobs-64.png ${LOBS_GEM_FRAMES})
+
+# The gem's blend (see shaders/gem.frag).
+qt_add_shaders(LOBS "lobs_shaders" PREFIX "/qt/qml/LOBS" FILES shaders/gem.frag)
 
 target_include_directories(LOBS PRIVATE ${LIBOBS_INCLUDE})
 target_include_directories(LOBS PRIVATE ${CMAKE_SOURCE_DIR}/deps/obs-frontend-api) # OBS 32.2.2's frontend API headers

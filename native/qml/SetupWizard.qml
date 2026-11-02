@@ -194,6 +194,7 @@ FDialog {
             }
         }
         Text {
+            visible: wiz.step !== "start" // the welcome has its own, under the gem
             Layout.leftMargin: 20
             text: wiz.stepTitles[wiz.step]
             color: Pal.fg; font.family: Pal.font; font.pixelSize: 20; font.weight: 600
@@ -207,15 +208,60 @@ FDialog {
         ColumnLayout {
             visible: wiz.step === "start"
             width: parent.width; spacing: 10
-            Body { text: "Set up streaming and recording in a few steps. You can change everything later in Settings." }
-            Item { implicitHeight: 4 }
-            Choice { icon: "radio-tower"; label: "Stream and record"; detail: "Twitch, YouTube or another service."; on: wiz.streaming; onPicked: wiz.streaming = true }
-            Choice { icon: "film"; label: "Record only"; detail: "No streaming."; on: !wiz.streaming; onPicked: wiz.streaming = false }
+            // The welcome: the gem turning in its own light, then the name.
+            Item {
+                Layout.fillWidth: true
+                implicitHeight: 196
+                // Its glow: a soft violet light behind the stone.
+                Canvas {
+                    anchors.centerIn: parent
+                    width: 420; height: 260
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        const g = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height / 2)
+                        g.addColorStop(0, Qt.rgba(0.62, 0.30, 1, 0.42)); g.addColorStop(0.45, Qt.rgba(0.48, 0.16, 0.9, 0.16)); g.addColorStop(1, Qt.rgba(0.4, 0.1, 0.8, 0))
+                        ctx.fillStyle = g
+                        ctx.save(); ctx.scale(1, 1); ctx.fillRect(0, 0, width, height); ctx.restore()
+                    }
+                }
+                Gem {
+                    id: welcomeGem
+                    sequence: "spin"
+                    width: 168; height: 168
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 14 + bob
+                    property real bob: 0
+                    NumberAnimation on frame { from: 0; to: 120; duration: 9000; loops: Animation.Infinite; running: wiz.visible && wiz.step === "start" }
+                    SequentialAnimation on bob {
+                        running: wiz.visible && wiz.step === "start"; loops: Animation.Infinite
+                        NumberAnimation { from: 0; to: -6; duration: 2600; easing.type: Easing.InOutSine }
+                        NumberAnimation { from: -6; to: 0; duration: 2600; easing.type: Easing.InOutSine }
+                    }
+                }
+            }
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "Welcome to LOBS"
+                color: Pal.fg; font.family: Pal.font; font.pixelSize: 30; font.weight: 700
+            }
+            Text {
+                Layout.alignment: Qt.AlignHCenter; Layout.bottomMargin: 10
+                text: "Set up streaming and recording in a minute. You can change everything later in Settings."
+                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Choice { Layout.preferredWidth: 1; icon: "radio-tower"; label: "Stream and record"; detail: "Twitch, YouTube or another service."; on: wiz.streaming; onPicked: wiz.streaming = true }
+                Choice { Layout.preferredWidth: 1; icon: "film"; label: "Record only"; detail: "No streaming."; on: !wiz.streaming; onPicked: wiz.streaming = false }
+            }
             ColumnLayout {
-                visible: wiz.streaming
-                Layout.fillWidth: true; spacing: 6; Layout.topMargin: 6
-                Caption { text: "Where do you stream?" }
+                opacity: wiz.streaming ? 1 : 0 // keeps its space: the page doesn't jump
+                Behavior on opacity { NumberAnimation { duration: Pal.fast } }
+                Layout.alignment: Qt.AlignHCenter; spacing: 6; Layout.topMargin: 6
+                Caption { text: "Where do you stream?"; horizontalAlignment: Text.AlignHCenter }
                 RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
                     spacing: 6
                     Repeater {
                         model: [{ v: "Twitch", n: "Twitch" }, { v: "YouTube - RTMPS", n: "YouTube" }, { v: "Custom", n: "Other (RTMP)" }]

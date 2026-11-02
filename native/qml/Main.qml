@@ -354,12 +354,21 @@ ApplicationWindow {
                         id: brandRow
                         anchors.centerIn: parent
                         spacing: 7
-                        Image {
-                            source: "qrc:/qt/qml/LOBS/resources/icon/lobs-64.png"
+                        // The gem rolls a quarter turn down as Settings opens (and stays), back up as it closes.
+                        Gem {
+                            id: brandGem
                             width: 20; height: 20
-                            sourceSize: Qt.size(40, 40)
-                            smooth: true; mipmap: true
                             anchors.verticalCenter: parent.verticalCenter
+                            NumberAnimation on frame { id: brandRoll; running: false; duration: 450; easing.type: Easing.OutCubic }
+                            Connections {
+                                target: settingsPage
+                                function onOpenChanged() {
+                                    brandRoll.stop()
+                                    brandRoll.from = brandGem.frame // from wherever it is, if it's still rolling
+                                    brandRoll.to = settingsPage.open ? brandGem.count - 1 : 0
+                                    brandRoll.start()
+                                }
+                            }
                         }
                         Text { text: "LOBS"; color: Pal.fg; font.family: Pal.font; font.pixelSize: 15; font.weight: 700; anchors.verticalCenter: parent.verticalCenter }
                         FIcon { name: "settings"; size: 14; color: brand.hovered ? Pal.fg : Pal.muted; anchors.verticalCenter: parent.verticalCenter }

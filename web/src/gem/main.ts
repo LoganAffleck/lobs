@@ -371,6 +371,9 @@ function exportPng(size: number, transparent = false) {
 // For scripts/logo.mjs: render the current look without the UI.
 declare global { interface Window { __gemRender?: typeof renderPng } }
 window.__gemRender = renderPng
+// For scripts/gem-frames.mjs: change the pose (or any setting) before a render.
+declare global { interface Window { __gemSet?: (o: Partial<GemParams>) => void } }
+window.__gemSet = (o) => { Object.assign(p, o); reset() }
 
 // ---------------- loop ----------------
 function resize() { setSizes(canvas.clientWidth, canvas.clientHeight) }
