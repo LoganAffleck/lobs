@@ -78,11 +78,9 @@ story("LK-01u", "Linked copy is reachable from the Layers menu and visible in th
 	t.grab("lk01u-rowmenu.png");
 	t.metric("rowMenuHasCopyTo", has("Copy to"));
 	t.note("Layers row right-click menu offers Copy to: " + has("Copy to"));
-	t.key("Escape"); t.wait(200);
-	// The header icon button ("Copy to another scene").
-	const btn = ui("tip=Copy to another scene");
-	check("Layers header has a 'Copy to another scene' button", btn.length > 0);
-	t.clickItem("tip=Copy to another scene", 0); t.wait(300);
+	// The row menu's Copy to (the Layers header has no copy button since 0.7.5).
+	check("Layers row menu offers Copy to", has("Copy to"));
+	t.click("Copy to"); t.wait(300);
 	t.grab("lk01u-copymenu.png");
 	const beta = ui("Beta").map((r, i) => Object.assign({ i: i }, r));
 	t.metric("copyMenuScenes", beta.map(b => b.cls + "@" + Math.round(b.x)));
@@ -268,4 +266,24 @@ story("IN-02u", "Inspector X and Y follow a canvas drag, and the Inspector is ri
 	eq("app.inspector has the final position after the drag", [Math.round(app.inspector.x), Math.round(app.inspector.y)], [Math.round(tr.x), Math.round(tr.y)]);
 	eq("app.inspectorTransform agrees", [Math.round(app.inspectorTransform.x), Math.round(app.inspectorTransform.y)], [Math.round(tr.x), Math.round(tr.y)]);
 	check("the drag is one undo step", app.undoLabel !== "", app.undoLabel);
+});
+
+story("LY-S1", "Layers search narrows the list", () => {
+	fresh();
+	const A = t.doc().sceneOrder[0]; app.editScene(A);
+	placeColor("Alpha box", "#ff0000"); placeColor("Beta box", "#00ff00"); t.wait(300);
+	check("no group/copy/delete header buttons", ui("tip=Copy to another scene").length === 0 && ui("tip=Delete  Del").length === 0);
+	check("search button", t.click("tip=Search layers")); t.wait(200);
+	"alpha".split("").forEach(c => t.key(c)); t.wait(300);
+	check("only the match shows", ui("Alpha box").length > 0 && ui("Beta box").length === 0);
+	t.key("Escape"); t.wait(300);
+	check("Escape clears it", ui("Beta box").length > 0);
+	check("the x closes it once empty", t.click("tip=Close search")); t.wait(300);
+	check("search closed", ui("tip=Close search").length === 0);
+	// A match inside a group shows the group it's in.
+	const g = placeColor("Gamma box", "#0000ff"); sel(g); app.groupSelected(); t.wait(300);
+	t.click("tip=Search layers"); t.wait(200);
+	"gamma".split("").forEach(c => t.key(c)); t.wait(300);
+	check("the group's name leads the match", ui("›").length > 0, ui("›").map(r => r.text));
+	t.grab("ly-s1-path.png");
 });

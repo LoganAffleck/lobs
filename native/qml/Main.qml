@@ -1589,6 +1589,7 @@ ApplicationWindow {
             Rectangle {
                 id: layersGuest
                 property size kddockwidgets_min_size: Qt.size(280, 140) // panel minimum
+                property bool searching: false
                 anchors.fill: parent
                 color: "transparent"
                 ColumnLayout {
@@ -1597,25 +1598,21 @@ ApplicationWindow {
                     FPanelHeader {
                         title: ""
                         meta: app.editSceneName
-                        FButton { iconName: "group"; variant: "ghost"; onClicked: app.groupSelected(); tip: chrome.keys("Group  Ctrl G") }
-                        FButton { iconName: "copy"; variant: "ghost"; onClicked: copyMenu.popup(this, 0, height + 4); tip: "Copy to another scene" } // under the button, not wherever the pointer is
-                        FButton { iconName: "trash-2"; variant: "ghost"; onClicked: app.deleteSelected(); tip: "Delete  Del" }
-                        FMenu {
-                            id: copyMenu
-                            Instantiator {
-                                active: copyMenu.populated // built while the menu is open
-                                model: app.scenes
-                                delegate: FMenu {
-                                    required property var modelData
-                                    title: modelData.name
-                                    // Close the menu first: the copy rebuilds these scene menus mid-handler.
-                                    FMenuItem { text: "Linked copy"; onTriggered: { const id = modelData.id; copyMenu.close(); app.copySelectedTo(id, true) } }
-                                    FMenuItem { text: "Independent copy"; onTriggered: { const id = modelData.id; copyMenu.close(); app.copySelectedTo(id, false) } }
-                                }
-                                onObjectAdded: (i, o) => copyMenu.insertMenu(i, o)
-                                onObjectRemoved: (i, o) => copyMenu.removeMenu(o)
-                            }
+                        // Group, copy and delete are in the right-click menu and on the keyboard.
+                        FButton {
+                            iconName: "search"; variant: "ghost"; selected: layersGuest.searching
+                            tip: "Search layers"
+                            onClicked: { layersGuest.searching = !layersGuest.searching; if (layersGuest.searching) layerSearch.forceActiveFocus(); else layerSearch.text = "" }
                         }
+                    }
+                    FSearchField {
+                        id: layerSearch
+                        visible: layersGuest.searching
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 4
+                        implicitHeight: 26
+                        placeholderText: "Search layers"
+                        onDismissed: { layersGuest.searching = false; text = "" }
                     }
                     // One right-click menu for every layer row.
                         FMenu {
@@ -1646,7 +1643,19 @@ ApplicationWindow {
                         reuseItems: true
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: RowsModel { rows: app.layers } // rows stay alive across clicks
+                        // Searching narrows the rows (and turns off dragging: positions are the full list's).
+                        readonly property bool filtered: layerSearch.query !== ""
+                        model: RowsModel { rows: layerList.filtered ? layerList.found() : app.layers } // rows stay alive across clicks
+                        // The matches, each with the groups it's in ("Group › Group ›"), unindented.
+                        function found() {
+                            const out = [], groups = []
+                            for (const r of app.layers) {
+                                groups.length = r.depth
+                                if (layerSearch.matches(r.name)) out.push(Object.assign({}, r, { depth: 0, path: groups.join("  ›  ") }))
+                                if (r.group) groups[r.depth] = r.name
+                            }
+                            return out
+                        }
                         topMargin: 2
                         // Blank space under the layers deselects (pinned to the view, not the content).
                         MouseArea { parent: layerList; anchors.fill: parent; z: -1; onPressed: (m) => { app.clearSelection(); m.accepted = false } }
@@ -1742,7 +1751,7 @@ ApplicationWindow {
                                 onPressed: (m) => { pressY = m.y; dragged = false }
                                 onPositionChanged: (m) => {
                                     if (!(m.buttons & Qt.LeftButton)) return
-                                    if (!dragged && Math.abs(m.y - pressY) > 5 && !modelData.background) { dragged = true; layerList.dragId = modelData.id }
+                                    if (!dragged && !layerList.filtered && Math.abs(m.y - pressY) > 5 && !modelData.background) { dragged = true; layerList.dragId = modelData.id }
                                     if (dragged) layerList.dragTo(mapToItem(layerList.contentItem, m.x, m.y).y)
                                 }
                                 onReleased: if (dragged) layerList.endDrag()
@@ -1777,10 +1786,17 @@ ApplicationWindow {
                                     }
                                 }
                                 FIcon { name: modelData.icon; color: modelData.visible ? Pal.fg : Pal.muted }
+                                Body { // searching: the groups it's in
+                                    visible: !!modelData.path && layerList.editingId !== modelData.id
+                                    text: (modelData.path || "") + "  ›"
+                                    color: Pal.muted; elide: Text.ElideLeft // the nearest group stays readable
+                                    Layout.preferredWidth: implicitWidth; Layout.minimumWidth: Math.min(implicitWidth, 24)
+                                }
                                 Body {
                                     visible: layerList.editingId !== modelData.id
                                     text: modelData.name + (modelData.collapsed ? "  ·  " + modelData.childCount : "")
                                     color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400; Layout.fillWidth: true
+                                    Layout.minimumWidth: modelData.path ? Math.min(implicitWidth, 64) : 0 // searching: the match gives way last
                                 }
                                 InlineRename {
                                     active: layerList.editingId === modelData.id
