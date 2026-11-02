@@ -3,7 +3,7 @@ rem Builds dist\installer\LOBS-Setup-<version>.exe from dist\LOBS (run build.bat
 rem Signs LOBS's own files and the installer when a certificate is set up (see sign.bat).
 setlocal
 cd /d "%~dp0"
-if not exist ..\dist\LOBS\engine\32.2.2\bin\64bit\obs.dll ( echo Run build.bat first & exit /b 1 )
+if not exist ..\dist\LOBS\engine\33.0.1\bin\64bit\obs.dll ( echo Run build.bat first & exit /b 1 )
 set D=..\dist\LOBS
 rem Same default as sign.bat: LOBS's Azure account when its signing tools are installed.
 set "DEFAULT_DLIB=%LOCALAPPDATA%\Microsoft\MicrosoftArtifactSigningClientTools\Azure.CodeSigning.Dlib.dll"
