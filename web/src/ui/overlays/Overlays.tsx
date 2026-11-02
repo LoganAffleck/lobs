@@ -143,12 +143,12 @@ function SettingsBody({ i }: { i: number }) {
       <div className="card">{['Show Starting Soon', 'Show Just Chatting', 'Show Gameplay'].map((t, j) => <Row key={t} t={t}><div className="grow"><Field>{`Ctrl + ${j + 1}`}</Field></div></Row>)}</div>
     </>
     case 5: return <>
-      <div className="card"><Row t="OBS 32.2.2" sub="Up to date · checked today at 8:01 PM"><Btn text="Check now" /></Row><Row t="Include OBS betas"><Switch on={false} /></Row></div>
+      <div className="card"><Row t="OBS 33.0.1" sub="Up to date · checked today at 8:01 PM"><Btn text="Check now" /></Row><Row t="Include OBS betas"><Switch on={false} /></Row></div>
       <span className="caption" style={{ lineHeight: 1.5 }}>LOBS checks for new OBS releases once a day. Downloads are checked against their SHA-256, tested with LOBS before switching, and LOBS goes back to the previous engine if a new one fails to start twice.</span>
     </>
     default: return <div className="card">
       <Row t="Version" sub="0.3.1 · Qt 6.11, C++20" />
-      <Row t="Engine" sub="OBS 32.2.2 (official release build)" />
+      <Row t="Engine" sub="OBS 33.0.1 (official release build)" />
       <Row t="Shows and settings" sub="C:\Users\you\AppData\Roaming\LOBS\LOBS" />
       <Row t="Open source" sub="OBS Studio (libobs) GPL-2.0 · LOBS GPL-2.0-or-later · Inter (SIL OFL 1.1) · Lucide icons (ISC)" />
     </div>

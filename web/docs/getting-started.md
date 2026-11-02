@@ -10,7 +10,7 @@ LOBS is a streaming and recording app for Windows, built on OBS Studio's engine.
 
 - Download the installer from [Releases](https://github.com/LoganAffleck/lobs/releases) and run it.
 - It installs for your Windows user only and doesn't need admin rights. The default folder is `%LOCALAPPDATA%\Programs\LOBS`.
-- OBS Studio doesn't need to be installed. LOBS 0.1.1 ships with OBS engine 32.2.2.
+- OBS Studio doesn't need to be installed. LOBS 0.7.4 ships with OBS engine 33.0.1.
 - If the Microsoft Visual C++ 2015-2022 runtime (14.40 or newer) is missing, the installer adds it. Only that step asks for admin permission.
 - **Create a desktop shortcut** is optional and off by default. The Start menu gets **LOBS** and **Uninstall LOBS**.
 - The last page offers **Start LOBS**.
