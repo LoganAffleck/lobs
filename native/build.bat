@@ -5,7 +5,7 @@ setlocal
 call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 cd /d "%~dp0"
 set QTDIR=C:\Qt\6.11.1\msvc2022_64
-set OBS_VERSION=32.2.2
+set OBS_VERSION=33.0.1
 set OBS_ZIP=deps\downloads\obs\OBS-Studio-%OBS_VERSION%-Windows-x64.zip
 set DIST=dist\LOBS
 for /f "delims=" %%n in ('python -c "import ninja,os;print(os.path.join(ninja.BIN_DIR,'ninja.exe'))"') do set NINJA=%%n

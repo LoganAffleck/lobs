@@ -361,6 +361,26 @@ static obs_data_t *filterData(const Doc &doc, const Filter &f, QString &kind)
 	return toData(o);
 }
 
+// Monitoring: "off", "monitor_only" or "monitor_and_output". OBS 33 dropped monitor-only (its
+// obs_source_set_monitoring_type() now means monitor and output, and logs a warning per call),
+// so there LOBS turns monitoring on and the caller leaves the source out of every mix. Resolved
+// at runtime: one LOBS build runs on both engines.
+static void setMonitoring(obs_source_t *in, const QString &mode)
+{
+	using SetEnabled = void (*)(obs_source_t *, bool);
+#ifdef Q_OS_WIN
+	static const auto setEnabled = reinterpret_cast<SetEnabled>(GetProcAddress(GetModuleHandleW(L"obs.dll"), "obs_source_set_monitoring_enabled"));
+#else
+	static const auto setEnabled = reinterpret_cast<SetEnabled>(dlsym(RTLD_DEFAULT, "obs_source_set_monitoring_enabled"));
+#endif
+	if (setEnabled)
+		setEnabled(in, mode != "off");
+	else
+		obs_source_set_monitoring_type(in, mode == "monitor_only"         ? OBS_MONITORING_TYPE_MONITOR_ONLY
+						   : mode == "monitor_and_output" ? OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT
+										  : OBS_MONITORING_TYPE_NONE);
+}
+
 static QString transitionSig(const Transition &t);
 
 // A white rounded rectangle on transparent, for the mask filter that rounds a layer's corners.
@@ -465,9 +485,7 @@ void Engine::apply(const Doc &doc)
 			obs_source_set_volume(in, float(s.audio.volume));
 			m_docMuted[id] = s.audio.muted;
 			obs_source_set_muted(in, s.audio.muted || mutedOnAir(id) || (m_pttBound.contains(id) && !m_pttHeld.contains(id)));
-			obs_source_set_monitoring_type(in, s.audio.monitor == "monitor_only"          ? OBS_MONITORING_TYPE_MONITOR_ONLY
-							   : s.audio.monitor == "monitor_and_output" ? OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT
-												     : OBS_MONITORING_TYPE_NONE);
+			setMonitoring(in, s.audio.monitor);
 			uint32_t mixers = 0;
 			for (int t = 0; t < std::min<qsizetype>(kRecordMix, s.audio.tracks.size()); t++)
 				if (s.audio.tracks[t])
@@ -475,6 +493,8 @@ void Engine::apply(const Doc &doc)
 			// The recording's mix: every source that goes to recordings, on the stream or not.
 			if (s.audio.inRecording)
 				mixers |= 1u << kRecordMix;
+			if (s.audio.monitor == "monitor_only") // heard in headphones, never on stream or in recordings
+				mixers = 0;
 			obs_source_set_audio_mixers(in, mixers);
 			applyAudioFilters(in, id, s.audio.filters);
 			// Advanced audio: mono downmix, L/R balance, sync offset.

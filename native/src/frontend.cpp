@@ -291,6 +291,8 @@ public:
 	void obs_frontend_copy_sceneitem(obs_sceneitem_t *) override {}
 	bool obs_frontend_can_paste_sceneitem(bool) override { return false; }
 	void obs_frontend_paste_sceneitem(obs_scene_t *, bool) override {}
+	// OBS 33. Last in the vtable, so a 32.x obs-frontend-api.dll never calls it.
+	bool obs_frontend_is_safe_mode_enabled(void) override { return false; }
 };
 
 Frontend *g = nullptr;

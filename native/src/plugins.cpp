@@ -452,7 +452,7 @@ QString install(const QString &path, QStringList *names)
 	if (found.isEmpty()) {
 		QDirIterator it(root, {"*.exe", "*.msi"}, QDir::Files, QDirIterator::Subdirectories);
 		return it.hasNext() ? "This has an installer, not plugin files. Download the plugin's .zip for Windows instead."
-				    : "No OBS plugin for 64-bit Windows in it (no obs-plugins/64bit or bin/64bit folder with a .dll).";
+				    : "No OBS plugin for 64-bit Windows in it (no <name>/<name>.dll, bin/64bit or obs-plugins/64bit folder with a .dll).";
 	}
 	for (const Found &f : found) {
 		// A plugin in use can't be replaced until LOBS lets go of it: it's swapped in at the next start.
