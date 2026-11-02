@@ -277,13 +277,21 @@ story("LY-S1", "Layers search narrows the list", () => {
 	"alpha".split("").forEach(c => t.key(c)); t.wait(300);
 	check("only the match shows", ui("Alpha box").length > 0 && ui("Beta box").length === 0);
 	t.key("Escape"); t.wait(300);
-	check("Escape clears it", ui("Beta box").length > 0);
-	check("the x closes it once empty", t.click("tip=Close search")); t.wait(300);
-	check("search closed", ui("tip=Close search").length === 0);
+	check("Escape clears and closes it", ui("Beta box").length > 0 && ui("tip=Close search").length === 0);
+	t.click("tip=Search layers"); t.wait(200);
+	"alpha".split("").forEach(c => t.key(c)); t.wait(300);
+	check("the x clears and closes it", t.click("tip=Close search")); t.wait(300);
+	check("search closed, all layers back", ui("tip=Close search").length === 0 && ui("Beta box").length > 0);
 	// A match inside a group shows the group it's in.
 	const g = placeColor("Gamma box", "#0000ff"); sel(g); app.groupSelected(); t.wait(300);
+	app.renameLayer(app.layers.find(r => r.group).id, "this is a very long group name that does not fit"); t.wait(200);
 	t.click("tip=Search layers"); t.wait(200);
 	"gamma".split("").forEach(c => t.key(c)); t.wait(300);
 	check("the group's name leads the match", ui("›").length > 0, ui("›").map(r => r.text));
 	t.grab("ly-s1-path.png");
+	// Inside a collapsed group, too.
+	const grp = app.layers.find(r => r.group); app.clearSelection(); app.setGroupCollapsed(grp.id, true); t.wait(300);
+	check("the group is collapsed", app.layers.every(r => r.name !== "Gamma box"));
+	t.key("a"); t.key("Backspace"); t.wait(300); // re-run the search
+	check("a collapsed group's layer is still found", ui("Gamma box").length > 0);
 });

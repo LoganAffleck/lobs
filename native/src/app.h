@@ -70,6 +70,8 @@ public:
 	QVariantList scenes() const;
 	QVariantList pool() const;
 	QVariantList layers() const;
+	Q_INVOKABLE QVariantList allLayers() const; // layers() plus what collapsed groups hide (Layers search)
+	QVariantList layerRows(bool everything) const;
 	QVariantMap inspector() const;
 	QVariantList history() const;
 	int historyIndex() const { return m_store.historyIndex(); }

@@ -494,7 +494,11 @@ QVariantList App::pool() const
 
 static bool isBackgroundLayer(const Doc &d, const QString &id); // defined with the scene helpers
 
-QVariantList App::layers() const
+QVariantList App::layers() const { return layerRows(false); }
+QVariantList App::allLayers() const { return layerRows(true); }
+
+// The edit scene's layers, top to bottom; `everything` also walks into collapsed groups (search).
+QVariantList App::layerRows(bool everything) const
 {
 	QVariantList out;
 	if (!doc().scenes.contains(m_editScene))
@@ -516,7 +520,7 @@ QVariantList App::layers() const
 					   {"visible", doc().visibility(i).visible}, {"locked", i.locked}, {"linked", linked},
 					   {"fx", i.kind == "group" ? 0 : doc().filters(i).size()}, {"selected", m_selection.contains(id)},
 					   {"background", isBackgroundLayer(doc(), id)}};
-			if (i.kind == "group" && !collapsed)
+			if (i.kind == "group" && (!collapsed || everything))
 				walk(i.children, depth + 1);
 		}
 	};

@@ -1649,7 +1649,7 @@ ApplicationWindow {
                         // The matches, each with the groups it's in ("Group › Group ›"), unindented.
                         function found() {
                             const out = [], groups = []
-                            for (const r of app.layers) {
+                            for (const r of (app.layers, app.allLayers())) { // app.layers: re-run when they change
                                 groups.length = r.depth
                                 if (layerSearch.matches(r.name)) out.push(Object.assign({}, r, { depth: 0, path: groups.join("  ›  ") }))
                                 if (r.group) groups[r.depth] = r.name
@@ -1786,17 +1786,39 @@ ApplicationWindow {
                                     }
                                 }
                                 FIcon { name: modelData.icon; color: modelData.visible ? Pal.fg : Pal.muted }
-                                Body { // searching: the groups it's in
-                                    visible: !!modelData.path && layerList.editingId !== modelData.id
-                                    text: (modelData.path || "") + "  ›"
-                                    color: Pal.muted; elide: Text.ElideLeft // the nearest group stays readable
-                                    Layout.preferredWidth: implicitWidth; Layout.minimumWidth: Math.min(implicitWidth, 24)
-                                }
-                                Body {
+                                // The name, and while searching the groups it's in before it. The name keeps
+                                // its width; the groups take what's left and shorten from the right (names are known by how they start).
+                                Item {
+                                    id: nameBox
                                     visible: layerList.editingId !== modelData.id
-                                    text: modelData.name + (modelData.collapsed ? "  ·  " + modelData.childCount : "")
-                                    color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400; Layout.fillWidth: true
-                                    Layout.minimumWidth: modelData.path ? Math.min(implicitWidth, 64) : 0 // searching: the match gives way last
+                                    Layout.fillWidth: true
+                                    implicitHeight: nameText.implicitHeight
+                                    readonly property real sepW: pathText.visible ? sepText.implicitWidth + 8 : 0
+                                    implicitWidth: (pathText.visible ? pathText.implicitWidth : 0) + sepW + nameText.implicitWidth
+                                    clip: true
+                                    Body {
+                                        id: pathText
+                                        visible: !!modelData.path
+                                        text: modelData.path || ""
+                                        color: Pal.muted; elide: Text.ElideRight
+                                        width: Math.max(0, Math.min(implicitWidth, nameBox.width - nameText.width - nameBox.sepW))
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Body {
+                                        id: sepText
+                                        visible: pathText.visible
+                                        x: pathText.width + 4
+                                        text: "›"; color: Pal.muted
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Body {
+                                        id: nameText
+                                        x: pathText.visible ? pathText.width + nameBox.sepW : 0
+                                        text: modelData.name + (modelData.collapsed ? "  ·  " + modelData.childCount : "")
+                                        color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400
+                                        width: Math.min(implicitWidth, nameBox.width - (pathText.visible ? Math.min(pathText.implicitWidth, 24) + nameBox.sepW : 0))
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
                                 }
                                 InlineRename {
                                     active: layerList.editingId === modelData.id
@@ -1811,6 +1833,9 @@ ApplicationWindow {
                                     id: rowTools
                                     spacing: 0
                                     opacity: showTools ? 1 : 0
+                                    // Hidden, it takes no room: names use the row's width until you hover or select.
+                                    Layout.preferredWidth: showTools ? implicitWidth : 0
+                                    clip: true
                                     // Fades on hover only: a list rebuilt for another scene or layout doesn't flash them.
                                     property bool settled: false
                                     Component.onCompleted: Qt.callLater(() => settled = true)

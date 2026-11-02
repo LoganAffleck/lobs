@@ -28,6 +28,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeySequence>
+#include <qpa/qwindowsysteminterface.h>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -488,13 +489,28 @@ public:
 			QTest::mouseClick(w, right ? Qt::RightButton : Qt::LeftButton, parseMods(mods), QPoint(x, y));
 		QCoreApplication::processEvents();
 	}
+	// Keys go to the focused window, and shortcuts only fire there: when another app has the
+	// desktop's focus (someone working while QA runs), LOBS has none. Ask for it, and if Windows
+	// won't hand it over, tell Qt the window has it anyway (the QA run is the only user here).
+	QWindow *keyWindow()
+	{
+		if (QWindow *w = QGuiApplication::focusWindow())
+			return w;
+		QQuickWindow *w = mainWindow();
+		if (!w)
+			return nullptr;
+		w->requestActivate();
+		if (!QTest::qWaitForWindowActive(w, 300)) {
+			QWindowSystemInterface::handleFocusWindowChanged(w, Qt::ActiveWindowFocusReason);
+			QWindowSystemInterface::flushWindowSystemEvents();
+		}
+		return w;
+	}
 	// A key sequence like "Ctrl+G", "Delete", "Ctrl+Shift+G" into the focused window.
 	Q_INVOKABLE bool key(const QString &seq)
 	{
 		const QKeySequence ks(seq);
-		QWindow *w = QGuiApplication::focusWindow();
-		if (!w)
-			w = mainWindow();
+		QWindow *w = keyWindow();
 		if (ks.isEmpty() || !w)
 			return false;
 		const QKeyCombination kc = ks[0];
@@ -504,8 +520,7 @@ public:
 	}
 	Q_INVOKABLE void typeText(const QString &text)
 	{
-		QWindow *w = QGuiApplication::focusWindow() ? QGuiApplication::focusWindow() : mainWindow();
-		if (w)
+		if (QWindow *w = keyWindow())
 			for (const QChar ch : text)
 				QTest::sendKeyEvent(QTest::Click, w, Qt::Key_unknown, QString(ch), Qt::NoModifier);
 		QCoreApplication::processEvents();
