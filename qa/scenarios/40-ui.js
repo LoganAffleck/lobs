@@ -295,3 +295,20 @@ story("LY-S1", "Layers search narrows the list", () => {
 	t.key("a"); t.key("Backspace"); t.wait(300); // re-run the search
 	check("a collapsed group's layer is still found", ui("Gamma box").length > 0);
 });
+
+story("UI-WN", "Scenes search, and the What's new card", () => {
+	fresh();
+	const first = t.doc().sceneOrder[0];
+	app.renameScene(mkScene("Hidden one"), "Hidden one"); app.editScene(first); t.wait(300);
+	check("Scenes has a search button", t.click("tip=Search scenes")); t.wait(200);
+	"zzz".split("").forEach(c => t.key(c)); t.wait(300);
+	check("no scene matches zzz", ui("Hidden one").length === 0);
+	t.key("Escape"); t.wait(300);
+	check("Escape brings them back", ui("Hidden one").length > 0);
+	check("mounts", t.mount('Item { WhatsNewDialog { id: w; Component.onCompleted: { w.version = "0.7.6"; w.open() } } }'));
+	t.wait(600);
+	check("card shows its highlights", ui("Search your scenes").length > 0 && ui("Got it").length > 0);
+	t.grab("whats-new.png");
+	t.click("Got it"); t.wait(400);
+	check("Got it closes it", ui("Search your scenes").length === 0);
+});

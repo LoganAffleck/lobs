@@ -228,7 +228,7 @@ ApplicationWindow {
         }
     }
     // Stable models for the big lists: rows are updated in place instead of rebuilt (LOBS-022).
-    RowsModel { id: sceneRows; rows: app.scenes }
+    RowsModel { id: sceneRows; rows: sceneSearch.query ? app.scenes.filter(r => sceneSearch.matches(r.name)) : app.scenes } // list and grid; Scenes search narrows both
     function openSetup() { setupWizard.open() }
     // Screenshots: LOBS_DEMO=<name> stages a feature on the sample show.
     Timer {
@@ -264,6 +264,9 @@ ApplicationWindow {
         }
     }
     // First run: the setup assistant, once the layout is up.
+    // After an update: its highlights, once (not on a first run, where Setup shows instead).
+    WhatsNewDialog { id: whatsNew }
+    Timer { interval: 1500; running: true; onTriggered: if (!setupWizard.visible) whatsNew.check() }
     Timer { id: setupTimer; interval: 900; running: !app.uiFlag("setup/done", false) && app.envValue("LOBS_NO_SETUP") === ""; onTriggered: setupWizard.open() }
     // A press on empty space anywhere (panel gaps, around the canvas, blank list area) deselects.
     // It sits under all content, so only presses nothing else takes reach it; it never consumes one.
@@ -600,6 +603,7 @@ ApplicationWindow {
                 id: scenesGuest
                 property string editingId: "" // the scene whose name is being typed in its row or tile
                 property size kddockwidgets_min_size: Qt.size(240, 160) // panel minimum
+                property bool searching: false
                 anchors.fill: parent
                 color: "transparent"
                 ColumnLayout {
@@ -610,7 +614,21 @@ ApplicationWindow {
                             FButton { iconName: "list"; variant: "ghost"; selected: win.sceneView === 0; tip: "List"; onClicked: win.sceneView = 0 },
                             FButton { iconName: "layout-grid"; variant: "ghost"; selected: win.sceneView === 1; tip: "Grid with live thumbnails"; onClicked: win.sceneView = 1 }
                         ]
+                        FButton {
+                            iconName: "search"; variant: "ghost"; selected: scenesGuest.searching
+                            tip: "Search scenes"
+                            onClicked: { scenesGuest.searching = !scenesGuest.searching; if (scenesGuest.searching) sceneSearch.forceActiveFocus(); else sceneSearch.text = "" }
+                        }
                         FButton { iconName: "plus"; text: "Scene"; variant: "secondary"; onClicked: app.addScene(); tip: "Add a scene" }
+                    }
+                    FSearchField {
+                        id: sceneSearch
+                        visible: scenesGuest.searching
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 4
+                        implicitHeight: 26
+                        placeholderText: "Search scenes"
+                        onDismissed: { scenesGuest.searching = false; text = "" }
                     }
                     // Right-click on a scene, in the list or the grid.
                     FMenu {

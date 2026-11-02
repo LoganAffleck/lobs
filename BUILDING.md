@@ -74,6 +74,8 @@ matches GitHub's and whose signature is from Logan Affleck, so every release mus
 1. Bump the version in `native/CMakeLists.txt` and `native/installer/lobs.iss`. To move to a new
    OBS engine, change `LOBS_ENGINE_VERSION` (CMakeLists), `OBS_VERSION` (build.bat) and
    `EngineVersion` (lobs.iss) together; the engine ships inside the installer and takes over on update.
+   Add the release's highlights to `notes` in `native/qml/WhatsNewDialog.qml`: the first start
+   after updating shows them once.
 2. `native\build.bat`, then `native\installer\build-installer.bat` (signed; see Code signing).
 3. Tag `v<version>`, push, and publish a GitHub release (not a pre-release) with the installer attached.
    Everyone sees the update within a day.
