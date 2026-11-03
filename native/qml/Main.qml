@@ -2867,6 +2867,8 @@ ApplicationWindow {
                 FButton { text: "−"; variant: "ghost"; tip: "Zoom out"; enabled: twitchPage.zoom > 0.51; onClicked: twitchPage.zoom -= 0.1 }
                 FButton { text: Math.round(twitchPage.zoom * 100) + "%"; variant: "ghost"; tip: "Back to 100%"; onClicked: twitchPage.zoom = 1 }
                 FButton { text: "+"; variant: "ghost"; tip: "Zoom in"; enabled: twitchPage.zoom < 2.49; onClicked: twitchPage.zoom += 0.1 }
+                // Twitch's Authorize can stay greyed after you log in until the page reloads.
+                FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "Reload the page"; onClicked: twitchPage.reload() }
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: twitchSignIn.close() }
             }

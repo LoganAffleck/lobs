@@ -376,10 +376,18 @@ private:
 	obs_source *m_transition = nullptr;
 	QString m_transitionType;
 	obs_source *ensureTransition();
+	void playCanvasTransition(obs_source *from, obs_source *to);
+	void releaseCanvasTransition(obs_source *tr);
+	static void onCanvasTransitionStop(void *engine, struct calldata *);
 	obs_source *createTransition(const lobs::Transition &t, const char *name);
 	lobs::Transition m_trDef{"tr_fade", "Fade", "fade", 300, {}}; // the show's transition in use
 	// Transition preview (the editor): A and B cards swapped by a private copy of a transition.
 	obs_source *m_pvA = nullptr, *m_pvB = nullptr, *m_pvTr = nullptr;
+	// Switching the edited scene plays the show's transition on the canvas, as OBS's preview does.
+	obs_source *m_canvasTr = nullptr;
+	QString m_canvasTrSig;
+	std::atomic<bool> m_canvasTrRunning{false}; // until the transition says it stopped (a stinger runs its video's length)
+	bool canvasTransitioning() const { return m_canvasTr && m_canvasTrRunning; }
 	bool m_pvAtB = false;
 
 public:

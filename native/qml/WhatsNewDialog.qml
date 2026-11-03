@@ -10,6 +10,11 @@ FDialog {
     width: 480
     property string version: ""
     readonly property var notes: ({
+        "0.7.7": [
+            { icon: "sparkles", title: "Transitions on the canvas", text: "Switching scenes plays your transition, stingers included, like OBS's preview." },
+            { icon: "crop", title: "Free crop and resize", text: "Crop doesn't lock to a ratio unless you pick one. Browser layers and shapes resize freely." },
+            { icon: "arrow-up-right", title: "Draw many arrows", text: "The arrow tool stays on after each arrow, like the pencil." },
+        ],
         "0.7.6": [
             { icon: "search", title: "Search your scenes", text: "Scenes has a search button too, like Layers and Sources." },
             { icon: "expand", title: "Resizing keeps the shape", text: "Dragging an edge scales the layer instead of stretching it. Hold Alt to scale from the center." },

@@ -991,16 +991,59 @@ void Engine::setEditScene(const QString &sceneId)
 	unparkScene(sceneId);
 	if (!m_parkTimer.isActive())
 		m_parkTimer.start(500);
-	if (m_editSource) {
-		obs_source_dec_showing(m_editSource);
-		m_editSource = nullptr;
-	}
+	obs_source_t *from = m_editSource; // still showing until the transition has it
+	const QSize fromSize = m_lastDoc.canvasOf(m_editId);
+	m_editSource = nullptr;
 	m_editId = sceneId;
 	updateEditCanvas();
 	if (obs_scene_t *s = m_scenes.value(sceneId)) {
 		m_editSource = obs_scene_get_source(s);
 		obs_source_inc_showing(m_editSource); // activates its cameras while editing
 	}
+	// Same-shaped canvases only: a vertical layout and its scene don't animate into each other.
+	if (m_started && from && m_editSource && m_trDef.type != "cut" && fromSize == m_lastDoc.canvasOf(sceneId))
+		playCanvasTransition(from, m_editSource);
+	if (from)
+		obs_source_dec_showing(from);
+}
+
+void Engine::playCanvasTransition(obs_source_t *from, obs_source_t *to)
+{
+	const QString sig = transitionSig(m_trDef);
+	if (!m_canvasTr || m_canvasTrSig != sig) {
+		obs_source_t *tr = createTransition(m_trDef, "lobs_canvas_transition");
+		if (!tr)
+			return;
+		// Active, as if on air: a stinger's video only decodes then.
+		obs_source_inc_showing(tr);
+		obs_source_inc_active(tr);
+		signal_handler_connect(obs_source_get_signal_handler(tr), "transition_stop", &Engine::onCanvasTransitionStop, this);
+		obs_enter_graphics(); // the canvas may be drawing the old one
+		std::swap(m_canvasTr, tr);
+		obs_leave_graphics();
+		if (tr)
+			releaseCanvasTransition(tr);
+		m_canvasTrSig = sig;
+	}
+	const QSize c = m_lastDoc.canvasOf(m_editId);
+	obs_transition_set_size(m_canvasTr, uint32_t(c.width() > 0 ? c.width() : m_canvasW), uint32_t(c.height() > 0 ? c.height() : m_canvasH));
+	obs_transition_set(m_canvasTr, from);
+	m_canvasTrRunning = true;
+	if (!obs_transition_start(m_canvasTr, OBS_TRANSITION_MODE_AUTO, uint32_t(std::max(50, m_trDef.durationMs)), to))
+		m_canvasTrRunning = false;
+}
+
+void Engine::onCanvasTransitionStop(void *engine, calldata_t *)
+{
+	static_cast<Engine *>(engine)->m_canvasTrRunning = false;
+}
+
+void Engine::releaseCanvasTransition(obs_source_t *tr)
+{
+	signal_handler_disconnect(obs_source_get_signal_handler(tr), "transition_stop", &Engine::onCanvasTransitionStop, this);
+	obs_source_dec_active(tr);
+	obs_source_dec_showing(tr);
+	obs_source_release(tr);
 }
 
 // The transition sits on output channel 0 and shows the program scene. It's recreated
@@ -1485,7 +1528,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 			vec4_set(&clear, 0, 0, 0, 1);
 			gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
 			gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f);
-			obs_source_video_render(m_editSource);
+			obs_source_video_render(canvasTransitioning() ? m_canvasTr : m_editSource);
 			renderPluginChannels();
 			gs_texrender_end(m_previewTex);
 			full = gs_texrender_get_texture(m_previewTex);
@@ -1512,7 +1555,7 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 		gs_blend_state_pop();
 		gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f); // overlays below are in canvas units
 	} else if (m_editSource) {
-		obs_source_video_render(m_editSource);
+		obs_source_video_render(canvasTransitioning() ? m_canvasTr : m_editSource);
 		renderPluginChannels();
 	} else {
 		obs_render_main_texture();
@@ -2186,6 +2229,11 @@ void Engine::shutdown()
 		m_laser = nullptr;
 	}
 	stopTransitionPreview();
+	if (m_canvasTr) {
+		m_canvasTrRunning = false;
+		releaseCanvasTransition(m_canvasTr);
+		m_canvasTr = nullptr;
+	}
 	if (m_ghost) {
 		obs_source_release(m_ghost);
 		m_ghost = nullptr;

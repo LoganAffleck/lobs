@@ -1937,19 +1937,8 @@ double App::cropAspect() const
 	const QString id = singleSelection();
 	if (id.isEmpty() || !doc().instances.contains(id))
 		return 0;
-	if (m_cropAspects.contains(id))
-		return m_cropAspects[id];
-	// Not picked this session: a crop that is one of the presets keeps it.
-	const Instance &i = doc().instances[id];
-	const Crop c = doc().crop(i);
-	if (!c.l && !c.t && !c.r && !c.b)
-		return 0;
-	const Transform t = doc().transform(i);
-	const double r = t.w / std::max(1.0, t.h);
-	for (double p : {16 / 9.0, 4 / 3.0, 1.0, 9 / 16.0})
-		if (std::abs(r / p - 1) < 0.01)
-			return p;
-	return 0;
+	// Free unless a ratio was picked: a crop that happens to match one doesn't hold it.
+	return m_cropAspects.value(id, 0);
 }
 
 void App::setCropAspect(double ratio)
@@ -4904,10 +4893,13 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 		const QString id = m_dragIds.first();
 		const Transform t0 = base.transform(base.instances[id]);
 		const bool page = pageFollowsLayer(base, id);
+		// Browser layers and shapes resize freely: an edge moves one side, a corner both (Shift keeps the shape).
+		const QString kind = base.sources.value(base.instances[id].sourceId).kind;
+		const bool free = page || kind == "browser" || kind == "shape";
 		if (m_handle >= 4) {
 			// An edge scales the layer from the opposite edge, keeping its shape (never a stretch):
-			// the other side grows evenly about its middle. Alt: from the center. A browser
-			// layer's page is the exception: its edge resizes the page, like a browser window's.
+			// the other side grows evenly about its middle. Alt: from the center. Browser layers
+			// and shapes are the exception: an edge moves only that side (a page resizes like a window).
 			const bool centered = mods & Qt::AltModifier, horiz = m_handle == 4 || m_handle == 6;
 			const double aspect = t0.w / std::max(1.0, t0.h);
 			Transform t = t0;
@@ -4915,7 +4907,7 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 				const double fixed = centered ? t0.x + t0.w / 2 : m_handle == 4 ? t0.x + t0.w : t0.x;
 				const double w = std::max(8.0, std::abs(c.x() - fixed) * (centered ? 2 : 1));
 				t.x = std::round(centered ? fixed - w / 2 : m_handle == 4 ? fixed - w : fixed), t.w = std::round(w);
-				if (!page) {
+				if (!free) {
 					const double h = w / aspect, cy = t0.y + t0.h / 2;
 					t.y = std::round(cy - h / 2), t.h = std::round(h);
 				}
@@ -4923,7 +4915,7 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 				const double fixed = centered ? t0.y + t0.h / 2 : m_handle == 5 ? t0.y + t0.h : t0.y;
 				const double h = std::max(8.0, std::abs(c.y() - fixed) * (centered ? 2 : 1));
 				t.y = std::round(centered ? fixed - h / 2 : m_handle == 5 ? fixed - h : fixed), t.h = std::round(h);
-				if (!page) {
+				if (!free) {
 					const double w = h * aspect, cx = t0.x + t0.w / 2;
 					t.x = std::round(cx - w / 2), t.w = std::round(w);
 				}
@@ -4937,8 +4929,8 @@ void App::canvasMove(QPointF p, Qt::KeyboardModifiers mods)
 		const double k = centered ? 2 : 1;
 		double w = std::max(8.0, std::abs(c.x() - ax) * k), h = std::max(8.0, std::abs(c.y() - ay) * k);
 		// A browser layer resizes like a browser window: the page gets the new size and lays itself
-		// out again (its breakpoints apply), so its proportions are free; Shift keeps them.
-		if (!(mods & Qt::ShiftModifier) != page) {
+		// out again (its breakpoints apply), so its proportions are free, as a shape's are; Shift keeps them.
+		if (!(mods & Qt::ShiftModifier) != free) {
 			const double aspect = t0.w / std::max(1.0, t0.h);
 			if (w / h > aspect) h = w / aspect;
 			else w = h * aspect;
@@ -5092,18 +5084,20 @@ void App::finishCreate()
 			d.instances[m_penGroup].name = uniqueName("Drawing", taken);
 		}
 	});
-	// The pencil keeps drawing, so its strokes aren't selected: handles on each stroke got in the
-	// way of the next one. Other shapes and text are selected, ready to adjust.
-	m_selection = m_tool == "pencil" ? QStringList() : QStringList{iid};
+	// The pencil and arrow keep drawing, so what they drew isn't selected: handles on it got in
+	// the way of the next one. Other shapes and text are selected, ready to adjust.
+	const bool keepsDrawing = pen || m_tool == "arrow";
+	m_selection = keepsDrawing ? QStringList() : QStringList{iid};
 	m_poolSelection.clear();
-	// Like design tools: a shape or text is placed once, then back to selecting (pencil keeps drawing).
+	// Like design tools: a shape or text is placed once, then back to selecting (pencil and arrow
+	// keep drawing until Select, V, is picked).
 	if (m_tool == "text") {
 		m_textEditId = iid;
 		m_caretOn = true;
 		m_caretTimer.start();
 		layoutEditedText();
 	}
-	if (m_tool != "pencil")
+	if (!keepsDrawing)
 		m_tool = "select", emit toolChanged();
 	updateOverlay();
 	emit docChanged();

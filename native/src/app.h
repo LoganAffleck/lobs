@@ -702,7 +702,7 @@ private:
 	static void sizePage(lobs::Doc &d, const QString &id, const lobs::Transform &t);
 	bool m_previewInScene = false;
 	lobs::Doc m_cropEntry; // the show when crop mode started (Esc goes back to it)
-	QHash<QString, double> m_cropAspects; // per layer, this session; else read from its crop
+	QHash<QString, double> m_cropAspects; // per layer, this session; Free otherwise
 	int m_perfMoves = 0;
 	qint64 m_perfTotalUs = 0, m_perfMaxUs = 0;
 	qint64 m_perfApplyUs = 0, m_perfEditUs = 0, m_perfHotkeyUs = 0, m_perfQmlUs = 0, m_perfInspectorUs = 0; // drag timing, logged on release
