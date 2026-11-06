@@ -46,6 +46,7 @@
 #include <QQuickWindow>
 #include <QRasterWindow>
 #include <QScreen>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QSvgRenderer>
 #include <QThreadPool>
@@ -141,6 +142,12 @@ int main(int argc, char *argv[])
 	if (scenario)
 		lobs_test::isolateProfile(app.arguments()[scenarioAt + 2]);
 #endif
+	// Benchmarks and scripted runs: the show and settings live apart from the user's own.
+	if (const int at = int(app.arguments().indexOf("--sandbox")); at > 0 && at + 1 < app.arguments().size()) {
+		QStandardPaths::setTestModeEnabled(true);
+		QSettings::setDefaultFormat(QSettings::IniFormat);
+		QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, app.arguments()[at + 1]);
+	}
 
 	for (const QString &a : app.arguments().mid(1)) {
 		if (!a.endsWith(".lobsfx", Qt::CaseInsensitive) || !QFileInfo::exists(a))
@@ -392,6 +399,8 @@ int main(int argc, char *argv[])
 	if (qml.rootObjects().isEmpty())
 		return 1;
 	blog(LOG_INFO, "[lobs] startup: UI built");
+	if (app.arguments().contains("--startrecording")) // as OBS's flag: for shortcuts and scripts
+		QTimer::singleShot(0, &engine, [&engine] { engine.startRecording(); });
 	if (auto *mainWindow = qobject_cast<QQuickWindow *>(qml.rootObjects().first())) {
 		QObject::connect(mainWindow, &QQuickWindow::frameSwapped, mainWindow, [&splash] {
 			blog(LOG_INFO, "[lobs] startup: first frame");

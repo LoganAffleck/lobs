@@ -30,15 +30,15 @@ ApplicationWindow {
 
     property int sceneView: 0 // 0 list, 1 grid
     onSceneViewChanged: app.setGridVisible(sceneView === 1)
-    readonly property bool dialogOpen: setupWizard.visible || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || trDialog.visible || addDialog.visible || twitchSignIn.visible || settingsPage.visible || saveDialog.visible || openDialog.visible || importDialog.visible
-    Shortcut { sequence: "Ctrl+,"; enabled: !chrome.nativeMenuBar; onActivated: settingsPage.show() }
+    readonly property bool dialogOpen: shown(setupWizard) || crashDialog.visible || updateDialog.visible || newProjectDialog.visible || shown(trDialog) || shown(addDialog) || twitchSignIn.visible || shown(settingsPage) || saveDialog.visible || openDialog.visible || importDialog.visible
+    Shortcut { sequence: "Ctrl+,"; enabled: !chrome.nativeMenuBar; onActivated: need(settingsLoader).show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Undo]; onActivated: app.undo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
-    Shortcut { enabled: app.cropMode && !addDialog.visible; sequence: "Escape"; onActivated: app.cancelCrop() }
-    Shortcut { enabled: app.cropMode && !addDialog.visible; sequences: ["Return", "Enter"]; onActivated: app.cropMode = false }
+    Shortcut { enabled: app.cropMode && !shown(addDialog); sequence: "Escape"; onActivated: app.cancelCrop() }
+    Shortcut { enabled: app.cropMode && !shown(addDialog); sequences: ["Return", "Enter"]; onActivated: app.cropMode = false }
     Shortcut { sequence: "F2"; enabled: !win.focusInside(assetsGuest); onActivated: { const sel = app.layers.filter(l => l.selected); if (sel.length === 1) layersGuest.rename(sel[0].id) } }
     function focusInside(item) { for (let f = win.activeFocusItem; f; f = f.parent) if (f === item) return true; return false }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Copy; onActivated: app.copyLayers() }
@@ -109,8 +109,8 @@ ApplicationWindow {
                 Platform.MenuSeparator {}
                 Platform.MenuItem { text: "Save"; shortcut: "Ctrl+S"; onTriggered: win.save() }
                 Platform.MenuItem { text: "Save As…"; shortcut: "Ctrl+Shift+S"; onTriggered: saveDialog.open() }
-                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(8) }
-                Platform.MenuItem { text: "Settings…"; shortcut: "Ctrl+,"; role: Platform.MenuItem.PreferencesRole; onTriggered: settingsPage.show() }
+                Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: need(settingsLoader).show(8) }
+                Platform.MenuItem { text: "Settings…"; shortcut: "Ctrl+,"; role: Platform.MenuItem.PreferencesRole; onTriggered: need(settingsLoader).show() }
             }
             Platform.Menu {
                 title: "Edit"
@@ -190,7 +190,7 @@ ApplicationWindow {
     component Divider: Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
     component VDivider: Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Pal.border }
 
-    function openTransitions() { trDialog.open() }
+    function openTransitions() { need(trLoader).open() }
     function showInspector() { if (!inspectorDock.isOpen) inspectorDock.show(); inspectorDock.dockWidget.setAsCurrentTab() }
     function togglePanel(d) {
         if (d.isOpen) d.close()
@@ -199,32 +199,44 @@ ApplicationWindow {
         else if (layersDock.isOpen && d !== layersDock) dockArea.addDockWidget(d, KDDW.KDDockWidgets.Location_OnBottom, layersDock, Qt.size(0, 360))
         else d.show()
     }
-    TransitionsDialog { id: trDialog }
+    // Dialogs are made on first use, or quietly soon after the window is up (lazyPreload), so
+    // opening LOBS doesn't wait on building every one of them.
+    function need(l) { l.asynchronous = false; l.active = true; return l.item.it }
+    function shown(d) { return !!d && d.visible }
+    Timer { id: lazyPreload; interval: 3000; running: true; onTriggered: [trLoader, setupLoader, addLoader, micLoader, settingsLoader].forEach(l => l.active = true) }
+    readonly property var trDialog: trLoader.item ? trLoader.item.it : null
+    readonly property var setupWizard: setupLoader.item ? setupLoader.item.it : null
+    readonly property var addDialog: addLoader.item ? addLoader.item.it : null
+    readonly property var addMicWizard: micLoader.item ? micLoader.item.it : null
+    readonly property var settingsPage: settingsLoader.item ? settingsLoader.item.it : null
+    readonly property bool settingsOpen: !!settingsPage && settingsPage.open
+    Loader { id: trLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d; TransitionsDialog { id: d } } }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
+    Loader { id: setupLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d
     SetupWizard {
-        id: setupWizard
+        id: d
         onAddPanels: (chat, info) => win.openTwitchPanels(chat, info)
         onTwitchConnectRequested: twitchSignIn.begin()
         onTuneMicRequested: {
             if (!app.mixer.some(m => m.kind === "mic"))
                 app.addSource("mic", "", "", false)
             const mic = app.mixer.find(m => m.kind === "mic")
-            if (mic) Qt.callLater(() => addMicWizard.openFor(mic.id, true))
+            if (mic) Qt.callLater(() => need(micLoader).openFor(mic.id, true))
         }
-    }
-    function openSetup() { setupWizard.open() }
+    } } }
+    function openSetup() { need(setupLoader).open() }
     Timer {
         interval: 2500
         running: app.envValue("LOBS_DEMO") !== ""
         onTriggered: {
             const d = app.envValue("LOBS_DEMO")
             app.runDemo(d)
-            if (d === "transitions") trDialog.open()
-            else if (d === "setup") setupWizard.open()
+            if (d === "transitions") need(trLoader).open()
+            else if (d === "setup") need(setupLoader).open()
             else if (d === "assets") assetsDock.show()
         }
     }
-    Timer { interval: 1500; running: app.envValue("LOBS_OPEN_SETTINGS") !== ""; onTriggered: settingsPage.show(Number(app.envValue("LOBS_OPEN_SETTINGS"))) }
+    Timer { interval: 1500; running: app.envValue("LOBS_OPEN_SETTINGS") !== ""; onTriggered: need(settingsLoader).show(Number(app.envValue("LOBS_OPEN_SETTINGS"))) }
     property string twitchChannel: app.uiValue("twitch/channel", "")
     function setTwitchChannel(c) { app.setUiValue("twitch/channel", c); twitchChannel = c }
     Connections { target: twitch; function onChanged() { if (twitch.connected && twitch.login !== win.twitchChannel) win.setTwitchChannel(twitch.login) } }
@@ -241,8 +253,8 @@ ApplicationWindow {
         }
     }
     WhatsNewDialog { id: whatsNew }
-    Timer { interval: 1500; running: true; onTriggered: if (!setupWizard.visible) whatsNew.check() }
-    Timer { id: setupTimer; interval: 900; running: !app.uiFlag("setup/done", false) && app.envValue("LOBS_NO_SETUP") === ""; onTriggered: setupWizard.open() }
+    Timer { interval: 1500; running: true; onTriggered: if (!shown(setupWizard)) whatsNew.check() }
+    Timer { id: setupTimer; interval: 900; running: !app.uiFlag("setup/done", false) && app.envValue("LOBS_NO_SETUP") === ""; onTriggered: need(setupLoader).open() }
     background: Rectangle {
         color: Pal.s1
         MouseArea { anchors.fill: parent; onPressed: (m) => { app.clearSelection(); m.accepted = false } }
@@ -307,8 +319,8 @@ ApplicationWindow {
                 Layout.rightMargin: 8
                 implicitHeight: Pal.ctl + 4
                 implicitWidth: brandRow.implicitWidth + 16
-                onClicked: settingsPage.open ? settingsPage.open = false : settingsPage.show()
-                ToolTip.visible: hovered && !settingsPage.open
+                onClicked: settingsOpen ? settingsPage.open = false : need(settingsLoader).show()
+                ToolTip.visible: hovered && !settingsOpen
                 ToolTip.delay: 600
                 ToolTip.text: chrome.keys("Settings  Ctrl ,")
                 background: Rectangle {
@@ -342,11 +354,11 @@ ApplicationWindow {
                     }
                 }
             }
-            FButton { text: "New"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; onClicked: newProjectDialog.open(); tip: "New project in its own folder" }
-            FButton { text: "Open"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
+            FButton { text: "New"; visible: !settingsOpen && (!chrome.nativeMenuBar); variant: "ghost"; onClicked: newProjectDialog.open(); tip: "New project in its own folder" }
+            FButton { text: "Open"; visible: !settingsOpen && (!chrome.nativeMenuBar); variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
                 id: importButton
-                visible: !settingsPage.open && (!chrome.nativeMenuBar)
+                visible: !settingsOpen && (!chrome.nativeMenuBar)
                 text: "Import"
                 variant: "ghost"
                 enabled: !app.live
@@ -372,9 +384,9 @@ ApplicationWindow {
                     FMenuItem { text: "Choose a file…"; onTriggered: win.guardUnsaved(() => importDialog.open()) }
                 }
             }
-            FButton { text: "Save"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
+            FButton { text: "Save"; visible: !settingsOpen && (!chrome.nativeMenuBar); variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
             Item {
-                visible: !settingsPage.open
+                visible: !settingsOpen
                 id: profileBox
                 readonly property var list: { app.settings; return app.profiles() }
                 implicitWidth: profileButton.implicitWidth
@@ -452,7 +464,7 @@ ApplicationWindow {
                 }
             }
             FButton {
-                visible: !settingsPage.open && (["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0)
+                visible: !settingsOpen && (["available", "downloading", "ready"].indexOf(appUpdater.state) >= 0)
                 iconName: "refresh-cw"
                 text: appUpdater.state === "downloading" ? "LOBS " + appUpdater.latest + " " + Math.round(appUpdater.progress * 100) + "%"
                     : appUpdater.state === "ready" ? "Install LOBS " + appUpdater.latest
@@ -461,9 +473,9 @@ ApplicationWindow {
                 tip: "A new version of LOBS"
                 onClicked: updateDialog.open()
             }
-            Rectangle { visible: !settingsPage.open && (!chrome.nativeMenuBar); width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+            Rectangle { visible: !settingsOpen && (!chrome.nativeMenuBar); width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
             FButton {
-                visible: !settingsPage.open && (!chrome.nativeMenuBar)
+                visible: !settingsOpen && (!chrome.nativeMenuBar)
                 text: "Window"
                 variant: "ghost"
                 onClicked: windowMenu.popup(this, 0, height + 4)
@@ -495,11 +507,11 @@ ApplicationWindow {
                     FMenuItem { text: "Reset layout"; onTriggered: layoutSaver.restoreFromFile(win.defaultLayoutFile) }
                 }
             }
-            Rectangle { visible: !settingsPage.open; width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
-            FButton { visible: !settingsPage.open; iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + chrome.keys("  Ctrl Z") }
-            FButton { visible: !settingsPage.open; iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: chrome.keys("Redo  Ctrl Shift Z") }
+            Rectangle { visible: !settingsOpen; width: 1; height: 18; color: Pal.border; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+            FButton { visible: !settingsOpen; iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + chrome.keys("  Ctrl Z") }
+            FButton { visible: !settingsOpen; iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: chrome.keys("Redo  Ctrl Shift Z") }
             Item { Layout.fillWidth: true }
-            OutputControls { visible: !settingsPage.open }
+            OutputControls { visible: !settingsOpen }
             Row {
                 visible: !chrome.nativeControls
                 Layout.leftMargin: 8
@@ -572,7 +584,7 @@ ApplicationWindow {
                 previewItem: win.previewItem
                 ghostItem: ghost
                 overlayItem: win.contentItem
-                onAddSourceRequested: addDialog.open()
+                onAddSourceRequested: need(addLoader).open()
                 onDeleteSourceRequested: (r) => deleteSourceDialog.ask(r)
             }
         }
@@ -796,15 +808,18 @@ ApplicationWindow {
     }
 
     // ---------------- dialogs ----------------
-    AddSourceDialog {
-        id: addDialog
-        onTuneMicRequested: (id) => addMicWizard.openFor(id)
-    }
+    Loader { id: addLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d
+        AddSourceDialog {
+            id: d
+            onTuneMicRequested: (id) => need(micLoader).openFor(id)
+        } } }
 
-    MicWizard { id: addMicWizard; fromAdd: true }
-    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500
-        onUpdateRequested: { open = false; updateDialog.open() }
-        onTwitchConnectRequested: twitchSignIn.begin() }
+    Loader { id: micLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d; MicWizard { id: d; fromAdd: true } } }
+    Loader { id: settingsLoader; active: false; asynchronous: true; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500
+        sourceComponent: Item { property alias it: d
+            SettingsPage { id: d; anchors.fill: parent
+                onUpdateRequested: { open = false; updateDialog.open() }
+                onTwitchConnectRequested: twitchSignIn.begin() } } }
 
     FDialog {
         id: twitchSignIn
@@ -900,7 +915,7 @@ ApplicationWindow {
         title: "LOBS closed unexpectedly"
         width: 420
         closePolicy: Popup.NoAutoClose
-        Timer { interval: 900; running: crashReport.pending && !setupTimer.running && !setupWizard.visible && !crashDialog.visible; onTriggered: crashDialog.open() }
+        Timer { interval: 900; running: crashReport.pending && !setupTimer.running && !shown(setupWizard) && !crashDialog.visible; onTriggered: crashDialog.open() }
         ColumnLayout {
             anchors.fill: parent
             spacing: 12

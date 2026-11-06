@@ -26,6 +26,13 @@ $recDir = Join-Path $benchRoot "recordings"
 New-Item -ItemType Directory -Force $recDir | Out-Null
 
 # Prepare isolated APPDATA for LOBS and portable directory structure for Vanilla OBS
+# LOBS reads its folders through Windows (not %APPDATA%); --sandbox moves them to Qt's test-mode
+# folders, so the user's own show and settings are never loaded or touched.
+$lobsData = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "qttest\LOBS\LOBS"
+$lobsIni = Join-Path $benchRoot "lobs-ini"
+Remove-Item -Recurse -Force $lobsData -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $lobsData, $lobsIni | Out-Null
+$lobsSandbox = @("--sandbox", $lobsIni)
 $appData = Join-Path $benchRoot "AppData\Roaming"
 $localAppData = Join-Path $benchRoot "AppData\Local"
 New-Item -ItemType Directory -Force "$appData\LOBS\LOBS" | Out-Null
@@ -88,7 +95,7 @@ $lobsDoc = @{
     }
     links = @{}
 }
-[IO.File]::WriteAllText("$appData\LOBS\LOBS\current.lobs.json", ($lobsDoc | ConvertTo-Json -Depth 12))
+[IO.File]::WriteAllText("$lobsData\current.lobs.json", ($lobsDoc | ConvertTo-Json -Depth 12))
 
 $lobsSettings = @{
     profile = "Default"
@@ -96,7 +103,7 @@ $lobsSettings = @{
     stream = @{ service = "Twitch"; server = "auto"; key = ""; bitrateKbps = 6000; encoder = "jim_nvenc" }
     record = @{ folder = $recDir; format = "mkv"; quality = "stream"; bitrateKbps = 6000; alsoMp4 = $false }
 }
-[IO.File]::WriteAllText("$appData\LOBS\LOBS\settings.json", ($lobsSettings | ConvertTo-Json -Depth 6))
+[IO.File]::WriteAllText("$lobsData\settings.json", ($lobsSettings | ConvertTo-Json -Depth 6))
 
 # 2. Create matching OBS profile & scene collection
 $obsGlobalIni = @"
@@ -261,6 +268,7 @@ function Measure-AppProcess {
             [Environment]::SetEnvironmentVariable($k, $ExtraEnv[$k], "Process")
         }
 
+        if ($Exe -eq $lobsExe) { Remove-Item -Force (Join-Path (Split-Path $Exe -Parent) "lobs.log") -ErrorAction SilentlyContinue }
         $swStart = [Diagnostics.Stopwatch]::StartNew()
         if ($ArgsList -and $ArgsList.Count -gt 0) {
             $p = Start-Process -FilePath $Exe -WorkingDirectory $WorkDir -ArgumentList $ArgsList -PassThru
@@ -271,7 +279,12 @@ function Measure-AppProcess {
         while ($swStart.ElapsedMilliseconds -lt 15000) {
             $p.Refresh()
             if ($p.HasExited) { break }
-            if ($p.MainWindowHandle -ne 0) {
+            # LOBS shows a splash window first; its main window is ready at its first drawn frame.
+            $ready = if ($Exe -eq $lobsExe) {
+                $log = Join-Path (Split-Path $Exe -Parent) "lobs.log"
+                (Test-Path $log) -and (Select-String -Path $log -Pattern "startup: first frame" -SimpleMatch -Quiet)
+            } else { $p.MainWindowHandle -ne 0 }
+            if ($ready) {
                 $winReadyMs = $swStart.ElapsedMilliseconds
                 break
             }
@@ -366,18 +379,18 @@ $results += Measure-AppProcess -Label "Vanilla OBS 33 (Idle Preview)" -Exe $obsE
     -Warmup $WarmupSec -Duration $SampleSec
 
 $results += Measure-AppProcess -Label "LOBS (Idle Preview - SharedTex)" -Exe $lobsExe -WorkDir (Split-Path $lobsExe -Parent) `
-    -ArgsList @() -Warmup $WarmupSec -Duration $SampleSec
+    -ArgsList $lobsSandbox -Warmup $WarmupSec -Duration $SampleSec
 
 $results += Measure-AppProcess -Label "LOBS (Idle Preview - NativeWin)" -Exe $lobsExe -WorkDir (Split-Path $lobsExe -Parent) `
-    -ArgsList @() -ExtraEnv @{ LOBS_NATIVE_PREVIEW = "1" } -Warmup $WarmupSec -Duration $SampleSec
+    -ArgsList $lobsSandbox -ExtraEnv @{ LOBS_NATIVE_PREVIEW = "1" } -Warmup $WarmupSec -Duration $SampleSec
 
 # Active 1080p60 Recording comparison
 $results += Measure-AppProcess -Label "Vanilla OBS 33 (Recording 1080p60)" -Exe $obsExe -WorkDir $obsDir `
     -ArgsList @("--portable", "--collection", "Bench", "--profile", "Bench", "--startrecording", "--disable-updater", "--disable-missing-files-check") `
     -Warmup $WarmupSec -Duration 12
 
-$results += Measure-AppProcess -Label "LOBS (Stream+Record 1080p60)" -Exe $lobsExe -WorkDir (Split-Path $lobsExe -Parent) `
-    -ArgsList @("--streamtest", "rtmp://127.0.0.1:19359/live") -Warmup 4 -Duration 10
+$results += Measure-AppProcess -Label "LOBS (Recording 1080p60)" -Exe $lobsExe -WorkDir (Split-Path $lobsExe -Parent) `
+    -ArgsList ($lobsSandbox + "--startrecording") -Warmup $WarmupSec -Duration 12
 
 $results | Format-Table -AutoSize
 if ($OutJson) {
