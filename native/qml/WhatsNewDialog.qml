@@ -10,6 +10,10 @@ FDialog {
     width: 480
     property string version: ""
     readonly property var notes: ({
+        "0.7.8": [
+            { icon: "zap", title: "Opens faster", text: "LOBS is ready about 0.4 seconds sooner. Dialogs are built when you first need them." },
+            { icon: "circle", title: "Start recording on launch", text: "Start LOBS with --startrecording to record right away, like OBS's flag." },
+        ],
         "0.7.7": [
             { icon: "sparkles", title: "Transitions on the canvas", text: "Switching scenes plays your transition, stingers included, like OBS's preview." },
             { icon: "crop", title: "Free crop and resize", text: "Crop doesn't lock to a ratio unless you pick one. Browser layers and shapes resize freely." },
