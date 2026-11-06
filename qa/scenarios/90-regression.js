@@ -132,3 +132,46 @@ story("RG-06", "UI still updates after the per-list signals change (no stale pan
 	check("History panel lists the latest edit", app.history.length > 0 && /Delete source|Remove|Delete/.test(app.history[app.history.length - 1].label), app.history.slice(-2));
 	t.grab("rg06.png");
 });
+
+// The canvas stays opaque where the scene draws nothing (the window is translucent).
+story("AL-01", "empty canvas areas aren't see-through", () => {
+	fresh();
+	app.layers.forEach(l => { if (l.visible !== false) app.toggleVisible(l.id) }); // an empty scene
+	t.wait(800);
+	const ws = t.windowSize();
+	const g = t.grab("al01.png");
+	const pts = [[0.23, 0.5], [0.77, 0.4], [0.77, 0.6]].map(p => t.pixel(g, Math.round(ws.w * ws.dpr * p[0]), Math.round(ws.h * ws.dpr * p[1])));
+	check("canvas is opaque", pts.every(p => p.ok && p.a === 255), pts);
+	t.note("layers: " + JSON.stringify(app.layers.map(l => l.visible)) + " edit=program " + (app.programSceneId === app.editSceneId));
+});
+
+// Transitions dialog: the stinger plays in the preview, and a missing video says so.
+story("TU-01", "stinger dialog shows the video", () => {
+	fresh();
+	t.wait(1200);
+	if (t.items("Skip setup").length) { t.click("Skip setup"); t.wait(400); }
+	const vid = t.scriptDir() + "/../runs/fixtures/stinger-blue.webm";
+	const id = app.addTransition("stinger");
+	app.updateTransition(id, "path", vid);
+	app.setCurrentTransition(id);
+	check("mounted opener", t.mount("Item { Timer { interval: 100; running: true; onTriggered: parent.Window.window.openTransitions() } }"));
+	t.wait(2500);
+	// The preview plays the stinger's video (blue) between the sample scenes A and B.
+	let sawVideo = false;
+	for (let i = 0; i < 16 && !sawVideo; i++) {
+		const g = t.grab("tu01-f" + i + ".png"), ws = t.windowSize();
+		const p = t.pixel(g, Math.round(ws.w * ws.dpr * 0.5), Math.round(ws.h * ws.dpr * 0.32));
+		sawVideo = p.ok && p.b > 230 && p.r < 90;
+		t.wait(200);
+	}
+	check("preview shows the stinger video", sawVideo);
+	check("shows the video's length", t.items(" s · ").length > 0, t.items("Reading").map(i => i.text));
+	app.updateTransition(id, "path", "C:/nope/missing.webm");
+	t.wait(800);
+	t.grab("tu01-missing.png");
+	check("says the video is missing", t.items("Video not found").length > 0);
+	check("offers Find video", t.items("Find video…").length > 0);
+	app.setCurrentTransition(app.transitions[0].id);
+	t.wait(300);
+	t.grab("tu01-fade.png");
+});

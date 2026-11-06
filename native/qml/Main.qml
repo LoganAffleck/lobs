@@ -199,20 +199,19 @@ ApplicationWindow {
         else if (layersDock.isOpen && d !== layersDock) dockArea.addDockWidget(d, KDDW.KDDockWidgets.Location_OnBottom, layersDock, Qt.size(0, 360))
         else d.show()
     }
-    // Dialogs are made on first use, or quietly soon after the window is up (lazyPreload), so
-    // opening LOBS doesn't wait on building every one of them.
-    function need(l) { l.asynchronous = false; l.active = true; return l.item.it }
+    // Dialogs are made the first time they open, so starting LOBS doesn't wait on building them.
+    // (Building them in the background later stalled the UI mid-show for over half a second.)
+    function need(l) { l.active = true; return l.item.it }
     function shown(d) { return !!d && d.visible }
-    Timer { id: lazyPreload; interval: 3000; running: true; onTriggered: [trLoader, setupLoader, addLoader, micLoader, settingsLoader].forEach(l => l.active = true) }
     readonly property var trDialog: trLoader.item ? trLoader.item.it : null
     readonly property var setupWizard: setupLoader.item ? setupLoader.item.it : null
     readonly property var addDialog: addLoader.item ? addLoader.item.it : null
     readonly property var addMicWizard: micLoader.item ? micLoader.item.it : null
     readonly property var settingsPage: settingsLoader.item ? settingsLoader.item.it : null
     readonly property bool settingsOpen: !!settingsPage && settingsPage.open
-    Loader { id: trLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d; TransitionsDialog { id: d } } }
+    Loader { id: trLoader; active: false; sourceComponent: Item { property alias it: d; TransitionsDialog { id: d } } }
     NewProjectDialog { id: newProjectDialog; onSaveCurrentAs: saveDialog.open() }
-    Loader { id: setupLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d
+    Loader { id: setupLoader; active: false; sourceComponent: Item { property alias it: d
     SetupWizard {
         id: d
         onAddPanels: (chat, info) => win.openTwitchPanels(chat, info)
@@ -808,14 +807,14 @@ ApplicationWindow {
     }
 
     // ---------------- dialogs ----------------
-    Loader { id: addLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d
+    Loader { id: addLoader; active: false; sourceComponent: Item { property alias it: d
         AddSourceDialog {
             id: d
             onTuneMicRequested: (id) => need(micLoader).openFor(id)
         } } }
 
-    Loader { id: micLoader; active: false; asynchronous: true; sourceComponent: Item { property alias it: d; MicWizard { id: d; fromAdd: true } } }
-    Loader { id: settingsLoader; active: false; asynchronous: true; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500
+    Loader { id: micLoader; active: false; sourceComponent: Item { property alias it: d; MicWizard { id: d; fromAdd: true } } }
+    Loader { id: settingsLoader; active: false; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500
         sourceComponent: Item { property alias it: d
             SettingsPage { id: d; anchors.fill: parent
                 onUpdateRequested: { open = false; updateDialog.open() }

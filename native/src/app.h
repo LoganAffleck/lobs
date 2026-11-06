@@ -429,6 +429,7 @@ public:
 	Q_INVOKABLE void updateTransition(const QString &id, const QString &field, const QVariant &value);
 	Q_INVOKABLE void previewTransition(const QString &id);
 	Q_INVOKABLE void stopTransitionPreview();
+	Q_INVOKABLE void probeVideo(const QString &path, int atMs) { m_engine->probeVideo(path, atMs); }
 	Q_INVOKABLE QStringList lumaWipes() const; // image names for Luma Wipe
 	Q_PROPERTY(QStringList swatches READ swatches NOTIFY docChanged)
 	QStringList swatches() const { return doc().swatches; }
@@ -543,6 +544,7 @@ public:
 	}
 
 signals:
+	void videoProbed(const QString &path, const QVariantMap &info);
 	void clickToShowChanged();
 	void docChanged();
 	void pluginsChanged();

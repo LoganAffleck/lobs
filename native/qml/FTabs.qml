@@ -36,7 +36,10 @@ Rectangle {
         x: t.itemX(t.currentIndex); width: t.itemW(t.currentIndex)
         y: 2; height: parent.height - 4
         radius: Pal.radius - 2
-        color: Pal.s6
+        // Lighter than every surface the tabs sit on (dialogs are s5), so the choice reads at a glance.
+        color: Pal.s8
+        border.width: 1
+        border.color: Pal.borderStrong
         Behavior on x { NumberAnimation { duration: Pal.moderate; easing.type: Easing.OutCubic } }
         Behavior on width { NumberAnimation { duration: Pal.moderate; easing.type: Easing.OutCubic } }
     }

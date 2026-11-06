@@ -306,6 +306,7 @@ signals:
 	void vcamChanged();
 	void bandwidthTestProgress(const QVariantMap &p);
 	void bandwidthTestDone(const QVariantMap &result);
+	void videoProbed(const QString &path, const QVariantMap &info);
 
 private:
 	struct Item {
@@ -372,7 +373,7 @@ private:
 	void updateEditCanvas();
 	void renderPluginChannels();
 	void pollPluginChannels();
-	QImage renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH, uint32_t outW, uint32_t outH);
+	QImage renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH, uint32_t outW, uint32_t outH, bool clear = false);
 	obs_source *m_transition = nullptr;
 	QString m_transitionType;
 	obs_source *ensureTransition();
@@ -390,11 +391,17 @@ private:
 	std::atomic<bool> m_canvasTrRunning{false}; // until the transition says it stopped (a stinger runs its video's length)
 	bool canvasTransitioning() const { return m_canvasTr && m_canvasTrRunning; }
 	bool m_pvAtB = false;
+	QHash<QString, QImage> m_probeFrames;
+	QHash<QString, int> m_probeGen;
 
 public:
 	void previewTransition(const lobs::Transition &t); // plays it once, A to B (or back)
 	void stopTransitionPreview();
 	QImage renderTransitionPreview(int width);
+	// Opens a video to learn its length and size, whether it has transparency, and a frame at
+	// atMs (for a stinger: where it covers the screen). Answers with videoProbed.
+	void probeVideo(const QString &path, int atMs);
+	QImage probedFrame(const QString &path) const { return m_probeFrames.value(path); }
 
 private:
 	obs_source *m_editSource = nullptr; // showing-ref held while edited

@@ -26,6 +26,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <memory>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSize>
@@ -1130,7 +1131,7 @@ void Engine::setProgramScene(const QString &sceneId, bool animate)
 		obs_transition_set(tr, scene);
 }
 
-QImage Engine::renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH, uint32_t outW, uint32_t outH)
+QImage Engine::renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH, uint32_t outW, uint32_t outH, bool clear)
 {
 	if (!src || !srcW || !srcH || !outW || !outH)
 		return {};
@@ -1140,9 +1141,9 @@ QImage Engine::renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH
 		m_thumbTex = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	gs_texrender_reset(m_thumbTex);
 	if (gs_texrender_begin(m_thumbTex, outW, outH)) {
-		vec4 clear;
-		vec4_set(&clear, 0, 0, 0, 1);
-		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
+		vec4 bg; // black, or see-through to keep the source's transparency
+		vec4_set(&bg, 0, 0, 0, clear ? 0.0f : 1.0f);
+		gs_clear(GS_CLEAR_COLOR, &bg, 0.0f, 0);
 		gs_ortho(0.0f, float(srcW), 0.0f, float(srcH), -100.0f, 100.0f);
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
@@ -1212,6 +1213,7 @@ void Engine::previewTransition(const Transition &t)
 		lobs_frame_set(m_pvB, b.constBits(), uint32_t(W), uint32_t(H), uint32_t(b.bytesPerLine()));
 	}
 	if (m_pvTr) {
+		obs_source_dec_active(m_pvTr);
 		obs_source_dec_showing(m_pvTr);
 		obs_source_release(m_pvTr);
 	}
@@ -1222,6 +1224,7 @@ void Engine::previewTransition(const Transition &t)
 	obs_transition_set_alignment(m_pvTr, OBS_ALIGN_CENTER);
 	obs_transition_set_scale_type(m_pvTr, OBS_TRANSITION_SCALE_ASPECT);
 	obs_source_inc_showing(m_pvTr);
+	obs_source_inc_active(m_pvTr); // a stinger decodes its video only while active
 	obs_transition_set(m_pvTr, m_pvAtB ? m_pvB : m_pvA);
 	m_pvAtB = !m_pvAtB;
 	if (t.type == "cut")
@@ -1233,6 +1236,7 @@ void Engine::previewTransition(const Transition &t)
 void Engine::stopTransitionPreview()
 {
 	if (m_pvTr) {
+		obs_source_dec_active(m_pvTr);
 		obs_source_dec_showing(m_pvTr);
 		obs_source_release(m_pvTr);
 		m_pvTr = nullptr;
@@ -1251,6 +1255,74 @@ QImage Engine::renderTransitionPreview(int width)
 		return {};
 	const uint32_t w = uint32_t(width), h = std::max<uint32_t>(1, uint32_t(width * m_canvasH / m_canvasW));
 	return renderSourceToImage(m_pvTr, uint32_t(m_canvasW), uint32_t(m_canvasH), w, h);
+}
+
+void Engine::probeVideo(const QString &path, int atMs)
+{
+	const int gen = ++m_probeGen[path];
+	QVariantMap info{{"path", path}, {"exists", QFileInfo::exists(path)}, {"ok", false}};
+	if (!m_started || !info["exists"].toBool()) {
+		emit videoProbed(path, info);
+		return;
+	}
+	obs_data_t *st = obs_data_create();
+	obs_data_set_string(st, "local_file", path.toUtf8().constData());
+	obs_data_set_bool(st, "is_local_file", true);
+	obs_data_set_bool(st, "looping", false);
+	obs_data_set_bool(st, "restart_on_activate", false);
+	obs_data_set_bool(st, "close_when_inactive", false);
+	obs_source_t *src = obs_source_create_private("ffmpeg_source", "lobs_probe", st);
+	obs_data_release(st);
+	if (!src) {
+		emit videoProbed(path, info);
+		return;
+	}
+	obs_source_inc_showing(src);
+	obs_source_inc_active(src);
+	// Opening happens on OBS's media thread: poll until it reports a length and a frame.
+	auto *poll = new QTimer(this);
+	auto tries = std::make_shared<int>(0);
+	auto stage = std::make_shared<int>(0); // 0 opening, 1 seeking to atMs
+	auto done = [this, src, poll, path](QVariantMap i) {
+		poll->stop();
+		poll->deleteLater();
+		obs_source_dec_active(src);
+		obs_source_dec_showing(src);
+		obs_source_release(src);
+		emit videoProbed(path, i);
+	};
+	connect(poll, &QTimer::timeout, this, [=]() mutable {
+		if (m_probeGen.value(path) != gen) // a newer probe of the same file took over
+			return done(QVariantMap{{"path", path}, {"stale", true}});
+		const int64_t dur = obs_source_media_get_duration(src);
+		const uint32_t w = obs_source_get_width(src), h = obs_source_get_height(src);
+		if (++*tries > 40) // 4 s: not a video OBS can play
+			return done(info);
+		if (dur <= 0 || !w || !h)
+			return;
+		if (*stage == 0) {
+			// Transparency shows at the start (a stinger begins clear) or the end.
+			const QImage first = renderSourceToImage(src, w, h, 64, std::max<uint32_t>(1, 64 * h / w), true);
+			bool alpha = false;
+			for (int y = 0; y < first.height() && !alpha; y++)
+				for (int x = 0; x < first.width() && !alpha; x++)
+					alpha = qAlpha(first.pixel(x, y)) < 250;
+			info["alpha"] = alpha;
+			info["durationMs"] = qint64(dur);
+			info["w"] = w;
+			info["h"] = h;
+			obs_source_media_set_time(src, std::clamp<int64_t>(atMs, 0, dur - 1));
+			*stage = 1;
+			*tries = 30; // about a second for the seek
+			return;
+		}
+		if (*tries < 34)
+			return;
+		m_probeFrames.insert(path, renderSourceToImage(src, w, h, 480, std::max<uint32_t>(1, 480 * h / w), true));
+		info["ok"] = true;
+		done(info);
+	});
+	poll->start(100);
 }
 
 QImage Engine::renderSourceThumbnail(const QString &sourceId, int width)
@@ -1533,14 +1605,20 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 			gs_effect_set_vec2(p, &dimInv);
 		if (gs_eparam_t *p = gs_effect_get_param_by_name(effect, "undistort_factor"))
 			gs_effect_set_float(p, 1.0f);
+		// OBS's frame is transparent where nothing is drawn: keep the black fill's alpha, or the
+		// UI behind (and the desktop, the window being translucent) shows through.
 		gs_blend_state_push();
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		gs_enable_color(true, true, true, false);
 		while (gs_effect_loop(effect, "Draw"))
 			gs_draw_sprite(full, 0, uint32_t(vw), uint32_t(vh));
+		gs_enable_color(true, true, true, true);
 		gs_blend_state_pop();
 		gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f);
 	} else if (mainProgram || !m_editSource) {
+		gs_enable_color(true, true, true, false); // as above
 		obs_render_main_texture();
+		gs_enable_color(true, true, true, true);
 	} else {
 		obs_source_video_render(canvasTransitioning() ? m_canvasTr : m_editSource);
 		renderPluginChannels();

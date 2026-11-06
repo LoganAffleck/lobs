@@ -203,6 +203,7 @@ App::App(Engine *engine, const QString &docPath, QObject *parent)
 	connect(&m_eyedropper, &Eyedropper::canceled, this, &App::screenColorCanceled);
 	connect(m_engine, &Engine::bandwidthTestProgress, this, &App::bandwidthProgress);
 	connect(m_engine, &Engine::bandwidthTestDone, this, &App::bandwidthDone);
+	connect(m_engine, &Engine::videoProbed, this, &App::videoProbed);
 	m_caretTimer.setInterval(530);
 	connect(&m_caretTimer, &QTimer::timeout, this, [this]() { m_caretOn = !m_caretOn; layoutEditedText(); });
 	m_engine->setPixelPerfect(m_pixelPerfect);

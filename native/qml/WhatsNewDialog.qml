@@ -10,6 +10,11 @@ FDialog {
     width: 480
     property string version: ""
     readonly property var notes: ({
+        "0.7.9": [
+            { icon: "film", title: "A clearer Transitions window", text: "Stingers play in the preview, show their length and a frame, and warn when the video is missing." },
+            { icon: "sliders-horizontal", title: "Switch point on a timeline", text: "Drag where the scenes switch along the stinger's own length." },
+            { icon: "square", title: "No see-through canvas", text: "Empty parts of the canvas stay black instead of showing your desktop." },
+        ],
         "0.7.8": [
             { icon: "zap", title: "Opens faster", text: "LOBS is ready about 0.4 seconds sooner. Dialogs are built when you first need them." },
             { icon: "circle", title: "Start recording on launch", text: "Start LOBS with --startrecording to record right away, like OBS's flag." },

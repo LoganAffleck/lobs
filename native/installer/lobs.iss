@@ -5,7 +5,7 @@
 
 #define AppName "LOBS"
 #ifndef AppVersion
-#define AppVersion "0.7.8"
+#define AppVersion "0.7.9"
 #endif
 #define EngineVersion "33.0.1"
 #define Dist "..\dist"
@@ -41,6 +41,7 @@ OutputBaseFilename=LOBS-Setup-{#AppVersion}
 #endif
 Compression=lzma2/ultra64
 SolidCompression=yes
+LZMAUseSeparateProcess=yes
 WizardStyle=modern
 SetupIconFile=..\resources\lobs.ico
 LicenseFile=..\..\LICENSE

@@ -128,6 +128,7 @@ QImage ThumbProvider::requestImage(const QString &id, QSize *size, const QSize &
 	const QString key = id.section('?', 0, 0);
 	const int w = req.width() > 0 ? req.width() : 320;
 	const QImage img = key == "__transition" ? m_engine->renderTransitionPreview(w)
+			 : key.startsWith("probe:") ? m_engine->probedFrame(QUrl::fromPercentEncoding(key.mid(6).toUtf8()))
 			 : key.startsWith("src:") ? m_engine->renderSourceThumbnail(key.mid(4), w) : m_engine->renderThumbnail(key, w);
 	if (size)
 		*size = img.size();
