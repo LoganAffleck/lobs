@@ -18,7 +18,7 @@
 #include <QJsonObject>
 #include <cmath>
 
-// OBS's last error for an output, as ": message" (or ""), in current Windows wording (LOBS-035).
+// OBS's last error for an output, as ": message" (or ""), in current Windows wording.
 QString obsOutputError(obs_output_t *out)
 {
 	const char *e = obs_output_get_last_error(out);

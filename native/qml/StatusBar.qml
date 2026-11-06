@@ -47,7 +47,7 @@ Rectangle {
             tone: (bar.st.fps || 0) < (bar.st.targetFps || 60) - 2 ? "#fbbf24" : Pal.muted
         }
         Seg {
-            // OBS's own warning level, over the last 10 s (LOBS-005); the popup shows totals.
+            // OBS's own warning level, over the last 10 s; the popup shows totals.
             visible: (bar.st.recentLaggedPct || 0) > 1 || (bar.st.recentSkippedPct || 0) > 1
             tone: "#fbbf24"
             text: "Lagging " + (bar.st.recentLaggedPct || 0).toFixed(1) + "% · skipped " + (bar.st.recentSkippedPct || 0).toFixed(1) + "%"

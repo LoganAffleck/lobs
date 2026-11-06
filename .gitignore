@@ -1,9 +1,8 @@
 # Build output and installers
 native/build/
 native/dist/
-obs-plugin/build/
-app/dist/
-app/node_modules/
+.claude/*
+!.claude/launch.json
 
 # Downloaded or separately cloned dependencies (see BUILDING.md)
 native/deps/downloads/

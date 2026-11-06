@@ -243,7 +243,7 @@ ColumnLayout {
         }
     }
     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
-    // The effects section takes a dropped .lobsfx file (P2-8), so it's one item with a drop area over it.
+    // The effects section takes a dropped .lobsfx file, so it's one item with a drop area over it.
     Item {
     Layout.fillWidth: true
     implicitHeight: fxSection.implicitHeight
@@ -283,7 +283,7 @@ ColumnLayout {
         Text { text: "Effects" + (au.s.fx.length ? " · " + au.s.fx.length : ""); color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
         // Gives way first when the panel is narrow.
         Text { text: au.s.fx.length > 1 ? "Runs top to bottom" : ""; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.leftMargin: 4; Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight }
-        // The whole chain: copy and paste it, or keep it in a .lobsfx file to share (P2-8).
+        // The whole chain: copy and paste it, or keep it in a .lobsfx file to share.
         FButton {
             id: chainMore
             iconName: "ellipsis"; variant: "ghost"
@@ -341,7 +341,7 @@ ColumnLayout {
             }
         }
     }
-    // Mics: let LOBS listen and set the effects up (P2-9).
+    // Mics: let LOBS listen and set the effects up.
     FButton {
         visible: au.s.kind === "mic"
         Layout.fillWidth: true

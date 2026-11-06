@@ -450,7 +450,7 @@ void Engine::apply(const Doc &doc)
 		return;
 
 	// Most changes touch one layer or source; everything unchanged is skipped below, so an edit
-	// costs about the same in a 3-scene show and a 300-scene one (LOBS-024).
+	// costs about the same in a 3-scene show and a 300-scene one.
 	const bool canvasSame = m_appliedCanvasW == doc.canvasW && m_appliedCanvasH == doc.canvasH;
 	m_appliedCanvasW = doc.canvasW, m_appliedCanvasH = doc.canvasH;
 
@@ -776,7 +776,7 @@ void Engine::apply(const Doc &doc)
 			obs_sceneitem_set_bounds_alignment(it.item, isText ? OBS_ALIGN_CENTER : (OBS_ALIGN_LEFT | OBS_ALIGN_TOP));
 			// A scale filter makes OBS draw the item through its own texture the size of the source,
 			// kept for the item's life. A solid color or vector shape looks the same without one, and
-			// a canvas-sized color layer would hold 8 MB for nothing (LOBS-034).
+			// a canvas-sized color layer would hold 8 MB for nothing.
 			const bool flat = src.kind == "color" || src.kind == "shape";
 			obs_sceneitem_set_scale_filter(it.item, isText ? OBS_SCALE_AREA : flat ? OBS_SCALE_DISABLE : OBS_SCALE_BICUBIC);
 			obs_sceneitem_set_bounds(it.item, &bounds);
@@ -907,6 +907,10 @@ QVariantMap Engine::layerResources() const
 
 void Engine::parkHiddenFilters()
 {
+	if (m_canvasTr && m_canvasTrRunning && m_trDef.type != "stinger" && QDateTime::currentMSecsSinceEpoch() >= m_canvasTrEndMs) {
+		obs_transition_set(m_canvasTr, m_editSource);
+		m_canvasTrRunning = false;
+	}
 	bool waiting = false;
 	for (Item &it : m_items) {
 		if (it.parked || !it.inst)
@@ -918,7 +922,7 @@ void Engine::parkHiddenFilters()
 		}
 		// Plugin filters stay: OBS never destroys a filter because its source is hidden, and some
 		// keep working off-screen or hold GPU state (win-spout sends while hidden, and its teardown
-		// raced the graphics thread when parking dropped and re-made it: LOBS-042).
+		// raced the graphics thread when parking dropped and re-made it).
 		if (std::any_of(it.applied.filters.cbegin(), it.applied.filters.cend(), [](const Filter &f) { return f.type.startsWith("obs:"); }))
 			continue;
 		// Its scene item goes too: with a scale filter it holds a source-sized texture, and a
@@ -938,7 +942,7 @@ void Engine::parkHiddenFilters()
 			obs_source_release(it.opacityFilter), it.opacityFilter = nullptr;
 		it.filterSig.clear();
 		// A text layer's renderer holds GDI objects (DC, font, bitmap): ~2.5 per layer, and Windows
-		// allows 10,000 per process. The stress show's 818 text layers held 2,000 (LOBS-025).
+		// allows 10,000 per process. The stress show's 818 text layers held 2,000.
 		if (it.text) {
 			obs_source_remove(it.text);
 			obs_source_release(it.text);
@@ -1028,8 +1032,10 @@ void Engine::playCanvasTransition(obs_source_t *from, obs_source_t *to)
 	const QSize c = m_lastDoc.canvasOf(m_editId);
 	obs_transition_set_size(m_canvasTr, uint32_t(c.width() > 0 ? c.width() : m_canvasW), uint32_t(c.height() > 0 ? c.height() : m_canvasH));
 	obs_transition_set(m_canvasTr, from);
+	const int dur = std::max(50, m_trDef.durationMs);
+	m_canvasTrEndMs = QDateTime::currentMSecsSinceEpoch() + dur + 150;
 	m_canvasTrRunning = true;
-	if (!obs_transition_start(m_canvasTr, OBS_TRANSITION_MODE_AUTO, uint32_t(std::max(50, m_trDef.durationMs)), to))
+	if (!obs_transition_start(m_canvasTr, OBS_TRANSITION_MODE_AUTO, uint32_t(dur), to))
 		m_canvasTrRunning = false;
 }
 
@@ -1109,6 +1115,10 @@ void Engine::setProgramScene(const QString &sceneId, bool animate)
 		applyMutes(); // a scene can keep some global audio muted
 	obs_scene_t *s = m_scenes.value(sceneId);
 	obs_source_t *scene = s ? obs_scene_get_source(s) : nullptr;
+	if (m_programId == m_editId && m_canvasTr && m_canvasTrRunning) {
+		obs_transition_set(m_canvasTr, scene);
+		m_canvasTrRunning = false;
+	}
 	obs_source_t *tr = m_started ? ensureTransition() : nullptr;
 	if (!tr) {
 		obs_set_output_source(0, scene);
@@ -1120,6 +1130,45 @@ void Engine::setProgramScene(const QString &sceneId, bool animate)
 		obs_transition_set(tr, scene);
 }
 
+QImage Engine::renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH, uint32_t outW, uint32_t outH)
+{
+	if (!src || !srcW || !srcH || !outW || !outH)
+		return {};
+	QImage img;
+	obs_enter_graphics();
+	if (!m_thumbTex)
+		m_thumbTex = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	gs_texrender_reset(m_thumbTex);
+	if (gs_texrender_begin(m_thumbTex, outW, outH)) {
+		vec4 clear;
+		vec4_set(&clear, 0, 0, 0, 1);
+		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
+		gs_ortho(0.0f, float(srcW), 0.0f, float(srcH), -100.0f, 100.0f);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+		obs_source_video_render(src);
+		gs_blend_state_pop();
+		gs_texrender_end(m_thumbTex);
+		if (!m_thumbStage || m_thumbStageW != outW || m_thumbStageH != outH) {
+			if (m_thumbStage)
+				gs_stagesurface_destroy(m_thumbStage);
+			m_thumbStage = gs_stagesurface_create(outW, outH, GS_RGBA);
+			m_thumbStageW = outW, m_thumbStageH = outH;
+		}
+		if (m_thumbStage) {
+			gs_stage_texture(m_thumbStage, gs_texrender_get_texture(m_thumbTex));
+			uint8_t *data = nullptr;
+			uint32_t linesize = 0;
+			if (gs_stagesurface_map(m_thumbStage, &data, &linesize)) {
+				img = QImage(data, int(outW), int(outH), int(linesize), QImage::Format_RGBA8888).copy();
+				gs_stagesurface_unmap(m_thumbStage);
+			}
+		}
+	}
+	obs_leave_graphics();
+	return img;
+}
+
 QImage Engine::renderThumbnail(const QString &sceneId, int width)
 {
 	obs_scene_t *scene = m_scenes.value(sceneId);
@@ -1128,40 +1177,12 @@ QImage Engine::renderThumbnail(const QString &sceneId, int width)
 	unparkScene(sceneId);
 	if (!m_parkTimer.isActive())
 		m_parkTimer.start(500);
-	const QSize c = m_lastDoc.canvasOf(sceneId); // a vertical layout is tall
+	const QSize c = m_lastDoc.canvasOf(sceneId);
 	const int CW = c.width() > 0 ? c.width() : m_canvasW, CH = c.height() > 0 ? c.height() : m_canvasH;
-	const uint32_t w = uint32_t(width), h = uint32_t(width * CH / CW);
-	QImage img;
-	obs_enter_graphics();
-	gs_texrender_t *tr = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-	if (gs_texrender_begin(tr, w, h)) {
-		vec4 clear;
-		vec4_set(&clear, 0, 0, 0, 1);
-		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
-		gs_ortho(0.0f, float(CW), 0.0f, float(CH), -100.0f, 100.0f);
-		gs_blend_state_push();
-		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
-		obs_source_video_render(obs_scene_get_source(scene));
-		gs_blend_state_pop();
-		gs_texrender_end(tr);
-		gs_stagesurf_t *stage = gs_stagesurface_create(w, h, GS_RGBA);
-		gs_stage_texture(stage, gs_texrender_get_texture(tr));
-		uint8_t *data = nullptr;
-		uint32_t linesize = 0;
-		if (gs_stagesurface_map(stage, &data, &linesize)) {
-			img = QImage(data, int(w), int(h), int(linesize), QImage::Format_RGBA8888).copy();
-			gs_stagesurface_unmap(stage);
-		}
-		gs_stagesurface_destroy(stage);
-	}
-	gs_texrender_destroy(tr);
-	obs_leave_graphics();
-	return img;
+	const uint32_t w = uint32_t(width), h = std::max<uint32_t>(1, uint32_t(width * CH / CW));
+	return renderSourceToImage(obs_scene_get_source(scene), uint32_t(CW), uint32_t(CH), w, h);
 }
 
-// ---------- transition preview (the transitions editor) ----------
-
-// A big letter on a color card, like OBS's preview: what "from" and "to" look like.
 static QImage previewCard(const QString &letter, QColor bg, int w, int h)
 {
 	QImage img(w, h, QImage::Format_ARGB32);
@@ -1200,7 +1221,7 @@ void Engine::previewTransition(const Transition &t)
 	obs_transition_set_size(m_pvTr, uint32_t(W), uint32_t(H));
 	obs_transition_set_alignment(m_pvTr, OBS_ALIGN_CENTER);
 	obs_transition_set_scale_type(m_pvTr, OBS_TRANSITION_SCALE_ASPECT);
-	obs_source_inc_showing(m_pvTr); // media (a stinger video) plays only while shown
+	obs_source_inc_showing(m_pvTr);
 	obs_transition_set(m_pvTr, m_pvAtB ? m_pvB : m_pvA);
 	m_pvAtB = !m_pvAtB;
 	if (t.type == "cut")
@@ -1228,33 +1249,8 @@ QImage Engine::renderTransitionPreview(int width)
 {
 	if (!m_pvTr || width <= 0)
 		return {};
-	const uint32_t w = uint32_t(width), h = uint32_t(width * m_canvasH / m_canvasW);
-	QImage img;
-	obs_enter_graphics();
-	gs_texrender_t *tr = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-	if (gs_texrender_begin(tr, w, h)) {
-		vec4 clear;
-		vec4_set(&clear, 0, 0, 0, 1);
-		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
-		gs_ortho(0.0f, float(m_canvasW), 0.0f, float(m_canvasH), -100.0f, 100.0f);
-		gs_blend_state_push();
-		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
-		obs_source_video_render(m_pvTr);
-		gs_blend_state_pop();
-		gs_texrender_end(tr);
-		gs_stagesurf_t *stage = gs_stagesurface_create(w, h, GS_RGBA);
-		gs_stage_texture(stage, gs_texrender_get_texture(tr));
-		uint8_t *data = nullptr;
-		uint32_t linesize = 0;
-		if (gs_stagesurface_map(stage, &data, &linesize)) {
-			img = QImage(data, int(w), int(h), int(linesize), QImage::Format_RGBA8888).copy();
-			gs_stagesurface_unmap(stage);
-		}
-		gs_stagesurface_destroy(stage);
-	}
-	gs_texrender_destroy(tr);
-	obs_leave_graphics();
-	return img;
+	const uint32_t w = uint32_t(width), h = std::max<uint32_t>(1, uint32_t(width * m_canvasH / m_canvasW));
+	return renderSourceToImage(m_pvTr, uint32_t(m_canvasW), uint32_t(m_canvasH), w, h);
 }
 
 QImage Engine::renderSourceThumbnail(const QString &sourceId, int width)
@@ -1264,32 +1260,7 @@ QImage Engine::renderSourceThumbnail(const QString &sourceId, int width)
 	if (!sw || !sh || width <= 0)
 		return {};
 	const uint32_t w = uint32_t(width), h = std::max<uint32_t>(1, uint32_t(double(width) * sh / sw));
-	QImage img;
-	obs_enter_graphics();
-	gs_texrender_t *tr = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-	if (gs_texrender_begin(tr, w, h)) {
-		vec4 clear;
-		vec4_set(&clear, 0, 0, 0, 1);
-		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
-		gs_ortho(0.0f, float(sw), 0.0f, float(sh), -100.0f, 100.0f);
-		gs_blend_state_push();
-		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
-		obs_source_video_render(in);
-		gs_blend_state_pop();
-		gs_texrender_end(tr);
-		gs_stagesurf_t *stage = gs_stagesurface_create(w, h, GS_RGBA);
-		gs_stage_texture(stage, gs_texrender_get_texture(tr));
-		uint8_t *data = nullptr;
-		uint32_t linesize = 0;
-		if (gs_stagesurface_map(stage, &data, &linesize)) {
-			img = QImage(data, int(w), int(h), int(linesize), QImage::Format_RGBA8888).copy();
-			gs_stagesurface_unmap(stage);
-		}
-		gs_stagesurface_destroy(stage);
-	}
-	gs_texrender_destroy(tr);
-	obs_leave_graphics();
-	return img;
+	return renderSourceToImage(in, sw, sh, w, h);
 }
 
 bool Engine::sourceActive(const QString &sourceId) const
@@ -1383,7 +1354,10 @@ QVariantMap Engine::mediaInfo(const QString &sourceId) const
 		return {{"state", "none"}};
 	const char *names[] = {"none", "playing", "opening", "buffering", "paused", "stopped", "ended", "error"};
 	const int st = int(obs_source_media_get_state(in));
-	return {{"state", st >= 0 && st < 8 ? names[st] : "none"}, {"timeMs", qint64(obs_source_media_get_time(in))},
+	qint64 timeMs = qint64(obs_source_media_get_time(in));
+	if (const qint64 at = m_mediaRestartedAt.value(sourceId); at > 0 && QDateTime::currentMSecsSinceEpoch() - at < 300 && timeMs > 500)
+		timeMs = 0;
+	return {{"state", st >= 0 && st < 8 ? names[st] : "none"}, {"timeMs", timeMs},
 		{"durationMs", qint64(obs_source_media_get_duration(in))}};
 }
 
@@ -1394,11 +1368,14 @@ void Engine::mediaCommand(const QString &sourceId, const QString &cmd, qint64 ms
 		return;
 	if (cmd == "playPause") {
 		const obs_media_state st = obs_source_media_get_state(in);
-		if (st == OBS_MEDIA_STATE_STOPPED || st == OBS_MEDIA_STATE_ENDED)
+		if (st == OBS_MEDIA_STATE_STOPPED || st == OBS_MEDIA_STATE_ENDED) {
+			m_mediaRestartedAt[sourceId] = QDateTime::currentMSecsSinceEpoch();
 			obs_source_media_restart(in);
-		else
+		} else {
 			obs_source_media_play_pause(in, st == OBS_MEDIA_STATE_PLAYING);
+		}
 	} else if (cmd == "restart") {
+		m_mediaRestartedAt[sourceId] = QDateTime::currentMSecsSinceEpoch();
 		obs_source_media_restart(in);
 	} else if (cmd == "stop") {
 		obs_source_media_stop(in);
@@ -1511,15 +1488,23 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 		}
 		gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f);
 	}
-	// Exact ratios (2x, 1x, 1/2, 1/3...) draw straight to the screen: canvas pixels land on screen
-	// pixels. Any other size first renders the canvas at full resolution, then scales it down with
-	// Lanczos (small reductions) or area averaging (big ones), the filters OBS uses for its own
-	// output, instead of plain bilinear sampling, so text and edges stay sharp.
+	// Exact ratios (2x, 1x, 1/2, 1/3...) draw straight to the screen. Any other size scales the
+	// full-resolution canvas with Lanczos (small reductions) or area averaging (big ones), the
+	// filters OBS uses for its own output, so text and edges stay sharp. Editing the scene that's
+	// on air reuses OBS's own frame of it instead of rendering the scene a second time.
 	const double inv = scale > 0 ? 1.0 / scale : 1;
 	const bool exact = scale >= 1 ? std::abs(scale - std::round(scale)) < 1e-4
 				      : std::abs(inv - std::round(inv)) < 1e-4 && CW % int(std::round(inv)) == 0 && CH % int(std::round(inv)) == 0;
+	const bool mainProgram = m_editId == m_programId && !canvasTransitioning() && CW == m_canvasW && CH == m_canvasH;
 	gs_texture_t *full = nullptr;
-	if (!exact && m_editSource) {
+	if (mainProgram) {
+		if (m_previewTex) {
+			gs_texrender_destroy(m_previewTex);
+			m_previewTex = nullptr;
+		}
+		if (!exact)
+			full = obs_get_main_texture();
+	} else if (!exact && m_editSource) {
 		if (!m_previewTex)
 			m_previewTex = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 		gs_texrender_reset(m_previewTex);
@@ -1549,16 +1534,16 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 		if (gs_eparam_t *p = gs_effect_get_param_by_name(effect, "undistort_factor"))
 			gs_effect_set_float(p, 1.0f);
 		gs_blend_state_push();
-		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO); // the canvas is opaque: copy it
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 		while (gs_effect_loop(effect, "Draw"))
 			gs_draw_sprite(full, 0, uint32_t(vw), uint32_t(vh));
 		gs_blend_state_pop();
-		gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f); // overlays below are in canvas units
-	} else if (m_editSource) {
+		gs_ortho(0.0f, W, 0.0f, H, -100.0f, 100.0f);
+	} else if (mainProgram || !m_editSource) {
+		obs_render_main_texture();
+	} else {
 		obs_source_video_render(canvasTransitioning() ? m_canvasTr : m_editSource);
 		renderPluginChannels();
-	} else {
-		obs_render_main_texture();
 	}
 
 	// Layers waiting on a permission: dimmed, with what they need (preview only).
@@ -1605,8 +1590,8 @@ void Engine::drawPreview(uint32_t cx, uint32_t cy)
 		}
 	}
 
-	if (m_laser)
-		obs_source_video_render(m_laser); // same trail viewers see
+	if (m_laser && !mainProgram)
+		obs_source_video_render(m_laser);
 	if (m_ghost && obs_source_get_width(m_ghost)) {
 		QPointF gp;
 		{
@@ -1822,14 +1807,20 @@ void Engine::refreshBrowser(const QString &sourceId)
 	obs_properties_destroy(props);
 }
 
-// What plugins put on output channels (Downstream Keyer's overlays, for one) draws over the
-// program, so the preview of the live scene draws it too. Channel 0 is the program itself, the
-// last one LOBS's laser pointer (drawn separately), and LOBS's audio channels draw nothing.
 void Engine::renderPluginChannels()
 {
-	// What's there is also watched: a LOBS scene a plugin shows (Downstream Keyer puts it straight
-	// on a channel) counts as showing, so its layers aren't parked and it draws.
-	static QString seen;
+	if (m_editId != m_programId)
+		return;
+	for (int ch = 1; ch < MAX_CHANNELS - 1; ch++) {
+		obs_source_t *o = obs_get_output_source(uint32_t(ch));
+		if (o && (obs_source_get_output_flags(o) & OBS_SOURCE_VIDEO))
+			obs_source_video_render(o);
+		obs_source_release(o);
+	}
+}
+
+void Engine::pollPluginChannels()
+{
 	QString now;
 	QSet<QString> scenes;
 	for (int ch = 1; ch < MAX_CHANNELS - 1; ch++) {
@@ -1844,15 +1835,13 @@ void Engine::renderPluginChannels()
 						scenes.insert(sceneIdOf(a)), now += QString("(%1) ").arg(obs_source_get_name(a));
 					obs_source_release(a);
 				}
+			obs_source_release(o);
 		}
-		if (o && m_editId == m_programId && (obs_source_get_output_flags(o) & OBS_SOURCE_VIDEO))
-			obs_source_video_render(o);
-		obs_source_release(o);
 	}
-	if (now != seen) {
+	if (now != m_pluginChannelsSeen) {
 		blog(LOG_INFO, "[lobs] output channels: %s", qPrintable(now));
-		seen = now;
-		QMetaObject::invokeMethod(this, [this, scenes] { setPluginScenes(scenes); }, Qt::QueuedConnection);
+		m_pluginChannelsSeen = now;
+		setPluginScenes(scenes);
 	}
 }
 
@@ -2183,6 +2172,7 @@ void Engine::setOverlay(const QVector<OverlayBox> &boxes, const QVector<OverlayG
 
 void Engine::pollStats()
 {
+	pollPluginChannels();
 	const double fps = obs_get_active_fps();
 	const double ms = double(obs_get_average_frame_time_ns()) / 1e6;
 	m_stats = QString("%1 fps · %2 ms").arg(fps, 0, 'f', 0).arg(ms, 0, 'f', 2);
@@ -2206,11 +2196,19 @@ void Engine::shutdown()
 		m_display = nullptr;
 	}
 	stopSharedPreview();
-	if (m_previewTex) {
+	if (m_previewTex || m_thumbTex || m_thumbStage) {
 		obs_enter_graphics();
-		gs_texrender_destroy(m_previewTex);
+		if (m_previewTex)
+			gs_texrender_destroy(m_previewTex);
+		if (m_thumbTex)
+			gs_texrender_destroy(m_thumbTex);
+		if (m_thumbStage)
+			gs_stagesurface_destroy(m_thumbStage);
 		obs_leave_graphics();
 		m_previewTex = nullptr;
+		m_thumbTex = nullptr;
+		m_thumbStage = nullptr;
+		m_thumbStageW = m_thumbStageH = 0;
 	}
 	if (!m_labelTextures.isEmpty()) {
 		obs_enter_graphics();

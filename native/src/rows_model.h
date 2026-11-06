@@ -7,7 +7,7 @@
 //
 // The panels used to bind ListViews straight to a QVariantList, so every change (a click, a
 // scene switch) replaced the whole array and QML destroyed and rebuilt every row, which was
-// slow and leaked memory with each rebuild (LOBS-022/024). Here, `rows` is compared with the
+// slow and leaked memory with each rebuild. Here, `rows` is compared with the
 // previous rows by their "id": rows that stayed are updated in place (dataChanged), and only
 // rows that came or went are inserted or removed. Delegates keep using `modelData`.
 class RowsModel : public QAbstractListModel {

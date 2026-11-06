@@ -196,7 +196,7 @@ bool Engine::vcamAvailable() const
 }
 
 #else
-// macOS needs a signed CoreMediaIO system extension for this (PLAN-MACOS.md, Phase 5).
+// macOS needs a signed CoreMediaIO system extension for this.
 bool Engine::vcamAvailable() const { return false; }
 #endif
 

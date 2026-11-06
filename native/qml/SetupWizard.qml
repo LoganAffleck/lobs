@@ -15,7 +15,7 @@ FDialog {
     topPadding: 12
     signal addPanels(bool chat, bool info)
     signal twitchConnectRequested() // the sign-in window lives in the main window
-    signal tuneMicRequested() // after Finish: the mic wizard (P2-9), in the main window
+    signal tuneMicRequested() // after Finish: the mic wizard, in the main window
     property bool tuneMic: true
     Connections { target: twitch; function onChanged() { if (twitch.connected) wiz.channel = twitch.login } }
 

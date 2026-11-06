@@ -28,7 +28,7 @@ FButton {
     }
     onClicked: picker().opened ? picker().close() : picker().open()
     // The picker is built the first time it opens, not with the field: Inspector filter cards
-    // make and drop many fields, and Qt kept ~28 KB of each unopened picker (LOBS-039).
+    // make and drop many fields, and Qt kept ~28 KB of each unopened picker.
     function picker() { pickerLoader.active = true; return pickerLoader.item.popup }
     Loader { id: pickerLoader; anchors.fill: parent; active: false; sourceComponent: pickerComponent }
 

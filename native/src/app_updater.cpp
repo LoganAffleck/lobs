@@ -65,7 +65,7 @@ QString verifyPublisher(const QString &path)
 	return err;
 }
 #else
-// Releases only carry the Windows installer so far; macOS updates come with Sparkle (PLAN-MACOS.md, Phase 4).
+// Releases only carry the Windows installer so far; macOS updates come with Sparkle.
 QString verifyPublisher(const QString &) { return "updates aren't available on macOS yet"; }
 #endif
 

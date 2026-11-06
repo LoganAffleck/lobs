@@ -24,8 +24,6 @@ ApplicationWindow {
     flags: chrome.nativeControls ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
                                  : Qt.Window | Qt.FramelessWindowHint
     readonly property bool maximized: visibility === Window.Maximized
-    // Filling the screen (maximized or full screen), nothing sits against its edges: the top bar
-    // and the status bar keep this much room from them (a window's own edge does that otherwise).
     readonly property int screenEdgeRoom: maximized || visibility === Window.FullScreen ? 6 : 0
     font.family: Pal.font
     font.pixelSize: Pal.body
@@ -36,43 +34,33 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+,"; enabled: !chrome.nativeMenuBar; onActivated: settingsPage.show() }
     onDialogOpenChanged: app.setPreviewVisible(!dialogOpen)
 
-    // On macOS the menu bar (below) owns these keys; elsewhere they're in-window shortcuts.
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Undo]; onActivated: app.undo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: [StandardKey.Redo, "Ctrl+Y"]; onActivated: app.redo() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+D"; onActivated: app.duplicateSelected() }
-    // Crop mode with the focus off the canvas (after the Inspector's Crop button): Enter keeps
-    // the crop, Esc puts it back. The canvas handles both itself when it has the focus.
     Shortcut { enabled: app.cropMode && !addDialog.visible; sequence: "Escape"; onActivated: app.cancelCrop() }
     Shortcut { enabled: app.cropMode && !addDialog.visible; sequences: ["Return", "Enter"]; onActivated: app.cropMode = false }
-    // F2 renames the selected layer in its row, as File Explorer does with files.
-    // Not while Assets has focus: F2 renames a file there.
-    Shortcut { sequence: "F2"; enabled: !win.focusInside(assetsGuest); onActivated: { const sel = app.layers.filter(l => l.selected); if (sel.length === 1) layerList.rename(sel[0].id) } }
+    Shortcut { sequence: "F2"; enabled: !win.focusInside(assetsGuest); onActivated: { const sel = app.layers.filter(l => l.selected); if (sel.length === 1) layersGuest.rename(sel[0].id) } }
     function focusInside(item) { for (let f = win.activeFocusItem; f; f = f.parent) if (f === item) return true; return false }
-    // Layers clipboard. Text fields keep their own copy and paste (they take these keys first).
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Copy; onActivated: app.copyLayers() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Cut; onActivated: app.cutLayers() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: StandardKey.Paste; onActivated: app.pasteLayers(false) }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+Shift+V"; onActivated: app.pasteLayers(true) }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+G"; onActivated: app.groupSelected() }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+Shift+G"; onActivated: app.ungroupSelected() }
-    // Layer order, like design tools: Ctrl ] forward, Ctrl [ backward, with Shift to the front/back.
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+]"]; onActivated: app.moveSelected(-1) }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+["]; onActivated: app.moveSelected(1) }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+Shift+]", "Ctrl+}"]; onActivated: app.moveSelected(-1000) }
     Shortcut { enabled: !chrome.nativeMenuBar; sequences: ["Ctrl+Shift+[", "Ctrl+{"]; onActivated: app.moveSelected(1000) }
     Shortcut { enabled: !chrome.nativeMenuBar; sequence: "Ctrl+S"; onActivated: win.save() }
     Shortcut { sequence: "Ctrl+O"; enabled: !app.live && !chrome.nativeMenuBar; onActivated: win.guardUnsaved(() => openDialog.open()) }
-    // A Mac keyboard's Delete key is Backspace (text fields still take it first).
     Shortcut { sequences: chrome.nativeMenuBar ? ["Delete", "Backspace"] : ["Delete"]; onActivated: app.deleteSelected() }
-    function save() { if (!app.saveProject()) saveDialog.open() } // saves in place; Save As only for an unsaved show
-    // Edit menu actions go to the text field being typed in, if any, else to the layers.
+    function save() { if (!app.saveProject()) saveDialog.open() }
     function editAction(textFn, layersFn) {
         const f = win.activeFocusItem
         if (f && typeof f[textFn] === "function" && typeof f.selectAll === "function") f[textFn]()
         else layersFn()
     }
 
-    // macOS menu bar: what the top bar's New / Open / Import / Save and Window menus hold on Windows.
     Loader {
         active: chrome.nativeMenuBar
         sourceComponent: Platform.MenuBar {
@@ -121,7 +109,6 @@ ApplicationWindow {
                 Platform.MenuSeparator {}
                 Platform.MenuItem { text: "Save"; shortcut: "Ctrl+S"; onTriggered: win.save() }
                 Platform.MenuItem { text: "Save As…"; shortcut: "Ctrl+Shift+S"; onTriggered: saveDialog.open() }
-                // Moved to the LOBS menu by macOS.
                 Platform.MenuItem { text: "About LOBS"; role: Platform.MenuItem.AboutRole; onTriggered: settingsPage.show(8) }
                 Platform.MenuItem { text: "Settings…"; shortcut: "Ctrl+,"; role: Platform.MenuItem.PreferencesRole; onTriggered: settingsPage.show() }
             }
@@ -152,7 +139,7 @@ ApplicationWindow {
                 Platform.MenuItem { text: "Zoom"; onTriggered: chrome.toggleMaximize() }
                 Platform.MenuItem {
                     text: win.visibility === Window.FullScreen ? "Exit Full Screen" : "Enter Full Screen"
-                    shortcut: "Meta+Ctrl+F" // ⌃⌘F (Qt's Ctrl is Command on macOS)
+                    shortcut: "Meta+Ctrl+F"
                     onTriggered: win.visibility = win.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
                 }
                 Platform.MenuSeparator {}
@@ -165,7 +152,7 @@ ApplicationWindow {
                         checked: modelData.isOpen
                         onTriggered: win.togglePanel(modelData)
                     }
-                    onObjectAdded: (i, o) => windowMac.insertItem(i + 4, o) // after Minimize, Zoom, Full Screen and the separator
+                    onObjectAdded: (i, o) => windowMac.insertItem(i + 4, o)
                     onObjectRemoved: (i, o) => windowMac.removeItem(o)
                 }
                 Platform.MenuSeparator {}
@@ -186,11 +173,10 @@ ApplicationWindow {
             app.saveAs(selectedFile)
             const next = win.afterSave
             win.afterSave = null
-            if (next && app.projectFile !== "") next() // saved: carry on with Open or Import
+            if (next && app.projectFile !== "") next()
         }
         onRejected: win.afterSave = null
     }
-    // An untitled show with changes asks to be saved before Open or Import replaces it.
     property var afterSave: null
     function guardUnsaved(next) {
         if (app.unsavedShow) { unsavedDialog.next = next; unsavedDialog.open() }
@@ -199,17 +185,17 @@ ApplicationWindow {
     FileDialog { id: importDialog; fileMode: FileDialog.OpenFile; nameFilters: ["OBS scene collection (*.json)"]; onAccepted: app.importObs(selectedFile.toString().replace(/^file:\/{3}/, "")) }
     FileDialog { id: openDialog; fileMode: FileDialog.OpenFile; nameFilters: ["LOBS show (*.lobs.json *.json)"]; onAccepted: app.open(selectedFile) }
 
-    // The Inspector's row labels (Position, Size, Rotate, Crop, Corners), one width so fields line up.
-    component RowLabel: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 52 }
     component Caption: Text { color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
+    component Body: Text { color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; elide: Text.ElideRight }
+    component Divider: Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
+    component VDivider: Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Pal.border }
+
     function openTransitions() { trDialog.open() }
-    // Brings the Inspector forward (opened if closed), e.g. after picking a source in the mixer.
     function showInspector() { if (!inspectorDock.isOpen) inspectorDock.show(); inspectorDock.dockWidget.setAsCurrentTab() }
     function togglePanel(d) {
         if (d.isOpen) d.close()
-        else if (d === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock) // docked, next to History
-        else if (d === captionsDock && audioDock.isOpen) dockArea.addDockWidget(captionsDock, KDDW.KDDockWidgets.Location_OnRight, audioDock, Qt.size(380, 0)) // beside the mixer
-        // Others dock in the right column, under Layers (floating only with Layers closed).
+        else if (d === statsDock && historyDock.isOpen) historyDock.addDockWidgetAsTab(statsDock)
+        else if (d === captionsDock && audioDock.isOpen) dockArea.addDockWidget(captionsDock, KDDW.KDDockWidgets.Location_OnRight, audioDock, Qt.size(380, 0))
         else if (layersDock.isOpen && d !== layersDock) dockArea.addDockWidget(d, KDDW.KDDockWidgets.Location_OnBottom, layersDock, Qt.size(0, 360))
         else d.show()
     }
@@ -219,18 +205,14 @@ ApplicationWindow {
         id: setupWizard
         onAddPanels: (chat, info) => win.openTwitchPanels(chat, info)
         onTwitchConnectRequested: twitchSignIn.begin()
-        // The show's mic (added if it has none), straight into Tune my mic.
         onTuneMicRequested: {
             if (!app.mixer.some(m => m.kind === "mic"))
                 app.addSource("mic", "", "", false)
             const mic = app.mixer.find(m => m.kind === "mic")
-            if (mic) Qt.callLater(() => addMicWizard.openFor(mic.id, true)) // once Setup is gone; it picks the device first
+            if (mic) Qt.callLater(() => addMicWizard.openFor(mic.id, true))
         }
     }
-    // Stable models for the big lists: rows are updated in place instead of rebuilt (LOBS-022).
-    RowsModel { id: sceneRows; rows: sceneSearch.query ? app.scenes.filter(r => sceneSearch.matches(r.name)) : app.scenes } // list and grid; Scenes search narrows both
     function openSetup() { setupWizard.open() }
-    // Screenshots: LOBS_DEMO=<name> stages a feature on the sample show.
     Timer {
         interval: 2500
         running: app.envValue("LOBS_DEMO") !== ""
@@ -242,49 +224,35 @@ ApplicationWindow {
             else if (d === "assets") assetsDock.show()
         }
     }
-    // For screenshots of a settings page: LOBS_OPEN_SETTINGS=<section index>.
     Timer { interval: 1500; running: app.envValue("LOBS_OPEN_SETTINGS") !== ""; onTriggered: settingsPage.show(Number(app.envValue("LOBS_OPEN_SETTINGS"))) }
-    // The Twitch channel both panels show; setup and either panel can set it.
     property string twitchChannel: app.uiValue("twitch/channel", "")
     function setTwitchChannel(c) { app.setUiValue("twitch/channel", c); twitchChannel = c }
-    // Connecting the account sets the channel the panels show.
     Connections { target: twitch; function onChanged() { if (twitch.connected && twitch.login !== win.twitchChannel) win.setTwitchChannel(twitch.login) } }
-    // Docks the Twitch panels at the right edge, Chat and Stream info as tabs.
     function openTwitchPanels(chat, info) {
-        twitchChannel = app.uiValue("twitch/channel", "") // setup just saved it
+        twitchChannel = app.uiValue("twitch/channel", "")
         if (chat && !chatDock.isOpen) dockArea.addDockWidget(chatDock, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(340, 0))
         if (info && !infoDock.isOpen) {
             if (chatDock.isOpen) chatDock.addDockWidgetAsTab(infoDock)
             else dockArea.addDockWidget(infoDock, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(340, 0))
         }
-        // The activity feed goes with Stream info, as OBS docks it.
         if (info && !feedDock.isOpen) {
             if (infoDock.isOpen) infoDock.addDockWidgetAsTab(feedDock)
             else dockArea.addDockWidget(feedDock, KDDW.KDDockWidgets.Location_OnRight, null, Qt.size(340, 0))
         }
     }
-    // First run: the setup assistant, once the layout is up.
-    // After an update: its highlights, once (not on a first run, where Setup shows instead).
     WhatsNewDialog { id: whatsNew }
     Timer { interval: 1500; running: true; onTriggered: if (!setupWizard.visible) whatsNew.check() }
     Timer { id: setupTimer; interval: 900; running: !app.uiFlag("setup/done", false) && app.envValue("LOBS_NO_SETUP") === ""; onTriggered: setupWizard.open() }
-    // A press on empty space anywhere (panel gaps, around the canvas, blank list area) deselects.
-    // It sits under all content, so only presses nothing else takes reach it; it never consumes one.
     background: Rectangle {
         color: Pal.s1
         MouseArea { anchors.fill: parent; onPressed: (m) => { app.clearSelection(); m.accepted = false } }
     }
-    component Body: Text { color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; elide: Text.ElideRight }
-    component Divider: Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Pal.border }
-    component VDivider: Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Pal.border }
 
     footer: StatusBar {}
 
-    // The window's popup layer, for the safety net below (Overlay.overlay only resolves on an Item).
     Item { id: overlayRef; readonly property Item overlay: Overlay.overlay }
-    // Safety net for the canvas: if it's stepped aside but nothing is open over it, bring it back.
     Timer {
-        interval: 1000; repeat: true; running: !app.previewInScene // in the scene it never steps aside
+        interval: 1000; repeat: true; running: !app.previewInScene
         property int idleChecks: 0
         onTriggered: {
             if (!app.previewHidden || win.dialogOpen) { idleChecks = 0; return }
@@ -296,10 +264,8 @@ ApplicationWindow {
         }
     }
 
-    // Every tooltip: app styling, and kept clear of the canvas preview.
     ToolTipStyle { host: win.contentItem; previewItem: win.previewItem }
 
-    // Dev check (LOBS_MIXER_PREVIEW=1): the mixer at a wide/short and a narrow/tall size.
     Loader {
         active: app.envFlag("LOBS_MIXER_PREVIEW")
         sourceComponent: Window {
@@ -331,7 +297,6 @@ ApplicationWindow {
             anchors.leftMargin: 14 + chrome.leadingInset
             anchors.rightMargin: 10
             spacing: 2
-            // The app's mark, name and Settings in one button.
             AbstractButton {
                 id: brand
                 Accessible.role: Accessible.Button
@@ -342,8 +307,8 @@ ApplicationWindow {
                 Layout.rightMargin: 8
                 implicitHeight: Pal.ctl + 4
                 implicitWidth: brandRow.implicitWidth + 16
-                onClicked: settingsPage.open ? settingsPage.open = false : settingsPage.show() // clicked again: back to the show
-                ToolTip.visible: hovered && !settingsPage.open // Settings is already showing
+                onClicked: settingsPage.open ? settingsPage.open = false : settingsPage.show()
+                ToolTip.visible: hovered && !settingsPage.open
                 ToolTip.delay: 600
                 ToolTip.text: chrome.keys("Settings  Ctrl ,")
                 background: Rectangle {
@@ -357,7 +322,6 @@ ApplicationWindow {
                         id: brandRow
                         anchors.centerIn: parent
                         spacing: 7
-                        // The gem rolls a quarter turn down as Settings opens (and stays), back up as it closes.
                         Gem {
                             id: brandGem
                             width: 20; height: 20
@@ -367,7 +331,7 @@ ApplicationWindow {
                                 target: settingsPage
                                 function onOpenChanged() {
                                     brandRoll.stop()
-                                    brandRoll.from = brandGem.frame // from wherever it is, if it's still rolling
+                                    brandRoll.from = brandGem.frame
                                     brandRoll.to = settingsPage.open ? brandGem.count - 1 : 0
                                     brandRoll.start()
                                 }
@@ -378,7 +342,6 @@ ApplicationWindow {
                     }
                 }
             }
-            // New, Open, Import, Save and Window are in the menu bar on macOS.
             FButton { text: "New"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; onClicked: newProjectDialog.open(); tip: "New project in its own folder" }
             FButton { text: "Open"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; enabled: !app.live; tip: app.live ? "Stop streaming and recording to open another show" : chrome.keys("Open a show (Ctrl+O)"); onClicked: win.guardUnsaved(() => openDialog.open()) }
             FButton {
@@ -394,7 +357,7 @@ ApplicationWindow {
                     width: 280
                     property var collections: []
                     Instantiator {
-                        active: importMenu.populated // built while the menu is open
+                        active: importMenu.populated
                         model: importMenu.collections
                         delegate: FMenuItem {
                             required property var modelData
@@ -410,10 +373,8 @@ ApplicationWindow {
                 }
             }
             FButton { text: "Save"; visible: !settingsPage.open && (!chrome.nativeMenuBar); variant: "ghost"; tip: chrome.keys("Save (Ctrl+S)"); onClicked: win.save() }
-            // The profile (stream, video and recording settings for one place you stream), next to Save.
-            // New and Rename open a small popover under the button to name it.
             Item {
-                visible: !settingsPage.open // Settings shows only the name and window buttons
+                visible: !settingsPage.open
                 id: profileBox
                 readonly property var list: { app.settings; return app.profiles() }
                 implicitWidth: profileButton.implicitWidth
@@ -427,8 +388,8 @@ ApplicationWindow {
                 }
                 Popup {
                     id: profileName
-                    popupType: Popup.Item // in the scene, not an OS window (see FMenu)
-                    property string mode: "new" // new | rename
+                    popupType: Popup.Item
+                    property string mode: "new"
                     function ask(m) { mode = m; nameIn.text = m === "rename" ? (app.settings.profile || "") : ""; err.text = ""; open() }
                     function apply() {
                         const n = nameIn.text.trim()
@@ -466,7 +427,7 @@ ApplicationWindow {
                     id: profileMenu
                     width: 240
                     Instantiator {
-                        active: profileMenu.populated // built while the menu is open
+                        active: profileMenu.populated
                         model: profileBox.list
                         delegate: FMenuItem {
                             required property string modelData
@@ -481,7 +442,6 @@ ApplicationWindow {
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                     FMenuItem { text: "New profile"; enabled: !app.live; onTriggered: profileName.ask("new") }
                     FMenuItem { text: "Rename"; onTriggered: profileName.ask("rename") }
-                    // The others can be deleted (not the one in use), listed after these.
                     Instantiator {
                         active: profileMenu.populated
                         model: profileBox.list.filter(n => n !== app.settings.profile)
@@ -511,7 +471,7 @@ ApplicationWindow {
                     id: windowMenu
                     width: 240
                     Instantiator {
-                        active: windowMenu.populated // built while the menu is open
+                        active: windowMenu.populated
                         model: win.panels
                         delegate: FMenuItem {
                             required property var modelData
@@ -524,7 +484,6 @@ ApplicationWindow {
                     }
                     MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                     FMenuItem { text: "Show all panels"; onTriggered: win.panels.forEach(d => { if (!d.isOpen) d.show() }) }
-                    // Plugins that add panels or Tools items through OBS's interface.
                     MenuSeparator { visible: windowMenu.populated && app.pluginTools().length > 0; height: visible ? implicitHeight : 0; contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
                     Instantiator {
                         active: windowMenu.populated
@@ -540,8 +499,7 @@ ApplicationWindow {
             FButton { visible: !settingsPage.open; iconName: "undo-2"; variant: "ghost"; enabled: app.canUndo; onClicked: app.undo(); tip: "Undo " + app.undoLabel + chrome.keys("  Ctrl Z") }
             FButton { visible: !settingsPage.open; iconName: "redo-2"; variant: "ghost"; enabled: app.canRedo; onClicked: app.redo(); tip: chrome.keys("Redo  Ctrl Shift Z") }
             Item { Layout.fillWidth: true }
-            OutputControls { visible: !settingsPage.open;}
-            // Window buttons, in Windows' order.
+            OutputControls { visible: !settingsPage.open }
             Row {
                 visible: !chrome.nativeControls
                 Layout.leftMargin: 8
@@ -573,9 +531,6 @@ ApplicationWindow {
         }
     }
 
-    // Dockable panels (KDDockWidgets). The video is a panel too, so rows of panels can sit
-    // under or over it. Drag a tab to move or float a panel, drop it on another panel to tab them
-    // together; the Window menu reopens closed ones.
     PermissionsBar {
         id: permissionsBar
         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 6; bottomMargin: 0 }
@@ -584,7 +539,7 @@ ApplicationWindow {
     KDDW.DockingArea {
         id: dockArea
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom; top: permissionsBar.visible ? permissionsBar.bottom : parent.top }
-        anchors.margins: 6 // same as the gaps between panels, so the edges match
+        anchors.margins: 6
         uniqueName: "LOBSMain"
 
         KDDW.DockWidget {
@@ -599,159 +554,11 @@ ApplicationWindow {
             id: scenesDock
             uniqueName: "scenes"
             title: "Scenes"
-            Rectangle {
+            ScenesPanel {
                 id: scenesGuest
-                property string editingId: "" // the scene whose name is being typed in its row or tile
-                property size kddockwidgets_min_size: Qt.size(240, 160) // panel minimum
-                property bool searching: false
                 anchors.fill: parent
-                color: "transparent"
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-                    FPanelHeader {
-                        leading: [
-                            FButton { iconName: "list"; variant: "ghost"; selected: win.sceneView === 0; tip: "List"; onClicked: win.sceneView = 0 },
-                            FButton { iconName: "layout-grid"; variant: "ghost"; selected: win.sceneView === 1; tip: "Grid with live thumbnails"; onClicked: win.sceneView = 1 }
-                        ]
-                        FButton {
-                            iconName: "search"; variant: "ghost"; selected: scenesGuest.searching
-                            tip: "Search scenes"
-                            onClicked: { scenesGuest.searching = !scenesGuest.searching; if (scenesGuest.searching) sceneSearch.forceActiveFocus(); else sceneSearch.text = "" }
-                        }
-                        FButton { iconName: "plus"; text: "Scene"; variant: "secondary"; onClicked: app.addScene(); tip: "Add a scene" }
-                    }
-                    FSearchField {
-                        id: sceneSearch
-                        visible: scenesGuest.searching
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 4
-                        implicitHeight: 26
-                        placeholderText: "Search scenes"
-                        onDismissed: { scenesGuest.searching = false; text = "" }
-                    }
-                    // Right-click on a scene, in the list or the grid.
-                    FMenu {
-                        id: sceneMenu
-                        property var row: ({})
-                        function openFor(r) { row = r; popup() }
-                        FMenuItem { text: "Show this scene"; onTriggered: { app.editScene(sceneMenu.row.id); app.take() } }
-                        // Opens the scene without putting it live (a click shows it).
-                        FMenuItem { visible: app.clickToShow; height: visible ? implicitHeight : 0; text: "Edit before showing"; onTriggered: app.editScene(sceneMenu.row.id) }
-                        FMenuItem { text: "Rename"; onTriggered: scenesGuest.editingId = sceneMenu.row.id }
-                        // Shows this scene inside the one being edited, as a layer (nested scenes).
-                        FMenuItem { text: "Show in " + app.editSceneName; enabled: sceneMenu.row.id !== app.editSceneId; onTriggered: app.addSceneSource(sceneMenu.row.id) }
-                        FMenuItem { text: "Duplicate with linked layers"; onTriggered: app.duplicateScene(sceneMenu.row.id, true) }
-                        FMenuItem { text: "Duplicate"; onTriggered: app.duplicateScene(sceneMenu.row.id, false) }
-                        MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                        FMenuItem { text: "Delete scene"; enabled: app.scenes.length > 1; onTriggered: app.deleteScene(sceneMenu.row.id) }
-                    }
-                    StackLayout {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        currentIndex: win.sceneView
-                        FluidList {
-                            id: sceneList
-                            model: sceneRows
-                            topMargin: 2
-                            delegate: Item {
-                                required property var modelData
-                                required property int index
-                                width: ListView.view.width
-                                height: Pal.ctl + 2
-                                Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.editing }
-                                MouseArea {
-                                    Accessible.role: Accessible.ListItem
-                                    Accessible.name: String(modelData.name || "Scene")
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onClicked: (m) => { if (m.button === Qt.RightButton) sceneMenu.openFor(modelData); else app.pickScene(modelData.id) }
-                                    onDoubleClicked: { app.editScene(modelData.id); app.take() }
-                                }
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 14
-                                    anchors.rightMargin: 12
-                                    spacing: 6
-                                    Body { visible: scenesGuest.editingId !== modelData.id; text: modelData.name; font.weight: modelData.editing ? 550 : 400; Layout.fillWidth: true }
-                                    InlineRename {
-                                        active: scenesGuest.editingId === modelData.id
-                                        original: modelData.name
-                                        Layout.fillWidth: true
-                                        onRenamed: (n) => app.renameScene(modelData.id, n)
-                                        onFinished: scenesGuest.editingId = ""
-                                    }
-                                    FBadge { visible: modelData.program; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
-                                    Caption { text: modelData.count }
-                                }
-                            }
-                        }
-                        GridView {
-                            id: sceneGrid
-                            Accessible.role: Accessible.List
-                            Accessible.name: "Scenes"
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            boundsMovement: Flickable.StopAtBounds
-                            flickDeceleration: 6000
-                            maximumFlickVelocity: 3000
-                            model: sceneRows
-                            leftMargin: 8; rightMargin: 8; topMargin: 4
-                            cellWidth: (width - 16) / 2
-                            cellHeight: cellWidth * 9 / 16 + 30
-                            delegate: Item {
-                                required property var modelData
-                                width: sceneGrid.cellWidth
-                                height: sceneGrid.cellHeight
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: 3
-                                    radius: Pal.radius
-                                    color: tileMouse.containsMouse ? Pal.s4 : Pal.s3
-                                    border.width: modelData.editing || modelData.program ? 2 : 1
-                                    border.color: modelData.program ? Pal.live : modelData.editing ? Pal.focus : Pal.border
-                                    Behavior on color { ColorAnimation { duration: Pal.fast } }
-                                    Rectangle {
-                                        id: thumbBox
-                                        x: 3; y: 3; width: parent.width - 6; height: width * 9 / 16
-                                        radius: Pal.radius - 3; color: "black"; clip: true
-                                        Image {
-                                            anchors.fill: parent
-                                            cache: false
-                                            fillMode: Image.PreserveAspectCrop
-                                            sourceSize.width: 320
-                                            source: win.sceneView === 1 ? "image://thumbs/" + modelData.id + "?" + app.thumbTick : ""
-                                        }
-                                    }
-                                    RowLayout {
-                                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: thumbBox.bottom
-                                        anchors.leftMargin: 8; anchors.rightMargin: 6; anchors.topMargin: 4
-                                        Body { visible: scenesGuest.editingId !== modelData.id; text: modelData.name; font.weight: modelData.editing ? 550 : 400; Layout.fillWidth: true }
-                                        InlineRename {
-                                            active: scenesGuest.editingId === modelData.id
-                                            original: modelData.name
-                                            Layout.fillWidth: true
-                                            onRenamed: (n) => app.renameScene(modelData.id, n)
-                                            onFinished: scenesGuest.editingId = ""
-                                        }
-                                        FBadge { visible: modelData.program; text: (app.streaming || app.recording) ? "On air" : "Showing"; tone: (app.streaming || app.recording) ? "live" : "neutral" }
-                                    }
-                                    MouseArea {
-                                        Accessible.role: Accessible.ListItem
-                                        Accessible.name: String(modelData.name || "Scene")
-                                        id: tileMouse
-                                        anchors.fill: parent
-                                        z: -1 // under the name editor, which takes its own clicks
-                                        hoverEnabled: true
-                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                        onClicked: (m) => { if (m.button === Qt.RightButton) sceneMenu.openFor(modelData); else app.pickScene(modelData.id) }
-                                        onDoubleClicked: { app.editScene(modelData.id); app.take() }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                sceneView: win.sceneView
+                onViewPicked: (v) => win.sceneView = v
             }
         }
 
@@ -759,285 +566,14 @@ ApplicationWindow {
             id: poolDock
             uniqueName: "pool"
             title: "Sources"
-            Rectangle {
+            SourcesPanel {
                 id: poolGuest
-                property size kddockwidgets_min_size: Qt.size(240, 160) // panel minimum
-                property int filter: 0 // 0 all, 1 video, 2 audio
-                property bool searching: false
                 anchors.fill: parent
-                clip: true // never draws past the panel when it's narrow
-                color: "transparent"
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-                    FPanelHeader {
-                        leading: [
-                            FTabs { model: ["All", "Video", "Audio"]; currentIndex: poolGuest.filter; onActivated: (i) => poolGuest.filter = i; Layout.leftMargin: 6 }
-                        ]
-                        FButton {
-                            iconName: "search"; variant: "ghost"; selected: poolGuest.searching
-                            tip: "Search sources"
-                            onClicked: { poolGuest.searching = !poolGuest.searching; if (poolGuest.searching) poolSearch.forceActiveFocus(); else poolSearch.text = "" }
-                        }
-                        FButton { iconName: "plus"; text: poolGuest.width < 330 ? "" : "Source"; variant: "secondary"; onClicked: addDialog.open(); tip: "Add a source" }
-                    }
-                    FSearchField {
-                        id: poolSearch
-                        visible: poolGuest.searching
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 4
-                        implicitHeight: 26
-                        placeholderText: "Search by name or device"
-                        onDismissed: { poolGuest.searching = false; text = "" }
-                    }
-                    FluidList {
-                        id: poolList
-                        property string editingId: "" // the source whose name is being typed in its row
-                        readonly property var levels: app.levels // read once per update, not once per meter (LOBS-025)
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        // Video first, then audio, with a divider between; the filter narrows it.
-                        model: RowsModel { rows: poolList.poolRowsFn() } // rows stay alive across changes
-                        // app.sourceStatus converts the whole map on every read: read it once, not per row.
-                        readonly property var status: app.sourceStatus
-                        function poolRowsFn() {
-                            const st = poolList.status
-                            const rows = app.pool.filter(r => !r.header && poolSearch.matches(r.name, (st[r.id] || {}).detail, r.kindLabel))
-                            const video = rows.filter(r => r.video), audio = rows.filter(r => !r.video)
-                            if (poolGuest.filter === 1) return video
-                            if (poolGuest.filter === 2) return audio
-                            return video.length && audio.length ? video.concat([{ divider: true }], audio) : video.concat(audio)
-                        }
-                        topMargin: 4
-                        delegate: Item {
-                            id: srow
-                            required property var modelData
-                            required property int index
-                            property bool hoverable: !modelData.divider
-                            readonly property var st: modelData.divider ? ({}) : (poolList.status[modelData.id] || ({}))
-                            readonly property bool problem: !!st.status
-                            readonly property bool inScene: !!modelData.inScene
-                            width: ListView.view.width
-                            height: modelData.divider ? 13 : 46
-                            Rectangle { visible: !!modelData.divider; anchors.centerIn: parent; width: parent.width - 24; height: 1; color: Pal.border }
-                            Rectangle {
-                                visible: !modelData.divider && (modelData.selected || rowHover.hovered)
-                                anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1
-                                radius: Pal.radius - 2
-                                color: modelData.selected ? Pal.selected : Pal.hover
-                            }
-                            HoverHandler { id: rowHover; enabled: !modelData.divider }
-                            RowLayout {
-                                visible: !modelData.divider
-                                anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 8
-                                spacing: 10
-                                // Video: a live thumbnail. Audio: its icon over a mini level meter.
-                                Rectangle {
-                                    implicitWidth: 52; implicitHeight: 30
-                                    radius: 4
-                                    color: Pal.s1
-                                    border.width: 1; border.color: srow.problem ? "#92400e" : Pal.border
-                                    clip: true
-                                    Image {
-                                        id: thumbImg
-                                        // Keep the last frame up while the next loads (no placeholder flash each second).
-                                        retainWhileLoading: true
-                                        property bool hadFrame: false
-                                        onStatusChanged: if (status === Image.Ready) hadFrame = true
-                                        onSourceChanged: if (!source.toString()) hadFrame = false
-                                        visible: modelData.video === true && hadFrame
-                                        anchors.fill: parent; anchors.margins: 1
-                                        fillMode: Image.PreserveAspectCrop
-                                        cache: false
-                                        asynchronous: true
-                                        sourceSize.width: 104
-                                        source: modelData.video && srow.st.hasSize ? "image://thumbs/src:" + modelData.id + "?" + app.sourceTick : ""
-                                        // clip is always rectangular: mask to the frame's rounded corners instead.
-                                        layer.enabled: true
-                                        layer.effect: MultiEffect { maskEnabled: true; maskSource: thumbMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
-                                    }
-                                    Rectangle { id: thumbMask; anchors.fill: thumbImg; radius: 3; visible: false; layer.enabled: true; layer.smooth: true }
-                                    FIcon {
-                                        visible: !modelData.video || !thumbImg.hadFrame
-                                        anchors.centerIn: parent
-                                        anchors.verticalCenterOffset: modelData.video ? 0 : -4
-                                        name: srow.problem ? "triangle-alert" : (modelData.icon || "")
-                                        size: 14
-                                        color: srow.problem ? "#fbbf24" : Pal.muted
-                                    }
-                                    Row { // audio: tiny stereo meter along the bottom
-                                        visible: !modelData.video
-                                        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 4 }
-                                        spacing: 2
-                                        Repeater {
-                                            model: 2
-                                            delegate: Rectangle {
-                                                required property int index
-                                                readonly property real db: (poolList.levels[modelData.id] || [-60, -60])[index]
-                                                width: (parent.width - 2) / 2; height: 3; radius: 1.5; color: Pal.s4
-                                                Rectangle {
-                                                    width: parent.width * Math.max(0, Math.min(1, (parent.db + 60) / 60)); height: parent.height; radius: 1.5
-                                                    color: modelData.muted ? Pal.muted : parent.db > -6 ? "#ef4444" : parent.db > -18 ? "#f59e0b" : "#22c55e"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 1
-                                    Body { visible: poolList.editingId !== modelData.id; text: modelData.name || ""; font.weight: 550; Layout.fillWidth: true; color: modelData.muted ? Pal.muted : Pal.fg }
-                                    InlineRename {
-                                        active: poolList.editingId === modelData.id
-                                        original: modelData.name || ""
-                                        Layout.fillWidth: true
-                                        onRenamed: (n) => app.renameSource(modelData.id, n)
-                                        onFinished: poolList.editingId = ""
-                                    }
-                                    Row {
-                                        Layout.fillWidth: true
-                                        spacing: 6
-                                        Rectangle { // problems only; healthy sources show their device
-                                            visible: srow.problem
-                                            width: probText.implicitWidth + 12; height: 16; radius: 8
-                                            color: "#3a2a0a"; border.width: 1; border.color: "#92400e"
-                                            Text { id: probText; anchors.centerIn: parent; text: srow.st.statusText || ""; color: "#fbbf24"; font.family: Pal.font; font.pixelSize: 10; font.weight: 600 }
-                                        }
-                                        Caption {
-                                            visible: !srow.problem
-                                            width: parent.width
-                                            elide: Text.ElideRight
-                                            text: srow.st.detail || modelData.kindLabel || ""
-                                        }
-                                    }
-                                }
-                                // Audio: mute right on the row.
-                                FButton {
-                                    visible: !modelData.video
-                                    iconName: modelData.muted ? "volume-x" : "volume-2"
-                                    iconColor: modelData.muted ? Pal.danger : Pal.muted
-                                    variant: "ghost"
-                                    tip: modelData.muted ? "Unmute" : "Mute"
-                                    onClicked: app.setAudio(modelData.id, "muted", !modelData.muted, true)
-                                }
-                                // Video: is it in the scene you're editing? Hover to add or remove.
-                                AbstractButton {
-                                    id: sceneToggle
-                                    visible: modelData.video === true
-                                    hoverEnabled: true
-                                    implicitHeight: Pal.ctl
-                                    implicitWidth: toggleRow.implicitWidth + 16
-                                    readonly property bool showAction: hovered || rowHover.hovered
-                                    onClicked: app.toggleInScene(modelData.id)
-                                    background: Rectangle {
-                                        radius: Pal.radius
-                                        color: sceneToggle.hovered ? (srow.inScene ? Pal.dangerBg : Pal.s6) : sceneToggle.showAction && !srow.inScene ? Pal.s5 : "transparent"
-                                        Behavior on color { ColorAnimation { duration: Pal.fast } }
-                                    }
-                                    contentItem: Item {
-                                        Row {
-                                            id: toggleRow
-                                            anchors.centerIn: parent
-                                            spacing: 5
-                                            Rectangle {
-                                                visible: srow.inScene && !sceneToggle.hovered
-                                                width: 6; height: 6; radius: 3; color: "#22c55e"
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                            FIcon {
-                                                visible: !srow.inScene || sceneToggle.hovered
-                                                name: srow.inScene ? "x" : "plus"
-                                                size: 12
-                                                color: srow.inScene && sceneToggle.hovered ? Pal.danger : Pal.fg
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                            Text {
-                                                text: srow.inScene ? (sceneToggle.hovered ? "Remove" : "In scene") : (sceneToggle.showAction ? "Add to scene" : "")
-                                                color: srow.inScene && !sceneToggle.hovered ? Pal.muted : srow.inScene ? Pal.danger : Pal.fg
-                                                font.family: Pal.font; font.pixelSize: Pal.caption
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                        }
-                                    }
-                                    ToolTip.visible: hovered
-                                    ToolTip.delay: 700
-                                    ToolTip.text: srow.inScene ? "Remove from " + app.editSceneName : "Add to " + app.editSceneName
-                                }
-                                FButton {
-                                    id: moreButton
-                                    iconName: "ellipsis"
-                                    variant: "ghost"
-                                    opacity: rowHover.hovered || poolMenu.visible ? 1 : 0.45
-                                    tip: "More"
-                                    onClicked: poolMenu.popup(moreButton, 0, moreButton.height + 4)
-                                }
-                            }
-                            // Drag onto the canvas to place it where you drop it; click selects (settings in
-                            // the Inspector); double-click adds it to the scene; right-click for more.
-                            MouseArea {
-                                Accessible.role: Accessible.ListItem
-                                Accessible.name: String(modelData.name || "Source")
-                                enabled: !modelData.divider && poolList.editingId !== modelData.id // typing: clicks go to the name
-                                anchors.fill: parent
-                                anchors.rightMargin: 150 // leave the row's buttons clickable
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                property point start
-                                property bool dragging: false
-                                function inPreview(p) { return p.x >= 0 && p.y >= 0 && p.x <= win.previewItem.width && p.y <= win.previewItem.height }
-                                onPressed: (m) => { start = Qt.point(m.x, m.y); dragging = false }
-                                onPositionChanged: (m) => {
-                                    if (!(m.buttons & Qt.LeftButton) || !modelData.video) return
-                                    if (!dragging && Math.hypot(m.x - start.x, m.y - start.y) > 6) dragging = true
-                                    if (!dragging) return
-                                    const g = mapToItem(win.contentItem, m.x, m.y)
-                                    ghost.show(modelData.icon, modelData.name, g.x, g.y)
-                                    const p = mapToItem(win.previewItem, m.x, m.y)
-                                    if (inPreview(p)) app.poolDragMove(modelData.id, p.x, p.y)
-                                    else app.poolDragCancel()
-                                }
-                                onReleased: (m) => {
-                                    if (!dragging) return
-                                    dragging = false
-                                    ghost.visible = false
-                                    const p = mapToItem(win.previewItem, m.x, m.y)
-                                    if (inPreview(p)) app.poolDrop(modelData.id, p.x, p.y)
-                                    else app.poolDragCancel()
-                                }
-                                onClicked: (m) => { app.selectSource(modelData.id); if (m.button === Qt.RightButton) poolMenu.popup() }
-                                onDoubleClicked: if (modelData.video) app.placeSource(modelData.id)
-                            }
-                            FMenu {
-                                id: poolMenu
-                                FMenuItem {
-                                    visible: modelData.video === true
-                                    height: visible ? implicitHeight : 0
-                                    text: modelData.inScene ? "Remove from " + app.editSceneName : "Add to " + app.editSceneName
-                                    onTriggered: app.toggleInScene(modelData.id)
-                                }
-                                FMenuItem { text: "Settings…"; onTriggered: app.selectSource(modelData.id) }
-                                FMenuItem { text: "Rename"; onTriggered: poolList.editingId = modelData.id }
-                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem {
-                                    enabled: false
-                                    text: !modelData.video ? "Plays in every scene"
-                                        : (modelData.scenes || []).length ? "Used in " + modelData.scenes.join(", ") : "Not in any scene"
-                                }
-                                MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                FMenuItem { // LOBS-018: confirm when the source is in more than one scene
-                                    text: "Delete source"
-                                    onTriggered: (modelData.scenes || []).length > 1 ? deleteSourceDialog.ask(modelData) : app.deleteSource(modelData.id)
-                                }
-                            }
-                        }
-                        Caption {
-                            visible: poolList.count === 0
-                            anchors.centerIn: parent
-                            horizontalAlignment: Text.AlignHCenter
-                            text: poolSearch.query ? "No sources match \u201c" + poolSearch.text + "\u201d." : poolGuest.filter === 2 ? "No audio sources yet." : poolGuest.filter === 1 ? "No video sources yet." : "Add each camera, capture or mic once,\nthen drag it onto any scene."
-                        }
-                    }
-                }
+                previewItem: win.previewItem
+                ghostItem: ghost
+                overlayItem: win.contentItem
+                onAddSourceRequested: addDialog.open()
+                onDeleteSourceRequested: (r) => deleteSourceDialog.ask(r)
             }
         }
 
@@ -1045,558 +581,12 @@ ApplicationWindow {
             id: assetsDock
             uniqueName: "assets"
             title: "Assets"
-            FocusScope {
+            AssetsPanel {
                 id: assetsGuest
-                property size kddockwidgets_min_size: Qt.size(240, 140)
-                property int view: app.uiValue("assets/view", "grid") === "list" ? 0 : 1 // 0 list, 1 grid
-                property int typeFilter: 0 // 0 all, 1 images, 2 video, 3 audio
-                property string sortKey: app.uiValue("assets/sort", "name") // name | modified | bytes
-                property bool sortDesc: app.uiFlag("assets/sortDesc", false)
-                property var selected: [] // paths
-                property string anchorPath: ""
-                property bool searching: false
                 anchors.fill: parent
-                // Searching walks every folder. (app.assets is read first only so results refresh when files change.)
-                readonly property var raw: assetSearch.query ? (app.assets, app.searchAssets(assetSearch.query)) : app.assets
-                // Folders first, then the filter and sort.
-                readonly property var items: {
-                    const kinds = [null, "image", "video", "audio"]
-                    const want = kinds[typeFilter]
-                    const rows = raw.filter(a => !want || a.folder || a.kind === want)
-                    const key = sortKey, dir = sortDesc ? -1 : 1
-                    const cmp = (a, b) => key === "name" ? dir * a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
-                                                         : dir * ((a[key] || 0) - (b[key] || 0)) || a.name.localeCompare(b.name)
-                    return rows.filter(a => a.folder).sort(cmp).concat(rows.filter(a => !a.folder).sort(cmp))
-                }
-                function isSel(path) { return selected.indexOf(path) >= 0 }
-                function selectItem(a, mods) {
-                    forceActiveFocus()
-                    if (mods & Qt.ControlModifier) {
-                        selected = isSel(a.path) ? selected.filter(x => x !== a.path) : selected.concat([a.path])
-                    } else if ((mods & Qt.ShiftModifier) && anchorPath) {
-                        const paths = items.map(x => x.path), i = paths.indexOf(anchorPath), j = paths.indexOf(a.path)
-                        selected = paths.slice(Math.min(i, j), Math.max(i, j) + 1)
-                        return
-                    } else if (!isSel(a.path)) {
-                        selected = [a.path]
-                    }
-                    anchorPath = a.path
-                }
-                function targets(a) { return a && isSel(a.path) ? selected : a ? [a.path] : selected }
-                property string editingPath: "" // the file or folder whose name is being typed in place
-                function rename(path) { editingPath = path }
-                function newFolder() { const f = app.createAssetFolder(); if (f) { selected = [f]; Qt.callLater(rename, f) } }
-                function currentFolderPath() { return app.assetPath ? app.assetsFolder + "/" + app.assetPath : app.assetsFolder }
-                property string dropFolder: "" // the folder a dragged asset would land in (it lights up)
-                function folderAt(gx, gy) { // folder item under a global point (drop target)
-                    // A parent folder in the breadcrumb takes a drop too (moving an asset back up).
-                    const cp = crumbs.mapFromGlobal(gx, gy)
-                    const crumb = crumbs.childAt(cp.x, cp.y)
-                    if (crumb && crumb.modelData && !crumb.last) return crumb.modelData.dir
-                    if (view === 1) { // grid: folders are the compact row above the tiles
-                        const flow = assetGrid.headerItem ? assetGrid.headerItem.children[0] : null
-                        if (!flow) return ""
-                        const p = flow.mapFromGlobal(gx, gy)
-                        const it = flow.childAt(p.x, p.y)
-                        return it && it.modelData && it.modelData.folder ? it.modelData.path : ""
-                    }
-                    const p = assetListView.contentItem.mapFromGlobal(gx, gy)
-                    const it = assetListView.itemAt(p.x, p.y)
-                    return it && it.modelData && it.modelData.folder ? it.modelData.path : ""
-                }
-                function duration(ms) { const t = Math.round(ms / 1000); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0") }
-                function detailOf(a) { // "1920×1080 · 2.1 MB" / "0:12 · 1280×720 · 8 MB"
-                    if (a.folder) return a.size
-                    return [a.durationMs ? duration(a.durationMs) : "", a.dims || "", a.size].filter(t => t).join(" · ")
-                }
-                function setSort(k) {
-                    if (sortKey === k) sortDesc = !sortDesc; else { sortKey = k; sortDesc = k !== "name" } // newest / largest first
-                    app.setUiValue("assets/sort", sortKey); app.setUiFlag("assets/sortDesc", sortDesc)
-                }
-                Connections { target: app; function onAssetsChanged() { assetsGuest.selected = assetsGuest.selected.filter(x => app.assets.some(a => a.path === x)) } }
-                // Keyboard, while the panel has focus.
-                Keys.onPressed: (e) => {
-                    const ctrl = e.modifiers & Qt.ControlModifier
-                    if (ctrl && e.key === Qt.Key_C) { app.copyAssets(selected); e.accepted = true }
-                    else if (ctrl && e.key === Qt.Key_X) { app.cutAssets(selected); e.accepted = true }
-                    else if (ctrl && e.key === Qt.Key_V) { app.pasteAssets(); e.accepted = true }
-                    else if (ctrl && e.key === Qt.Key_A) { selected = items.map(x => x.path); e.accepted = true }
-                    else if (ctrl && e.key === Qt.Key_N) { newFolder(); e.accepted = true }
-                    else if (ctrl && e.key === Qt.Key_F) { searching = true; assetSearch.forceActiveFocus(); e.accepted = true }
-                    else if (e.key === Qt.Key_Delete && selected.length) { app.trashAssets(selected); e.accepted = true }
-                    else if (e.key === Qt.Key_F2 && selected.length === 1) { rename(selected[0]); e.accepted = true }
-                    else if (e.key === Qt.Key_Backspace) { app.assetUp(); e.accepted = true }
-                    else if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && selected.length === 1) {
-                        const a = items.find(x => x.path === selected[0])
-                        if (a) a.folder ? app.openAssetFolder(a.path) : a.placeable ? app.placeAsset(a.path) : undefined
-                        e.accepted = true
-                    }
-                }
-                FileDialog { id: assetPicker; fileMode: FileDialog.OpenFiles; title: "Add files to assets"; onAccepted: app.importAssets(selectedFiles) }
-                FileDialog {
-                    id: relinkPicker
-                    property string sourceId
-                    title: "Find the missing file"
-                    onAccepted: app.relinkAsset(sourceId, String(selectedFile).replace(/^file:\/{3}/, ""))
-                }
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-                    // ---- actions; the path gets its own row below, inside a folder ----
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 40
-                        Layout.leftMargin: 6; Layout.rightMargin: 6
-                        spacing: 0
-                        // Sort and view (nothing to sort in an empty folder).
-                        RowLayout {
-                            visible: assetsGuest.raw.length > 0
-                            spacing: 0
-                            FButton {
-                                id: sortButton
-                                text: ({ name: "Name", modified: "Date", bytes: "Size" })[assetsGuest.sortKey] + (assetsGuest.sortDesc ? " ↓" : " ↑")
-                                variant: "ghost"; tip: "Sort"
-                                onClicked: sortMenu.popup(sortButton, 0, sortButton.height + 4)
-                                FMenu {
-                                    id: sortMenu
-                                    FMenuItem { text: "Name"; selected: assetsGuest.sortKey === "name"; onTriggered: assetsGuest.setSort("name") }
-                                    FMenuItem { text: "Date modified"; selected: assetsGuest.sortKey === "modified"; onTriggered: assetsGuest.setSort("modified") }
-                                    FMenuItem { text: "Size"; selected: assetsGuest.sortKey === "bytes"; onTriggered: assetsGuest.setSort("bytes") }
-                                    MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                                    FMenuItem { text: assetsGuest.sortDesc ? "Ascending" : "Descending"; onTriggered: { assetsGuest.sortDesc = !assetsGuest.sortDesc; app.setUiFlag("assets/sortDesc", assetsGuest.sortDesc) } }
-                                }
-                            }
-                            FButton { iconName: "layout-grid"; variant: "ghost"; selected: assetsGuest.view === 1; tip: "Grid"; onClicked: { assetsGuest.view = 1; app.setUiValue("assets/view", "grid") } }
-                            FButton { iconName: "list"; variant: "ghost"; selected: assetsGuest.view === 0; tip: "List"; onClicked: { assetsGuest.view = 0; app.setUiValue("assets/view", "list") } }
-                        }
-                        Item { Layout.fillWidth: true }
-                        FButton {
-                            iconName: "search"; variant: "ghost"; selected: assetsGuest.searching
-                            tip: chrome.keys("Search all folders  Ctrl F")
-                            onClicked: { assetsGuest.searching = !assetsGuest.searching; if (assetsGuest.searching) assetSearch.forceActiveFocus(); else assetSearch.text = "" }
-                        }
-                        FButton {
-                            id: moreAssets
-                            iconName: "ellipsis"; variant: "ghost"; tip: "More"
-                            onClicked: bgMenu.popup(moreAssets, 0, moreAssets.height + 4)
-                        }
-                        FButton { iconName: "plus"; text: assetsGuest.width < 360 ? "" : "Add"; variant: "secondary"; tip: "Add files"; onClicked: assetPicker.open(); Layout.leftMargin: 2 }
-                    }
-                    // ---- where you are: up, then the path (right-click: show it in File Explorer) ----
-                    RowLayout {
-                        visible: app.assetPath !== ""
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 30
-                        Layout.leftMargin: 6; Layout.rightMargin: 6; Layout.bottomMargin: 2
-                        spacing: 0
-                            FButton { visible: app.assetPath !== ""; iconName: "corner-left-up"; variant: "ghost"; tip: "Up one folder  Backspace"; onClicked: app.assetUp() }
-                            // The path: earlier folders are links, the current one is plain text. At the top, nothing (the tab says Assets).
-                            // It gets whatever width is left and clips from the left, so the current folder stays in view.
-                            Item {
-                              Layout.fillWidth: true
-                              Layout.minimumWidth: 0
-                              implicitHeight: 28
-                              clip: true
-                              MouseArea { anchors.fill: parent; acceptedButtons: Qt.RightButton; onClicked: bgMenu.popup() }
-                              Row {
-                                id: crumbs
-                                anchors.verticalCenter: parent.verticalCenter
-                                x: Math.min(0, parent.width - width)
-                            Repeater {
-                                model: app.assetPath ? app.assetCrumbs : []
-                                delegate: Row {
-                                    required property var modelData
-                                    required property int index
-                                    readonly property bool last: index === app.assetCrumbs.length - 1
-                                    spacing: 0
-                                    height: 28 // same for links and the current folder, so they line up
-                                    FIcon { visible: index > 0; name: "chevron-right"; size: 12; color: Pal.muted; anchors.verticalCenter: parent.verticalCenter }
-                                    FButton { visible: !parent.last; text: modelData.name; variant: "ghost"; selected: assetsGuest.dropFolder === modelData.dir; implicitHeight: 24; anchors.verticalCenter: parent.verticalCenter; onClicked: app.goToAssetPath(modelData.path) }
-                                    Text { visible: parent.last; text: modelData.name; leftPadding: 8; rightPadding: 4; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550; anchors.verticalCenter: parent.verticalCenter }
-                                }
-                            }
-                              }
-                            }
-                        FButton { iconName: "folder-search"; variant: "ghost"; tip: "Show this folder in File Explorer"; onClicked: app.revealAsset(assetsGuest.currentFolderPath()) }
-                    }
-                    FSearchField {
-                        id: assetSearch
-                        visible: assetsGuest.searching
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 4
-                        implicitHeight: 26
-                        placeholderText: "Search all folders"
-                        onDismissed: { assetsGuest.searching = false; text = ""; assetsGuest.forceActiveFocus() }
-                    }
-                    // ---- missing files (moved or deleted outside LOBS) ----
-                    Rectangle {
-                        visible: app.missingAssets.length > 0
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 8; Layout.rightMargin: 8; Layout.bottomMargin: 6
-                        implicitHeight: missRow.implicitHeight + 12
-                        radius: Pal.radius
-                        color: "#2a2008"; border.width: 1; border.color: "#92400e"
-                        RowLayout {
-                            id: missRow
-                            anchors.fill: parent; anchors.margins: 6; anchors.leftMargin: 10
-                            spacing: 6
-                            FIcon { name: "triangle-alert"; size: 14; color: "#fbbf24" }
-                            Text {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                color: "#fde68a"; font.family: Pal.font; font.pixelSize: Pal.caption
-                                text: app.missingAssets.length === 1
-                                      ? app.missingAssets[0].name + " was moved or deleted outside LOBS."
-                                      : app.missingAssets.length + " files were moved or deleted outside LOBS."
-                            }
-                            FButton { text: "Find it"; variant: "secondary"; tip: "Search assets by file name"; onClicked: app.findMissingAssets() }
-                            FButton {
-                                text: "Choose file…"; variant: "ghost"
-                                tip: "Choose a new file for " + (app.missingAssets[0] ? app.missingAssets[0].name : "it")
-                                onClicked: { relinkPicker.sourceId = app.missingAssets[0].sourceId; relinkPicker.open() }
-                            }
-                        }
-                    }
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        // Empty space: clear the selection; right-click for New folder / Paste.
-                        MouseArea {
-                            anchors.fill: parent
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            onClicked: (m) => { assetsGuest.forceActiveFocus(); assetsGuest.selected = []; if (m.button === Qt.RightButton) bgMenu.popup() }
-                        }
-                        // Always-visible drop hint at the end of the list or grid.
-                        Component {
-                            id: dropHint
-                            Item {
-                                width: ListView.view ? ListView.view.width : (GridView.view ? GridView.view.width : 200)
-                                height: assetsGuest.raw.length ? 44 : 0
-                                visible: assetsGuest.raw.length > 0 && !assetSearch.query
-                                Rectangle {
-                                    anchors.fill: parent; anchors.margins: 4
-                                    radius: Pal.radius
-                                    // Clicking works like Add, for people used to Drive-style drop zones.
-                                    color: hintMouse.pressed ? Pal.s5 : hintMouse.containsMouse ? Pal.s4 : "transparent"
-                                    border.width: 1; border.color: hintMouse.containsMouse ? Pal.borderStrong : Pal.border
-                                    Behavior on color { ColorAnimation { duration: Pal.fast } }
-                                    Text { anchors.centerIn: parent; text: "Drop files here, or click to add them"; color: hintMouse.containsMouse ? Pal.fg : Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption }
-                                    MouseArea { id: hintMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: assetPicker.open() }
-                                }
-                            }
-                        }
-                        FluidList {
-                            id: assetListView
-                            visible: assetsGuest.view === 0
-                            anchors.fill: parent
-                            topMargin: 2
-                            model: assetsGuest.items
-                            footer: dropHint
-                            delegate: Item {
-                                required property var modelData
-                                width: ListView.view.width
-                                height: 40
-                                Rectangle {
-                                    readonly property bool target: modelData.folder && assetsGuest.dropFolder === modelData.path
-                                    visible: assetsGuest.isSel(modelData.path) || target
-                                    anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1
-                                    radius: Pal.radius - 2; color: target ? Pal.s6 : Pal.selected
-                                    border.width: target ? 1 : 0; border.color: Pal.focus
-                                }
-                                RowLayout {
-                                    anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 12
-                                    spacing: 10
-                                    Rectangle {
-                                        implicitWidth: 44; implicitHeight: 28; radius: 4
-                                        color: modelData.folder ? "transparent" : Pal.s1
-                                        Image {
-                                            id: rowThumb
-                                            anchors.fill: parent
-                                            visible: !!modelData.thumb && status === Image.Ready
-                                            source: modelData.thumb || ""
-                                            sourceSize.width: 88
-                                            fillMode: Image.PreserveAspectCrop
-                                            asynchronous: true
-                                            layer.enabled: true
-                                            layer.effect: MultiEffect { maskEnabled: true; maskSource: rowMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
-                                        }
-                                        Rectangle { id: rowMask; anchors.fill: parent; radius: 4; visible: false; layer.enabled: true; layer.smooth: true }
-                                        FIcon { visible: !rowThumb.visible; anchors.centerIn: parent; name: modelData.icon; size: modelData.folder ? 18 : 14; color: modelData.folder ? (modelData.color || "#e9b949") : Pal.muted }
-                                    }
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 0
-                                        Body { visible: assetsGuest.editingPath !== modelData.path; text: modelData.name; Layout.fillWidth: true; elide: Text.ElideRight }
-                                        InlineRename {
-                                        active: assetsGuest.editingPath === modelData.path
-                                        original: modelData.name
-                                        onRenamed: (n) => app.renameAsset(modelData.path, n)
-                                        onFinished: assetsGuest.editingPath = ""
-                                        Layout.fillWidth: true
-                                    }
-                                        Caption { text: (assetSearch.query ? (modelData.where || "Assets") + " · " : "") + assetsGuest.detailOf(modelData); Layout.fillWidth: true; elide: Text.ElideRight }
-                                    }
-                                    Rectangle { visible: !modelData.folder && modelData.uses > 0; width: 7; height: 7; radius: 3.5; color: "#22c55e" }
-                                }
-                                AssetMouse {
-                                    enabled: assetsGuest.editingPath !== modelData.path
-                                    asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
-                                    folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
-                                    onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
-                                    onMenuRequested: (a) => { if (!assetsGuest.isSel(a.path)) assetsGuest.selected = [a.path]; assetMenu.asset = a; assetMenu.popup() }
-                                    onMovedToFolder: (a, f) => app.moveAssets(assetsGuest.targets(a), f)
-                                }
-                            }
-                        }
-                        GridView {
-                            id: assetGrid
-                            Accessible.role: Accessible.List
-                            Accessible.name: "Assets"
-                            visible: assetsGuest.view === 1
-                            anchors.fill: parent
-                            anchors.leftMargin: 6; anchors.rightMargin: 6; anchors.topMargin: 2; anchors.bottomMargin: 6
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            readonly property int cols: Math.max(2, Math.floor(width / 120))
-                            cellWidth: Math.floor(width / cols)
-                            cellHeight: Math.round(cellWidth * 0.62) + 52 // thumbnail + two lines of name
-                            model: assetsGuest.items.filter(a => !a.folder) // folders sit above, compact
-                            footer: dropHint
-                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; Accessible.name: "Scroll" }
-                            // Folders: short rectangles, one cell wide and a third of a tile tall, so three
-                            // stack in the space of one asset. They open, select, and take drops like tiles do.
-                            header: Item {
-                                width: assetGrid.width
-                                readonly property var folders: assetsGuest.items.filter(a => a.folder)
-                                height: folders.length ? folderFlow.implicitHeight + 8 : 0
-                                Flow {
-                                    id: folderFlow
-                                    objectName: "assetFolderFlow"
-                                    width: parent.width
-                                    Repeater {
-                                        model: parent.parent.folders
-                                        delegate: Item {
-                                            required property var modelData
-                                            width: assetGrid.cellWidth
-                                            height: Math.max(40, Math.round(assetGrid.cellHeight / 3))
-                                            Rectangle {
-                                                readonly property bool sel: assetsGuest.isSel(modelData.path)
-                                                anchors.fill: parent; anchors.margins: 4
-                                                radius: Pal.radius
-                                                readonly property bool target: assetsGuest.dropFolder === modelData.path
-                                                color: target ? Pal.s6 : sel ? Pal.s5 : folderMouse.containsMouse ? Pal.s4 : Pal.s3
-                                                border.width: sel || target ? 2 : 1
-                                                border.color: sel || target ? Pal.focus : Pal.border
-                                                Behavior on color { ColorAnimation { duration: Pal.fast } }
-                                                RowLayout {
-                                                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
-                                                    spacing: 8
-                                                    FIcon { name: "folder"; size: 15; color: modelData.color || "#e9b949" }
-                                                    Text { visible: assetsGuest.editingPath !== modelData.path; text: modelData.name; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption; font.weight: 550; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                    InlineRename {
-                                        active: assetsGuest.editingPath === modelData.path
-                                        original: modelData.name
-                                        onRenamed: (n) => app.renameAsset(modelData.path, n)
-                                        onFinished: assetsGuest.editingPath = ""
-                                        Layout.fillWidth: true; font.pixelSize: Pal.caption
-                                    }
-                                                    Rectangle { visible: modelData.uses > 0; width: 7; height: 7; radius: 3.5; color: "#22c55e" }
-                                                }
-                                                AssetMouse {
-                                                    enabled: assetsGuest.editingPath !== modelData.path
-                                                    id: folderMouse
-                                                    asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
-                                                    folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
-                                                    onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
-                                                    onMenuRequested: (a) => { if (!assetsGuest.isSel(a.path)) assetsGuest.selected = [a.path]; assetMenu.asset = a; assetMenu.popup() }
-                                                    onMovedToFolder: (a, f) => app.moveAssets(assetsGuest.targets(a), f)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            delegate: Item {
-                                required property var modelData
-                                width: assetGrid.cellWidth
-                                height: assetGrid.cellHeight
-                                Rectangle {
-                                    id: tile
-                                    readonly property bool sel: assetsGuest.isSel(modelData.path)
-                                    anchors.fill: parent
-                                    anchors.margins: 4
-                                    radius: Pal.radius
-                                    color: sel ? Pal.s5 : tileMouse.containsMouse ? Pal.s4 : "transparent"
-                                    border.width: sel ? 2 : 0
-                                    border.color: Pal.focus
-                                    Behavior on color { ColorAnimation { duration: Pal.fast } }
-                                    Rectangle {
-                                        id: thumbBox
-                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 4 }
-                                        height: Math.round(width * 0.62)
-                                        radius: Pal.radius - 2
-                                        color: modelData.folder ? "transparent" : Pal.s1
-                                        border.width: modelData.folder ? 0 : 1; border.color: Pal.border
-                                        Image {
-                                            id: tileThumb
-                                            visible: !!modelData.thumb && status === Image.Ready
-                                            anchors.fill: parent; anchors.margins: 1
-                                            source: modelData.thumb || ""
-                                            sourceSize.width: 260
-                                            fillMode: Image.PreserveAspectCrop
-                                            asynchronous: true
-                                            layer.enabled: true
-                                            layer.effect: MultiEffect { maskEnabled: true; maskSource: tileMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
-                                        }
-                                        Rectangle { id: tileMask; anchors.fill: tileThumb; radius: Pal.radius - 3; visible: false; layer.enabled: true; layer.smooth: true }
-                                        FIcon {
-                                            visible: !tileThumb.visible
-                                            anchors.centerIn: parent
-                                            name: modelData.icon
-                                            size: modelData.folder ? 38 : 22
-                                            color: modelData.folder ? (modelData.color || "#e9b949") : Pal.muted
-                                        }
-                                        // In a scene: the same green dot as Sources.
-                                        Rectangle {
-                                            visible: !modelData.folder && modelData.uses > 0
-                                            anchors { left: parent.left; top: parent.top; margins: 6 }
-                                            width: 9; height: 9; radius: 4.5; color: "#22c55e"
-                                            border.width: 2; border.color: "#cc000000"
-                                        }
-                                        // Type corner: duration for video/audio, the extension otherwise.
-                                        Rectangle {
-                                            visible: !modelData.folder && (modelData.kind === "video" || modelData.kind === "audio" || modelData.kind === "other")
-                                            anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
-                                            width: typeRow.implicitWidth + 10; height: 17; radius: 4; color: "#cc000000"
-                                            Row {
-                                                id: typeRow
-                                                anchors.centerIn: parent
-                                                spacing: 3
-                                                FIcon { visible: modelData.kind === "video"; name: "film"; size: 10; color: Pal.fg; anchors.verticalCenter: parent.verticalCenter }
-                                                FIcon { visible: modelData.kind === "audio"; name: "audio-lines"; size: 10; color: Pal.fg; anchors.verticalCenter: parent.verticalCenter }
-                                                Text {
-                                                    text: modelData.durationMs ? assetsGuest.duration(modelData.durationMs) : (modelData.ext || "")
-                                                    color: Pal.fg; font.family: Pal.font; font.pixelSize: 10; font.weight: 600
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                }
-                                            }
-                                        }
-                                    }
-                                    // Name: up to two lines, cut at the end (search shows the folder first).
-                                    InlineRename {
-                                        active: assetsGuest.editingPath === modelData.path
-                                        original: modelData.name
-                                        onRenamed: (n) => app.renameAsset(modelData.path, n)
-                                        onFinished: assetsGuest.editingPath = ""
-                                        anchors { left: parent.left; right: parent.right; top: thumbBox.bottom; topMargin: 5; leftMargin: 6; rightMargin: 6 }
-                                        font.pixelSize: Pal.caption; horizontalAlignment: TextInput.AlignHCenter
-                                    }
-                                    Text {
-                                        visible: assetsGuest.editingPath !== modelData.path
-                                        anchors { left: parent.left; right: parent.right; top: thumbBox.bottom; topMargin: 5; leftMargin: 6; rightMargin: 6 }
-                                        text: (assetSearch.query && modelData.where ? modelData.where.split("/").pop() + " / " : "") + modelData.name
-                                        color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.caption
-                                        wrapMode: Text.WrapAnywhere
-                                        maximumLineCount: 2
-                                        elide: Text.ElideRight
-                                        horizontalAlignment: Text.AlignHCenter
-                                        lineHeight: 1.05
-                                    }
-                                    AssetMouse {
-                                        enabled: assetsGuest.editingPath !== modelData.path
-                                        id: tileMouse
-                                        asset: modelData; previewItem: win.previewItem; ghostItem: ghost; overlayItem: win.contentItem
-                                        folderAt: assetsGuest.folderAt; hoverFolder: (f) => assetsGuest.dropFolder = f
-                                        onSelectRequested: (a, mods) => assetsGuest.selectItem(a, mods)
-                                        onMenuRequested: (a) => { if (!assetsGuest.isSel(a.path)) assetsGuest.selected = [a.path]; assetMenu.asset = a; assetMenu.popup() }
-                                        onMovedToFolder: (a, f) => app.moveAssets(assetsGuest.targets(a), f)
-                                    }
-                                }
-                            }
-                        }
-                        Caption {
-                            visible: assetsGuest.items.length === 0
-                            anchors.centerIn: parent
-                            width: parent.width - 40
-                            wrapMode: Text.WordWrap
-                            horizontalAlignment: Text.AlignHCenter
-                            text: assetSearch.query ? "Nothing in assets matches \u201c" + assetSearch.text + "\u201d."
-                                : assetsGuest.raw.length ? "No " + ["", "images", "videos", "audio files"][assetsGuest.typeFilter] + " here."
-                                : app.assetPath ? chrome.keys("Empty folder. Drop files here or paste with Ctrl+V.")
-                                : "Drop images, video or audio here."
-                        }
-                        // Drop from File Explorer: files are copied into the current folder.
-                        DropArea {
-                            id: assetDrop
-                            anchors.fill: parent
-                            onEntered: (d) => d.accepted = d.hasUrls
-                            onDropped: (d) => { if (d.hasUrls) { app.importAssets(d.urls); d.acceptProposedAction() } }
-                        }
-                        Rectangle {
-                            visible: assetDrop.containsDrag
-                            anchors.fill: parent; anchors.margins: 6
-                            radius: Pal.radius + 2
-                            color: "#1a6b97ff"
-                            border.width: 2; border.color: Pal.focus
-                            Text { anchors.centerIn: parent; text: "Drop to copy into " + (app.assetPath ? app.assetPath.split("/").pop() : "assets"); color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
-                        }
-                        FMenu {
-                            id: assetMenu
-                            property var asset: ({})
-                            readonly property var sel: assetsGuest.targets(asset)
-                            readonly property bool many: sel.length > 1
-                            FMenuItem { visible: !!assetMenu.asset.folder && !assetMenu.many; height: visible ? implicitHeight : 0; text: "Open"; onTriggered: app.openAssetFolder(assetMenu.asset.path) }
-                            FMenuItem { visible: !assetMenu.asset.folder && !assetMenu.many; height: visible ? implicitHeight : 0; text: "Place on " + app.editSceneName; enabled: !!assetMenu.asset.placeable; onTriggered: app.placeAsset(assetMenu.asset.path) }
-                            FMenuItem { visible: !assetMenu.many; height: visible ? implicitHeight : 0; text: "Rename  F2"; onTriggered: assetsGuest.rename(assetMenu.asset.path) }
-                            // Folder color: a row of swatches (the first is the default yellow).
-                            Item {
-                                visible: !!assetMenu.asset.folder
-                                width: parent ? parent.width : 220
-                                height: visible ? 34 : 0
-                                Row {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: 12
-                                    spacing: 6
-                                    Repeater {
-                                        model: ["", "#ef4444", "#f97316", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899", "#a3a3a3"]
-                                        delegate: Rectangle {
-                                            required property string modelData
-                                            readonly property bool current: (assetMenu.asset.color || "") === modelData
-                                            width: 18; height: 18; radius: 9
-                                            color: modelData || "#e9b949"
-                                            border.width: current ? 2 : 0
-                                            border.color: Pal.fg
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: { for (const p of assetMenu.sel) app.setFolderColor(p, modelData); assetMenu.close() }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { text: (assetMenu.many ? "Copy " + assetMenu.sel.length + " items" : "Copy") + chrome.keys("  Ctrl C"); onTriggered: app.copyAssets(assetMenu.sel) }
-                            FMenuItem { text: (assetMenu.many ? "Cut " + assetMenu.sel.length + " items" : "Cut") + chrome.keys("  Ctrl X"); onTriggered: app.cutAssets(assetMenu.sel) }
-                            FMenuItem { text: chrome.keys("Paste here  Ctrl V"); enabled: app.clipboardHasFiles(); onTriggered: app.pasteAssets() }
-                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { visible: !assetMenu.many; height: visible ? implicitHeight : 0; text: "Show in File Explorer"; onTriggered: app.revealAsset(String(assetMenu.asset.path || "")) }
-                            FMenuItem {
-                                text: assetMenu.asset.uses && !assetMenu.many ? "In use. Remove its layers first" : "Move to Recycle Bin  Del"
-                                enabled: !(assetMenu.asset.uses && !assetMenu.many)
-                                onTriggered: app.trashAssets(assetMenu.sel)
-                            }
-                        }
-                        FMenu {
-                            id: bgMenu
-                            FMenuItem { text: chrome.keys("New folder  Ctrl N"); onTriggered: assetsGuest.newFolder() }
-                            FMenuItem { text: chrome.keys("Paste  Ctrl V"); enabled: app.clipboardHasFiles(); onTriggered: app.pasteAssets() }
-                            FMenuItem { text: "Add files…"; onTriggered: assetPicker.open() }
-                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { text: "Show folder in File Explorer"; onTriggered: app.revealAsset(assetsGuest.currentFolderPath()) }
-                        }
-                    }
-                }
+                previewItem: win.previewItem
+                ghostItem: ghost
+                overlayItem: win.contentItem
             }
         }
 
@@ -1604,276 +594,9 @@ ApplicationWindow {
             id: layersDock
             uniqueName: "layers"
             title: "Layers"
-            Rectangle {
+            LayersPanel {
                 id: layersGuest
-                property size kddockwidgets_min_size: Qt.size(280, 140) // panel minimum
-                property bool searching: false
                 anchors.fill: parent
-                color: "transparent"
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 0
-                    FPanelHeader {
-                        title: ""
-                        meta: app.editSceneName
-                        // Group, copy and delete are in the right-click menu and on the keyboard.
-                        FButton {
-                            iconName: "search"; variant: "ghost"; selected: layersGuest.searching
-                            tip: "Search layers"
-                            onClicked: { layersGuest.searching = !layersGuest.searching; if (layersGuest.searching) layerSearch.forceActiveFocus(); else layerSearch.text = "" }
-                        }
-                    }
-                    FSearchField {
-                        id: layerSearch
-                        visible: layersGuest.searching
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.bottomMargin: 4
-                        implicitHeight: 26
-                        placeholderText: "Search layers"
-                        onDismissed: { layersGuest.searching = false; text = "" }
-                    }
-                    // One right-click menu for every layer row.
-                        FMenu {
-                            id: layerMenu
-                            property var row: ({}) // the row it was opened on
-                            FMenuItem { text: "Rename"; onTriggered: layerList.rename(layerMenu.row.id) }
-                            FMenuItem { text: chrome.keys("Copy    Ctrl C"); onTriggered: app.copyLayers() }
-                            FMenuItem { text: chrome.keys("Cut    Ctrl X"); visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; onTriggered: app.cutLayers() }
-                            FMenuItem { text: chrome.keys("Paste    Ctrl V"); enabled: app.canPaste; onTriggered: app.pasteLayers(false) }
-                            FMenuItem { text: chrome.keys("Paste linked    Ctrl Shift V"); enabled: app.canPaste; onTriggered: app.pasteLayers(true) }
-                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { text: "Duplicate"; onTriggered: app.duplicateSelected() }
-                            FCopyToMenu { onCopied: layerMenu.close() }
-                            FMenuItem { text: "Group selection"; onTriggered: app.groupSelected() }
-                            FMenuItem { text: "Ungroup"; enabled: layerMenu.row.group; onTriggered: app.ungroupSelected() }
-                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { text: chrome.keys("Bring to front    Ctrl Shift ]"); onTriggered: app.moveSelected(-1000) }
-                            FMenuItem { text: chrome.keys("Bring forward    Ctrl ]"); onTriggered: app.moveSelected(-1) }
-                            FMenuItem { text: chrome.keys("Send backward    Ctrl ["); onTriggered: app.moveSelected(1) }
-                            FMenuItem { text: chrome.keys("Send to back    Ctrl Shift ["); onTriggered: app.moveSelected(1000) }
-                            MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Pal.border } }
-                            FMenuItem { visible: !layerMenu.row.background; height: visible ? implicitHeight : 0; text: "Delete"; onTriggered: app.deleteSelected() }
-                        }
-                    FluidList {
-                        id: layerList
-                        // Switching scenes replaces every row; recycling them instead of building new
-                        // ones each time was most of a scene switch on a big show (LOBS-025).
-                        reuseItems: true
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        // Searching narrows the rows (and turns off dragging: positions are the full list's).
-                        readonly property bool filtered: layerSearch.query !== ""
-                        model: RowsModel { rows: layerList.filtered ? layerList.found() : app.layers } // rows stay alive across clicks
-                        // The matches, each with the groups it's in ("Group › Group ›"), unindented.
-                        function found() {
-                            const out = [], groups = []
-                            for (const r of (app.layers, app.allLayers())) { // app.layers: re-run when they change
-                                groups.length = r.depth
-                                if (layerSearch.matches(r.name)) out.push(Object.assign({}, r, { depth: 0, path: groups.join("  ›  ") }))
-                                if (r.group) groups[r.depth] = r.name
-                            }
-                            return out
-                        }
-                        topMargin: 2
-                        // Blank space under the layers deselects (pinned to the view, not the content).
-                        MouseArea { parent: layerList; anchors.fill: parent; z: -1; onPressed: (m) => { app.clearSelection(); m.accepted = false } }
-                        // Drag and drop: a line shows where the layer lands (above/below a row); a
-                        // highlight shows dropping into a group, or, after holding over a layer a
-                        // moment, making a new group of the two.
-                        property string dragId: ""
-                        property string editingId: "" // the layer whose name is being typed in its row
-                        function rename(id) { editingId = id; const i = app.layers.findIndex(r => r.id === id); if (i >= 0) positionViewAtIndex(i, ListView.Contain) }
-                        property int dropIndex: -1
-                        property string dropMode: ""   // above | below | into | group | wait
-                        property string waitId: ""
-                        function rowAt(yInContent) {
-                            const i = indexAt(20, yInContent)
-                            if (i >= 0) return i
-                            return yInContent > 0 ? app.layers.length - 1 : 0
-                        }
-                        function dragTo(yInContent) {
-                            const L = app.layers, i = rowAt(yInContent)
-                            const row = L[i], item = itemAtIndex(i)
-                            if (!row || !item) { dropIndex = -1; return }
-                            // Not onto itself or its own children.
-                            const from = L.findIndex(r => r.id === dragId)
-                            let end = from + 1
-                            while (from >= 0 && end < L.length && L[end].depth > L[from].depth) end++
-                            const inside = from >= 0 && i >= from && i < end
-                            if (inside) { dropIndex = -1; dropMode = ""; return }
-                            const f = (yInContent - item.y) / item.height
-                            dropIndex = i
-                            if (row.background) { dropMode = "above"; waitId = "" } // the background stays last
-                            else if (f < 0.28) { dropMode = "above"; waitId = "" }
-                            else if (f > 0.72) { dropMode = "below"; waitId = "" }
-                            else if (row.group) { dropMode = "into"; waitId = "" }
-                            else if (waitId !== row.id) { waitId = row.id; dropMode = f < 0.5 ? "above" : "below"; groupTimer.restart() }
-                        }
-                        function endDrag() {
-                            const row = app.layers[dropIndex]
-                            if (dragId && row && dropMode) app.dropLayer(dragId, row.id, dropMode)
-                            dragId = ""; dropIndex = -1; dropMode = ""; waitId = ""; groupTimer.stop()
-                        }
-                        Timer { id: groupTimer; interval: 300; onTriggered: if (layerList.dragId && layerList.waitId) layerList.dropMode = "group" }
-                        // Where it lands.
-                        Rectangle {
-                            parent: layerList.contentItem
-                            readonly property var it: layerList.dropIndex >= 0 ? layerList.itemAtIndex(layerList.dropIndex) : null
-                            readonly property var row: layerList.dropIndex >= 0 ? app.layers[layerList.dropIndex] : null
-                            visible: !!it && !!row && (layerList.dropMode === "above" || layerList.dropMode === "below")
-                            x: row ? 10 + row.depth * 16 : 0
-                            width: layerList.width - x - 10
-                            height: 2; radius: 1
-                            y: it ? (layerList.dropMode === "above" ? it.y - 1 : it.y + it.height - 1) : 0
-                            color: Pal.focus
-                            z: 10
-                        }
-                        Rectangle {
-                            parent: layerList.contentItem
-                            readonly property var it: layerList.dropIndex >= 0 ? layerList.itemAtIndex(layerList.dropIndex) : null
-                            visible: !!it && (layerList.dropMode === "into" || layerList.dropMode === "group")
-                            x: 4; width: layerList.width - 8
-                            y: it ? it.y + 1 : 0; height: it ? it.height - 2 : 0
-                            radius: Pal.radius - 2
-                            color: "transparent"
-                            border.width: 2; border.color: Pal.focus
-                            z: 10
-                            Text {
-                                anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
-                                text: layerList.dropMode === "group" ? "New group" : "Move into group"
-                                color: Pal.focus; font.family: Pal.font; font.pixelSize: Pal.caption
-                            }
-                        }
-                        delegate: Item {
-                            required property var modelData
-                            required property int index
-                            width: ListView.view.width
-                            height: Pal.ctl + 2
-                            // A recycled row's index is -1 for a moment, the same as "no row hovered": checking
-                            // hoverIndex >= 0 keeps every row's buttons from flashing on a scene or layout switch.
-                            readonly property bool ready: !!modelData && modelData.id !== undefined
-                            readonly property bool showTools: ready && ((layerList.hoverIndex >= 0 && layerList.hoverIndex === index) || modelData.selected === true)
-                            // A recycled row waiting in the pool is hidden and gives up focus.
-                            ListView.onPooled: { visible = false; focus = false }
-                            ListView.onReused: visible = true
-                            Rectangle { anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 1; anchors.bottomMargin: 1; radius: Pal.radius - 2; color: Pal.selected; visible: modelData.selected }
-                            opacity: layerList.dragId === modelData.id ? 0.45 : 1
-                            MouseArea {
-                                Accessible.role: Accessible.ListItem
-                                Accessible.name: String(modelData.name || "Layer")
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                property real pressY: 0
-                                property bool dragged: false
-                                preventStealing: dragged
-                                onPressed: (m) => { pressY = m.y; dragged = false }
-                                onPositionChanged: (m) => {
-                                    if (!(m.buttons & Qt.LeftButton)) return
-                                    if (!dragged && !layerList.filtered && Math.abs(m.y - pressY) > 5 && !modelData.background) { dragged = true; layerList.dragId = modelData.id }
-                                    if (dragged) layerList.dragTo(mapToItem(layerList.contentItem, m.x, m.y).y)
-                                }
-                                onReleased: if (dragged) layerList.endDrag()
-                                onCanceled: { dragged = false; layerList.dragId = ""; layerList.dropIndex = -1 }
-                                onClicked: (m) => {
-                                    if (dragged) return
-                                    if (m.modifiers & Qt.ShiftModifier) app.selectLayerRange(modelData.id) // everything between
-                                    else app.selectLayer(modelData.id, m.modifiers & Qt.ControlModifier)
-                                    if (m.button === Qt.RightButton) { layerMenu.row = modelData; layerMenu.popup() }
-                                }
-                                onDoubleClicked: layerList.rename(modelData.id)
-                            }
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 12 + modelData.depth * 16
-                                anchors.rightMargin: 8
-                                spacing: 6
-                                Rectangle { width: 6; height: 6; radius: 3; color: modelData.color; visible: !modelData.group }
-                                // A group opens and closes; closed, its layers are out of the list.
-                                FIcon {
-                                    visible: modelData.group
-                                    name: modelData.collapsed ? "chevron-right" : "chevron-down"
-                                    color: chevronMouse.containsMouse ? Pal.fg : Pal.muted
-                                    Layout.leftMargin: -6
-                                    MouseArea {
-                                        id: chevronMouse
-                                        anchors.fill: parent; anchors.margins: -4
-                                        hoverEnabled: true
-                                        Accessible.role: Accessible.Button
-                                        Accessible.name: modelData.collapsed ? "Show the group's layers" : "Hide the group's layers"
-                                        onClicked: app.setGroupCollapsed(modelData.id, !modelData.collapsed)
-                                    }
-                                }
-                                FIcon { name: modelData.icon; color: modelData.visible ? Pal.fg : Pal.muted }
-                                // The name, and while searching the groups it's in before it. The name keeps
-                                // its width; the groups take what's left and shorten from the right (names are known by how they start).
-                                Item {
-                                    id: nameBox
-                                    visible: layerList.editingId !== modelData.id
-                                    Layout.fillWidth: true
-                                    implicitHeight: nameText.implicitHeight
-                                    readonly property real sepW: pathText.visible ? sepText.implicitWidth + 8 : 0
-                                    implicitWidth: (pathText.visible ? pathText.implicitWidth : 0) + sepW + nameText.implicitWidth
-                                    clip: true
-                                    Body {
-                                        id: pathText
-                                        visible: !!modelData.path
-                                        text: modelData.path || ""
-                                        color: Pal.muted; elide: Text.ElideRight
-                                        width: Math.max(0, Math.min(implicitWidth, nameBox.width - nameText.width - nameBox.sepW))
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                    Body {
-                                        id: sepText
-                                        visible: pathText.visible
-                                        x: pathText.width + 4
-                                        text: "›"; color: Pal.muted
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                    Body {
-                                        id: nameText
-                                        x: pathText.visible ? pathText.width + nameBox.sepW : 0
-                                        text: modelData.name + (modelData.collapsed ? "  ·  " + modelData.childCount : "")
-                                        color: modelData.visible ? Pal.fg : Pal.muted; font.weight: modelData.selected ? 550 : 400
-                                        width: Math.min(implicitWidth, nameBox.width - (pathText.visible ? Math.min(pathText.implicitWidth, 24) + nameBox.sepW : 0))
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                }
-                                InlineRename {
-                                    active: layerList.editingId === modelData.id
-                                    original: modelData.name
-                                    Layout.fillWidth: true
-                                    onRenamed: (n) => app.renameLayer(modelData.id, n)
-                                    onFinished: layerList.editingId = ""
-                                }
-                                FIcon { visible: modelData.linked; name: "link-2"; color: Pal.link; ToolTip.text: "Linked with another scene" }
-                                FBadge { visible: modelData.fx > 0; text: modelData.fx + " fx" }
-                                Row {
-                                    id: rowTools
-                                    spacing: 0
-                                    opacity: showTools ? 1 : 0
-                                    // Hidden, it takes no room: names use the row's width until you hover or select.
-                                    Layout.preferredWidth: showTools ? implicitWidth : 0
-                                    clip: true
-                                    // Fades on hover only: a list rebuilt for another scene or layout doesn't flash them.
-                                    property bool settled: false
-                                    Component.onCompleted: Qt.callLater(() => settled = true)
-                                    Behavior on opacity { enabled: rowTools.settled; NumberAnimation { duration: Pal.fast } }
-                                    FButton { visible: ready && !modelData.background; iconName: "chevron-up"; variant: "ghost"; onClicked: app.moveLayer(modelData.id, -1); tip: "Move up" }
-                                    FButton { visible: ready && !modelData.background; iconName: "chevron-down"; variant: "ghost"; onClicked: app.moveLayer(modelData.id, 1); tip: "Move down" }
-                                    FButton { iconName: modelData.locked ? "lock" : "lock-open"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: modelData.locked ? "Unlock" : "Lock" }
-                                }
-                                FButton { visible: ready && modelData.locked === true && !showTools; iconName: "lock"; variant: "ghost"; onClicked: app.toggleLock(modelData.id); tip: "Unlock" }
-                                FButton { iconName: modelData.visible ? "eye" : "eye-off"; variant: "ghost"; onClicked: app.toggleVisible(modelData.id); tip: modelData.visible ? "Hide" : "Show" }
-                            }
-                        }
-                        Caption {
-                            visible: app.layers.length === 0
-                            anchors.centerIn: parent
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Empty scene.\nDrag a source from Sources onto the canvas."
-                        }
-                    }
-                }
             }
         }
 
@@ -1881,7 +604,10 @@ ApplicationWindow {
             id: inspectorDock
             uniqueName: "inspector"
             title: "Inspector"
-            Loader { id: inspectorGuest; property size kddockwidgets_min_size: Qt.size(280, 200); anchors.fill: parent; sourceComponent: inspectorView }
+            InspectorPanel {
+                id: inspectorGuest
+                anchors.fill: parent
+            }
         }
 
         KDDW.DockWidget {
@@ -1891,7 +617,6 @@ ApplicationWindow {
             Loader { id: historyGuest; property size kddockwidgets_min_size: Qt.size(240, 120); anchors.fill: parent; sourceComponent: historyView }
         }
 
-        // Twitch panels (closed until setup or the Window menu opens them).
         KDDW.DockWidget {
             id: chatDock
             uniqueName: "twitchChat"
@@ -1914,7 +639,6 @@ ApplicationWindow {
                 sourceComponent: TwitchPanel { kind: "info"; live: infoDock.isOpen; channel: win.twitchChannel; onChannelPicked: (c) => win.setTwitchChannel(c) }
             }
         }
-        // Plugin docks (OBS's frontend API), one panel each; PluginPanel embeds the plugin's widget.
         Instantiator {
             model: app.pluginDocks()
             delegate: KDDW.DockWidget {
@@ -1958,7 +682,6 @@ ApplicationWindow {
                 property size kddockwidgets_min_size: Qt.size(280, 200)
                 anchors.fill: parent
                 clip: true
-                // Built the first time the panel opens, not at startup.
                 Loader {
                     active: statsDock.isOpen || item
                     anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
@@ -1989,34 +712,27 @@ ApplicationWindow {
             addDockWidget(inspectorDock, KDDW.KDDockWidgets.Location_OnBottom, layersDock, Qt.size(0, 520))
             inspectorDock.addDockWidgetAsTab(historyDock)
             inspectorDock.dockWidget.setAsCurrentTab()
-            poolDock.addDockWidgetAsTab(audioDock) // Audio Mixer as a tab next to Sources
+            poolDock.addDockWidgetAsTab(audioDock)
             poolDock.dockWidget.setAsCurrentTab()
-            // Remember this arrangement for "Reset layout", then bring back the user's own.
             layoutSaver.saveToFile(win.defaultLayoutFile)
             layoutSaver.restoreFromFile(win.layoutFile)
-            if (!win.panels.some(d => d.isOpen)) // a broken save shouldn't leave you with no panels
+            if (!win.panels.some(d => d.isOpen))
                 layoutSaver.restoreFromFile(win.defaultLayoutFile)
-            // Layouts saved before the Asset Library existed: dock it under Sources, once, after
-            // the restore has settled (docking during the restore leaves it floating).
             if (app.firstTime("assetsDocked"))
                 Qt.callLater(() => addDockWidget(assetsDock, KDDW.KDDockWidgets.Location_OnBottom, poolDock, Qt.size(0, 300)))
             win.layoutReady = true
         }
     }
     KDDW.LayoutSaver { id: layoutSaver }
-    // v2: the video became a panel; layouts saved before that don't fit, so they're left behind.
     readonly property string layoutFile: app.dataFolder + "/layout-v2.json"
     readonly property string defaultLayoutFile: app.dataFolder + "/layout-default-v2.json"
-    // Save the arrangement while running (survives crashes). Not on close: by then the panels
-    // have been closed by the shutdown itself, and that would be saved as "all panels closed".
     property bool layoutReady: false
-    Timer { interval: 3000; repeat: true; running: win.layoutReady; onTriggered: layoutSaver.saveToFile(win.layoutFile) }
-    onClosing: { layoutReady = false; app.closeProjectors() }
-    property var pluginPanels: [] // plugin docks' panels (see the Instantiator by feedDock)
+    Timer { interval: 30000; repeat: true; running: win.layoutReady; onTriggered: layoutSaver.saveToFile(win.layoutFile) }
+    onClosing: { if (layoutReady) layoutSaver.saveToFile(win.layoutFile); layoutReady = false; app.closeProjectors() }
+    property var pluginPanels: []
     readonly property var panels: [scenesDock, poolDock, assetsDock, layersDock, inspectorDock, audioDock, historyDock, statsDock, captionsDock, chatDock, infoDock, feedDock].concat(pluginPanels)
     property Item previewItem: null
 
-    // Docked panels are moved with LOBS's own drag (keeps their slot until the drop).
     readonly property var panelDrag: panelDragController
     PanelDragController {
         id: panelDragController
@@ -2036,7 +752,6 @@ ApplicationWindow {
         ]
     }
 
-    // Drag ghost that follows the cursor while dragging a pool source.
     Rectangle {
         id: ghost
         visible: false
@@ -2054,425 +769,12 @@ ApplicationWindow {
             Text { id: ghostText; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; anchors.verticalCenter: parent.verticalCenter } }
     }
 
-    // ---------------- inspector ----------------
-
-    Component {
-        id: inspectorView
-        FScrollView {
-            id: sv
-            clip: true
-            contentWidth: availableWidth
-            property var d: app.inspector
-            ColumnLayout {
-                width: sv.availableWidth
-                spacing: 0
-                Item { implicitHeight: 8 } // room under the panel's tabs for whatever is selected
-
-                // A drawing tool is picked and nothing is selected: its colors and width for the next
-                // thing you draw. (A selected shape shows its own in the layer section instead.)
-                ColumnLayout {
-                    id: toolDefaults
-                    readonly property string t: app.tool
-                    readonly property bool usesFill: t === "rect" || t === "ellipse" || t === "laser"
-                    readonly property bool usesStroke: t !== "laser"
-                    readonly property bool lineTool: t === "arrow" || t === "pencil"
-                    readonly property var names: ({ text: "Text", rect: "Rectangle", ellipse: "Ellipse", arrow: "Arrow", pencil: "Pencil", laser: "Laser pointer" })
-                    visible: sv.d.mode === "none" && t !== "select"
-                    Layout.fillWidth: true
-                    Layout.margins: 14
-                    spacing: 10
-                    Text { text: toolDefaults.names[toolDefaults.t] || ""; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: 550 }
-                    Caption {
-                        Layout.fillWidth: true; wrapMode: Text.WordWrap
-                        text: toolDefaults.t === "laser" ? "A fading trail. Nothing is added to the scene."
-                            : toolDefaults.t === "text" ? "Drag up or down to set the size, then type. Esc or click away to finish."
-                                                         : "Applies to the next shape. Select a shape to change it."
-                    }
-                    RowLayout {
-                        visible: toolDefaults.t === "text"
-                        Layout.fillWidth: true; spacing: 4
-                        FFontPicker { Layout.fillWidth: true; currentFont: app.toolFont; onPicked: (f) => app.toolFont = f }
-                        FButton { text: "B"; font.bold: true; variant: "ghost"; selected: app.toolBold; tip: "Bold"; implicitWidth: Pal.ctl; onClicked: app.toolBold = !app.toolBold }
-                        FButton { text: "I"; font.italic: true; variant: "ghost"; selected: app.toolItalic; tip: "Italic"; implicitWidth: Pal.ctl; onClicked: app.toolItalic = !app.toolItalic }
-                    }
-                    RowLayout {
-                        visible: toolDefaults.usesFill
-                        Layout.fillWidth: true; spacing: 6
-                        Text { text: toolDefaults.t === "laser" ? "Color" : "Fill"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 44 }
-                        FColorField { Layout.fillWidth: true; color: app.toolFill; onPicked: (c) => app.toolFill = c }
-                        FButton { visible: toolDefaults.t !== "laser"; text: "None"; variant: "ghost"; selected: !app.toolFill; tip: "No fill (outline only)"; onClicked: app.toolFill = "" }
-                    }
-                    RowLayout {
-                        visible: toolDefaults.usesStroke
-                        Layout.fillWidth: true; spacing: 6
-                        Text { text: toolDefaults.lineTool || toolDefaults.t === "text" ? "Color" : "Stroke"; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 44 }
-                        FColorField { Layout.fillWidth: true; color: app.toolStroke; onPicked: (c) => app.toolStroke = c }
-                    }
-                    FFillSlider {
-                        visible: toolDefaults.t === "laser"
-                        Layout.fillWidth: true
-                        label: "Trail length"
-                        from: 150; to: 2000; decimals: 0
-                        value: app.laserTrailMs
-                        format: (v) => (v / 1000).toFixed(2) + " s"
-                        onReleased: (v) => app.laserTrailMs = Math.round(v)
-                    }
-                    FFillSlider {
-                        visible: toolDefaults.usesStroke && toolDefaults.t !== "text"
-                        Layout.fillWidth: true
-                        label: toolDefaults.lineTool ? "Thickness" : "Stroke width"
-                        from: 0; to: 48; decimals: 0
-                        value: app.toolStrokeWidth
-                        format: (v) => Math.round(v) + " px"
-                        onReleased: (v) => app.toolStrokeWidth = Math.round(v)
-                    }
-                }
-
-                Caption {
-                    visible: sv.d.mode === "none" && app.tool === "select"
-                    Layout.fillWidth: true
-                    Layout.margins: 24
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: "Select a layer or source to edit it."
-                }
-
-                ColumnLayout {
-                    // Groups and multi-selections get a title; a layer is titled under its source instead.
-                    visible: sv.d.mode === "group" || sv.d.mode === "multi" || (sv.d.mode === "layer" && !sv.d.source)
-                    Layout.fillWidth: true
-                    Layout.margins: 12
-                    Layout.topMargin: 4
-                    spacing: 2
-                    Row {
-                        spacing: 8
-                        FIcon { visible: sv.d.mode !== "multi"; size: 16; name: sv.d.mode === "group" ? "folder" : (sv.d.sourceIcon || ""); anchors.verticalCenter: parent.verticalCenter }
-                        Text { text: sv.d.mode === "multi" ? sv.d.count + " layers" : (sv.d.name || ""); color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; anchors.verticalCenter: parent.verticalCenter }
-                    }
-                    // (Which source, where it's used and its size are in the Source section below.)
-                }
-
-                SourceSection {
-                    visible: sv.d.mode === "layer" && !!sv.d.source
-                    src: sv.d.source || ({})
-                    topDivider: false
-                }
-
-                FSection {
-                    visible: sv.d.mode === "layer" || sv.d.mode === "group"
-                    title: "Transform"; group: "transform"; linkedWith: sv.d.linkTransform || ""; sections: sv.d.sections || ({})
-                    // One labeled row per property, each action beside the value it changes: Center
-                    // with position; the aspect lock and Fit / Fill / Original with size; the flips
-                    // with rotation. Drag any field sideways to scrub it.
-                    ColumnLayout {
-                        id: tf
-                        readonly property bool isLayer: sv.d.mode === "layer"
-                        property bool lockAspect: app.uiFlag("inspector/lockAspect", true)
-                        spacing: 6; Layout.fillWidth: true
-                        RowLayout {
-                            visible: tf.isLayer
-                            spacing: 4; Layout.fillWidth: true
-                            RowLabel { text: "Layer fit" }
-                            FButton { iconName: "shrink"; text: "Fit"; variant: "ghost"; onClicked: app.fit("fit"); tip: "Fit inside the canvas, keeping proportions" }
-                            FButton { iconName: "expand"; text: "Fill"; variant: "ghost"; onClicked: app.fit("fill"); tip: "Cover the whole canvas, keeping proportions" }
-                            FButton { iconName: "ratio"; text: "Original"; variant: "ghost"; onClicked: app.fit("aspect"); tip: "Use the source's proportions" }
-                            Item { Layout.fillWidth: true }
-                        }
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true
-                            RowLabel { text: "Position" }
-                            FNumField { label: "X"; live: true; value: sv.d.x || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("x", v); onScrubbed: (v, f) => app.scrubTransform("x", v, f) }
-                            FNumField { label: "Y"; live: true; value: sv.d.y || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("y", v); onScrubbed: (v, f) => app.scrubTransform("y", v, f) }
-                            FButton { visible: tf.isLayer; iconName: "crosshair"; variant: "ghost"; tip: "Center on the canvas"; onClicked: app.fit("center") }
-                        }
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true
-                            RowLabel { text: "Size" }
-                            FNumField { label: "W"; live: true; from: 1; value: sv.d.w || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setSize("w", v, tf.lockAspect); onScrubbed: (v, f) => app.scrubTransform("w", v, f, tf.lockAspect) }
-                            FNumField { label: "H"; live: true; from: 1; value: sv.d.h || 0; enabled: tf.isLayer; Layout.fillWidth: true; onCommit: (v) => app.setSize("h", v, tf.lockAspect); onScrubbed: (v, f) => app.scrubTransform("h", v, f, tf.lockAspect) }
-                            FButton {
-                                visible: tf.isLayer
-                                iconName: tf.lockAspect ? "link-2" : "unlink-2"
-                                variant: "ghost"; selected: tf.lockAspect
-                                tip: tf.lockAspect ? "Unlock proportions" : "Lock proportions"
-                                onClicked: { tf.lockAspect = !tf.lockAspect; app.setUiFlag("inspector/lockAspect", tf.lockAspect) }
-                            }
-                        }
-                        RowLayout {
-                            visible: tf.isLayer
-                            spacing: 6; Layout.fillWidth: true
-                            RowLabel { text: "Rotate" }
-                            FNumField { suffix: "°"; live: true; from: -360; to: 360; value: sv.d.rot || 0; Layout.fillWidth: true; onCommit: (v) => app.setTransform("rot", v); onScrubbed: (v, f) => app.scrubTransform("rot", v, f) }
-                            FButton { iconName: "flip-horizontal-2"; variant: "ghost"; selected: !!sv.d.flipH; tip: "Mirror left to right"; onClicked: app.setTransform("flipH", sv.d.flipH ? 0 : 1) }
-                            FButton { iconName: "flip-vertical-2"; variant: "ghost"; selected: !!sv.d.flipV; tip: "Mirror top to bottom"; onClicked: app.setTransform("flipV", sv.d.flipV ? 0 : 1) }
-                        }
-                    }
-                }
-
-                FSection {
-                    // Crop (pictures: captures, images, video, browser) folded into one summary row,
-                    // and rounded corners (any layer).
-                    id: cropSec
-                    readonly property bool croppable: !!sv.d.croppable
-                    readonly property real va: sv.d.visibleAspect || 0
-                    readonly property bool cropped: !!(sv.d.cl || sv.d.ct || sv.d.cr || sv.d.cb)
-                    property bool open: app.uiFlag("inspector/cropOpen", false)
-                    readonly property var ratios: [0, 16 / 9, 4 / 3, 1, 9 / 16]
-                    readonly property int ratioIndex: Math.max(0, ratios.findIndex(r => r > 0 && Math.abs(app.cropAspect - r) < 0.001))
-                    visible: sv.d.mode === "layer"
-                    title: croppable ? "Crop & corners" : "Corners"; group: "crop"; linkedWith: sv.d.linkCrop || ""; sections: sv.d.sections || ({})
-                    RowLayout {
-                        visible: cropSec.croppable
-                        spacing: 6; Layout.fillWidth: true
-                        RowLabel { text: "Crop" }
-                        // Cropping on the canvas is the main way in; exact values sit behind More.
-                        FButton {
-                            Layout.fillWidth: true
-                            iconName: "crop"; text: app.cropMode ? "Done" : "Crop"
-                            variant: app.cropMode ? "primary" : "secondary"
-                            tip: app.cropMode ? "Finish cropping (Enter). Esc cancels." : "Drag an edge on the canvas to crop, or inside to move it. Shortcut: double-click a layer."
-                            onClicked: app.cropMode = !app.cropMode
-                        }
-                        FButton {
-                            variant: "ghost"
-                            iconName: cropSec.open ? "chevron-up" : "chevron-down"
-                            tip: cropSec.open ? "Hide crop values" : "Show crop values"
-                            onClicked: { cropSec.open = !cropSec.open; app.setUiFlag("inspector/cropOpen", cropSec.open) }
-                        }
-                    }
-                    // The ratio the crop handles keep. Picking one crops to it, centered; the layer
-                    // keeps its scale. Free lets the edges move on their own (Shift still holds a ratio).
-                    RowLayout {
-                        visible: cropSec.croppable
-                        Layout.fillWidth: true; spacing: 6
-                        RowLabel { text: "Aspect" }
-                        FTabs { model: ["Free", "16:9", "4:3", "1:1", "9:16"]; currentIndex: cropSec.ratioIndex; onActivated: (i) => app.setCropAspect(cropSec.ratios[i]) }
-                        Item { Layout.fillWidth: true }
-                    }
-                    RowLayout {
-                        visible: cropSec.croppable && cropSec.open
-                        spacing: 6; Layout.fillWidth: true
-                        RowLabel {}
-                        FNumField { label: "L"; live: true; from: 0; value: sv.d.cl || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("l", v); onScrubbed: (v, f) => app.scrubCrop("l", Math.round(v), f) }
-                        FNumField { label: "T"; live: true; from: 0; value: sv.d.ct || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("t", v); onScrubbed: (v, f) => app.scrubCrop("t", Math.round(v), f) }
-                        FNumField { label: "R"; live: true; from: 0; value: sv.d.cr || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("r", v); onScrubbed: (v, f) => app.scrubCrop("r", Math.round(v), f) }
-                        FNumField { label: "B"; live: true; from: 0; value: sv.d.cb || 0; Layout.fillWidth: true; onCommit: (v) => app.setCrop("b", v); onScrubbed: (v, f) => app.scrubCrop("b", Math.round(v), f) }
-                        FButton { iconName: "rotate-ccw"; variant: "ghost"; enabled: cropSec.cropped; tip: "Remove the crop"; onClicked: app.cropToAspect(0) }
-                    }
-                    // Rounded corners: 50% of the short side makes a square a circle; the slider's
-                    // ends are square and round.
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 6
-                        RowLabel { text: "Corners" }
-                        FFillSlider {
-                            Layout.fillWidth: true
-                            label: ""
-                            from: 0; to: 50; decimals: 0
-                            value: sv.d.radius || 0
-                            format: (v) => v <= 0.5 ? "Square" : v >= 49.5 ? "Round" : Math.round(v) + "%"
-                            onMoved: (v) => app.setCornerRadius(v, false)
-                            onReleased: (v) => app.setCornerRadius(v, true)
-                        }
-                    }
-                }
-
-                FSection {
-                    visible: sv.d.mode === "layer"
-                    title: "Filters"; group: "filters"; linkedWith: sv.d.linkFilters || ""; sections: sv.d.sections || ({})
-                    Repeater {
-                        id: filterCards
-                        // Keyed by position, not by the filter objects: values change on every slider
-                        // move, and a new model array would recreate the slider mid-drag.
-                        // Cards are kept once built and hidden when a layer has fewer filters:
-                        // building and dropping them on every click kept memory each time (LOBS-039).
-                        readonly property int shown: (sv.d.filters || []).length
-                        property int built: 0
-                        onShownChanged: built = Math.max(built, shown)
-                        Component.onCompleted: built = shown
-                        model: built
-                        delegate: Rectangle {
-                            id: card
-                            required property int index
-                            // A hidden card keeps its last filter, so its controls stay built.
-                            property var modelData: ({ enabled: false, label: "", params: [] })
-                            readonly property var live: (sv.d.filters || [])[index]
-                            onLiveChanged: if (live) modelData = live
-                            Component.onCompleted: if (live) modelData = live
-                            visible: index < filterCards.shown
-                            Layout.fillWidth: true
-                            implicitHeight: fcol.implicitHeight + 16
-                            radius: Pal.radius + 2
-                            color: Pal.s3
-                            border.width: 1
-                            border.color: Pal.border
-                            ColumnLayout {
-                                id: fcol
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 6
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    FSwitch { checked: card.modelData.enabled; onClicked: app.toggleFilter(card.index) }
-                                    Body { text: card.modelData.label; font.weight: 550; Layout.fillWidth: true; Layout.leftMargin: 4 }
-                                    FButton { iconName: "trash-2"; variant: "ghost"; onClicked: app.removeFilter(card.index); tip: "Remove filter" }
-                                }
-                                // A plugin's filter: its own settings, from OBS.
-                                ObsProperties {
-                                    visible: !!card.modelData.obs && !!card.modelData.loaded && card.visible
-                                    active: visible
-                                    scope: "filter"; targetId: card.modelData.layer || ""; index: card.index
-                                }
-                                Caption {
-                                    visible: !!card.modelData.obs && !card.modelData.loaded
-                                    Layout.fillWidth: true; wrapMode: Text.WordWrap
-                                    text: "Its plugin isn't loaded, so this filter does nothing. Add the plugin in Settings > Plugins."
-                                }
-                                Repeater {
-                                    id: paramRows
-                                    // Kept like the cards: a filter with fewer settings hides the rest.
-                                    readonly property int shown: card.modelData.params.length
-                                    property int built: 0
-                                    onShownChanged: built = Math.max(built, shown)
-                                    Component.onCompleted: built = shown
-                                    model: built
-                                    // One control per setting, by kind (see native/src/model/video_fx.h).
-                                    delegate: Loader {
-                                        required property int index
-                                        Layout.fillWidth: true
-                                        property var p: ({ key: "", kind: "slider", value: 0, visible: false })
-                                        readonly property var live: card.modelData.params[index]
-                                        onLiveChanged: if (live) p = live
-                                        Component.onCompleted: if (live) p = live
-                                        visible: index < paramRows.shown && p.visible
-                                        active: p.visible
-                                        sourceComponent: p.kind === "color" ? colorParam : p.kind === "choice" ? choiceParam : p.kind === "file" ? fileParam
-                                                       : p.kind === "toggle" ? toggleParam : numParam
-                                        Component {
-                                            id: numParam
-                                            FFillSlider {
-                                                label: p.label
-                                                from: p.min; to: p.max; decimals: p.decimals; displayScale: p.scale; suffix: p.suffix
-                                                value: Number(p.value)
-                                                onMoved: (v) => app.setFilterValue(card.index, p.key, v, false)
-                                                onReleased: (v) => app.setFilterValue(card.index, p.key, v, true)
-                                            }
-                                        }
-                                        Component {
-                                            id: colorParam
-                                            RowLayout {
-                                                spacing: 6
-                                                Text { text: p.label; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.fillWidth: true }
-                                                FColorField { color: String(p.value); onPicked: (c) => app.setFilterValue(card.index, p.key, c, true) }
-                                            }
-                                        }
-                                        Component {
-                                            id: choiceParam
-                                            RowLayout {
-                                                spacing: 6
-                                                Text { text: p.label; color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.caption; Layout.preferredWidth: 90 }
-                                                FSelect {
-                                                    Layout.fillWidth: true
-                                                    options: p.options
-                                                    currentValue: String(p.value)
-                                                    placeholder: String(p.value) // a value from an OBS import that isn't in the list
-                                                    onPicked: (v) => app.setFilterValue(card.index, p.key, v, true)
-                                                }
-                                            }
-                                        }
-                                        Component {
-                                            id: fileParam
-                                            RowLayout {
-                                                spacing: 6
-                                                FInput {
-                                                    Layout.fillWidth: true
-                                                    placeholderText: p.label
-                                                    text: String(p.value)
-                                                    onEditingFinished: if (text !== String(p.value)) app.setFilterValue(card.index, p.key, text, true)
-                                                }
-                                                FButton {
-                                                    iconName: "folder-open"; variant: "ghost"; tip: "Choose " + p.label.toLowerCase()
-                                                    onClicked: filterFilePicker.pick(card.index, p.key, p.label, p.fileFilter)
-                                                }
-                                            }
-                                        }
-                                        Component {
-                                            id: toggleParam
-                                            FSwitch { text: p.label; checkable: false; checked: !!p.value; onClicked: app.setFilterValue(card.index, p.key, !p.value, true) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    FSelect {
-                        Layout.fillWidth: true
-                        placeholder: "Add filter…"
-                        options: app.filterTypes()
-                        onPicked: (v) => app.addFilter(v)
-                    }
-                    FileDialog {
-                        id: filterFilePicker
-                        property int filterIndex: -1
-                        property string key
-                        function pick(index, k, label, filter) {
-                            filterIndex = index; key = k; title = label
-                            nameFilters = [filter, "All files (*)"]
-                            open()
-                        }
-                        onAccepted: app.setFilterValue(filterIndex, key, decodeURIComponent(selectedFile.toString().replace(/^file:\/{3}/, "")), true)
-                    }
-                }
-
-                FSection {
-                    visible: sv.d.mode === "layer" || sv.d.mode === "group" || sv.d.mode === "multi"
-                    title: "Visibility"; group: "visibility"; linkedWith: sv.d.linkVisibility || ""; sections: sv.d.sections || ({})
-                    FSwitch { text: "Visible"; checked: sv.d.visible !== false; onClicked: app.setVisibleFlag(checked) }
-                    FFillSlider {
-                        Layout.fillWidth: true
-                        label: "Opacity"
-                        value: sv.d.opacity !== undefined ? sv.d.opacity : 1
-                        decimals: 0; displayScale: 100; suffix: "%"
-                        onMoved: (v) => app.setOpacity(v, false)
-                        onReleased: (v) => app.setOpacity(v, true)
-                    }
-                }
-
-                ColumnLayout {
-                    visible: sv.d.mode === "source"
-                    Layout.fillWidth: true
-                    Layout.margins: 12
-                    Layout.topMargin: 4
-                    spacing: 8
-                    Row { spacing: 8
-                        FIcon { size: 16; name: sv.d.icon || ""; anchors.verticalCenter: parent.verticalCenter }
-                        Text { text: sv.d.name || ""; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.title; font.weight: 550; anchors.verticalCenter: parent.verticalCenter } }
-                    SourceFields { d: sv.d; active: sv.d.mode === "source" }
-                    // Sources with sound: what the mixer's "..." used to open, here instead.
-                    AudioSettings {
-                        readonly property var entry: sv.d.mode === "source" ? app.mixer.find(m => m.id === sv.d.id) : undefined
-                        visible: !!entry
-                        s: entry || ({ id: "", name: "", icon: "", volume: 0, muted: false, monitor: "off", tracks: [], global: true, warnings: [], fx: [], mono: false, balance: 0.5, syncMs: 0 })
-                        Layout.fillWidth: true; Layout.topMargin: 8
-                    }
-                    // Where a picture source is placed (audio-only sources play everywhere: nothing to list).
-                    Text { visible: !!sv.d.video; text: "Used in"; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.subtitle; font.weight: 550; Layout.topMargin: 8 }
-                    Repeater {
-                        model: sv.d.video ? (sv.d.usedIn || []) : []
-                        delegate: FButton { required property var modelData; text: modelData.scene; variant: "ghost"; onClicked: { app.editScene(modelData.sceneId); app.selectLayer(modelData.instId, false) } }
-                    }
-                    Caption { visible: !!sv.d.video && (sv.d.usedIn || []).length === 0; text: "Not in any scene. Drag it onto the canvas."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                }
-                Item { Layout.fillHeight: true }
-            }
-        }
-    }
-
     Component { id: mixerView; MixerView {} }
 
     Component {
         id: historyView
         FluidList {
-            model: RowsModel { rows: app.history } // rows stay alive across edits
+            model: RowsModel { rows: app.history }
             topMargin: 2
             delegate: Item {
                 required property var modelData
@@ -2494,344 +796,21 @@ ApplicationWindow {
     }
 
     // ---------------- dialogs ----------------
-    FDialog {
+    AddSourceDialog {
         id: addDialog
-        title: "Add a source"
-        width: 600
-        // The last kind picked comes back next time.
-        property string kind: app.uiValue("addSource/kind", "camera")
-        // Camera, display, window and audio devices are picked here, before the source exists
-        // (a window has no sensible default, so Add waits for one).
-        readonly property bool picksDevice: ["camera", "display", "window", "mic", "desktop_audio"].indexOf(kind) >= 0
-        readonly property bool audioKind: kind === "mic" || kind === "desktop_audio"
-        property var devices: []
-        property string device: ""
-        property string deviceName: ""
-        property bool mono: false
-        property var browserSt: ({})
-        property bool adding: false // the preview lets go of the device before the real source opens it
-        // Windows sometimes answers with no cameras while one is starting or running: the last good
-        // list is kept, and an empty answer is asked again a few times.
-        property var goodLists: ({})
-        property int retries: 0
-        Timer { id: deviceRetry; interval: 400; onTriggered: addDialog.refreshDevices(true) }
-        function refreshDevices(retry) {
-            // Asked for the kind showing now, every time it changes or the dialog opens.
-            const k = kind
-            if (!retry) { retries = 0; deviceRetry.stop() }
-            let list = picksDevice ? app.devicesForKind(k) : []
-            if (k !== kind)
-                return
-            if (list.length) {
-                const g = Object.assign({}, goodLists); g[k] = list; goodLists = g
-            } else if (picksDevice && k !== "window") {
-                if (retries++ < 5) deviceRetry.restart()
-                list = goodLists[k] || []
-            }
-            if (retry && list.length && devices.length && device)
-                return // already showing a list (and a pick): keep it
-            // One already open (in the show, or another app) says so, and a free one is picked first.
-            const mine = d => onlyOnce && app.sourceUsingDevice(k, d.value) !== ""
-            devices = list.map(d => mine(d) ? Object.assign({}, d, { name: d.name + " (in your show)" })
-                                  : d.inUse ? Object.assign({}, d, { name: d.name + " (in use)" }) : d)
-            const real = d => d.name.toLowerCase().indexOf("virtual") < 0
-            const first = list.find(d => real(d) && !d.inUse && !mine(d)) || list.find(d => real(d) && !mine(d)) || list.find(real) || list[0]
-            device = k !== "window" && first ? first.value : ""
-            deviceName = k !== "window" && first ? first.name : ""
-        }
-        function setBrowser(key, value) {
-            const s = Object.assign({}, browserSt)
-            if (value === undefined) delete s[key]; else s[key] = value
-            browserSt = s
-        }
-        // Listed once the switch has settled (the preview lets go of the last device first).
-        onKindChanged: { app.setUiValue("addSource/kind", kind); devices = []; device = ""; Qt.callLater(refreshDevices) }
-        onOpened: { adding = false; mono = false; browserSt = ({}); Qt.callLater(refreshDevices); nameField.forceActiveFocus() }
-        readonly property bool ready: kind === "window" ? device !== ""
-            : kind === "browser" ? !!(browserSt.local ? browserSt.file : browserSt.url) : true
-        // A camera, mic or sound output is added once: one already in the show isn't opened again
-        // (a camera would freeze there). Its feed shows instead, and the button places that source.
-        readonly property bool onlyOnce: kind === "camera" || audioKind
-        readonly property string inUseBy: onlyOnce && visible ? app.sourceUsingDevice(kind, device) : ""
-        readonly property bool busyElsewhere: kind === "camera" && !inUseBy && !!(devices.find(d => d.value === device) || {}).inUse
-        readonly property var previewSettings: kind === "browser" ? browserSt : device ? ({ device: device }) : ({})
-        function create() {
-            if (!ready)
-                return
-            if (inUseBy) {
-                if (!audioKind && placeBox.checked) app.placeSource(inUseBy)
-                nameField.text = ""; close()
-                return
-            }
-            adding = true
-            // The preview's camera closes on its own thread; the new source opens it a moment later.
-            if (kind === "camera") {
-                pendingCreate.restart()
-                return
-            }
-            finishCreate()
-        }
-        Timer { id: pendingCreate; interval: 700; onTriggered: addDialog.finishCreate() }
-        function finishCreate() {
-            // A window source is named after its window, unless you named it.
-            const name = nameField.text || (kind === "window" ? deviceName.slice(0, 48) : "")
-            const extra = picksDevice ? device : kind === "browser" ? (browserSt.url || "") : extraField.text
-            const more = kind === "browser" ? browserSt : audioKind ? ({ mono: mono }) : ({})
-            const before = app.mixer.map(m => m.id)
-            app.addSource(kind, name, extra, placeBox.checked, more)
-            const added = kind === "mic" && tuneBox.checked ? app.mixer.find(m => m.kind === "mic" && before.indexOf(m.id) < 0) : null
-            nameField.text = ""; extraField.text = ""; close()
-            if (added)
-                Qt.callLater(() => addMicWizard.openFor(added.id)) // once this dialog is gone
-        }
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
-            Caption { text: "Add each source once and use it in any scene."; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            GridLayout {
-                columns: 5; columnSpacing: 6; rowSpacing: 6
-                Repeater {
-                    model: [["camera", "video", "Camera"], ["display", "monitor", "Display"], ["window", "app-window", "Window"], ["game", "gamepad-2", "Game"],
-                            ["browser", "globe", "Browser"], ["mic", "mic", "Mic"], ["desktop_audio", "volume-2", "Sound"]]
-                           .filter(k => app.kindAvailable(k[0])) // no game capture on macOS
-                           .concat(addDialog.visible ? app.pluginSourceTypes().map(t => [t.kind, t.icon, t.label]) : []) // from plugins (Settings > Plugins)
-                    delegate: Rectangle {
-                        required property var modelData
-                        readonly property bool on: addDialog.kind === modelData[0]
-                        width: 96; height: 62; radius: Pal.radius + 2
-                        color: on ? Pal.s7 : kindMouse.containsMouse ? Pal.s6 : Pal.s4
-                        border.width: 1
-                        border.color: on ? Pal.borderStrong : Pal.border
-                        Behavior on color { ColorAnimation { duration: Pal.fast } }
-                        Column {
-                            anchors.centerIn: parent; spacing: 4
-                            FIcon { name: modelData[1]; size: 18; color: on ? Pal.fg : Pal.muted; anchors.horizontalCenter: parent.horizontalCenter }
-                            Text { text: modelData[2]; color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: on ? 550 : 400; anchors.horizontalCenter: parent.horizontalCenter
-                                   width: Math.min(implicitWidth, 88); elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter }
-                        }
-                        MouseArea { Accessible.role: Accessible.Button; Accessible.name: String(modelData[2]); id: kindMouse; anchors.fill: parent; hoverEnabled: true; onClicked: { addDialog.kind = modelData[0]; Qt.callLater(addDialog.refreshDevices) } }
-                    }
-                }
-            }
-            // The middle (device, preview, options) scrolls when it's taller than the window allows.
-            FScrollView {
-                id: addScroll
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(addMiddle.implicitHeight, Math.max(160, (Overlay.overlay ? Overlay.overlay.height : 900) - 420))
-                ColumnLayout {
-                    id: addMiddle
-                    width: addScroll.availableWidth
-                    spacing: 12
-                    FSelect {
-                        visible: addDialog.picksDevice && addDialog.kind !== "window"
-                        Layout.fillWidth: true
-                        placeholder: "No " + ({ camera: "camera", display: "display", mic: "microphone", desktop_audio: "sound output" })[addDialog.kind] + " found"
-                        options: addDialog.devices
-                        currentValue: addDialog.device
-                        onPicked: (v) => { addDialog.device = v; addDialog.deviceName = (addDialog.devices.find(d => d.value === v) || {}).name || "" }
-                        onDownChanged: if (down) addDialog.refreshDevices() // plugged one in since: list again
-                    }
-                    // What it would show: a camera, display, window or page, live, before it's added.
-                    Rectangle {
-                        visible: ["camera", "display", "browser"].indexOf(addDialog.kind) >= 0 || (addDialog.kind === "window" && addDialog.device !== "")
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Math.round(width * 9 / 16 * (addDialog.kind === "browser" ? 0.45 : 0.62))
-                        radius: Pal.radius
-                        color: Pal.s1
-                        border.color: Pal.border
-                        clip: true
-                        SourcePreview {
-                            id: addPreview
-                            anchors.fill: parent; anchors.margins: 1
-                            kind: addDialog.kind
-                            settings: addDialog.previewSettings
-                            sourceId: addDialog.inUseBy
-                            live: addDialog.visible && !addDialog.adding && parent.visible && !addDialog.busyElsewhere
-                        }
-                        Caption {
-                            visible: addDialog.busyElsewhere
-                            anchors.centerIn: parent
-                            text: "Another app is using this camera. Close that app first."
-                        }
-                        Caption {
-                            visible: addDialog.inUseBy !== "" && addPreview.ready
-                            anchors { left: parent.left; bottom: parent.bottom; margins: 8 }
-                            text: "Already in your show. A camera opens in one place at a time, so this is that feed."
-                            color: Pal.fg
-                            Rectangle { anchors.fill: parent; anchors.margins: -4; z: -1; radius: 4; color: "#b0000000" }
-                        }
-                        Caption {
-                            visible: !addPreview.ready && !addDialog.busyElsewhere
-                            anchors.centerIn: parent
-                            text: addDialog.kind === "browser" ? "Enter a URL or choose a file" : addDialog.device ? "Starting the preview…" : "Nothing to preview"
-                        }
-                        FButton {
-                            visible: addDialog.kind === "browser" && addPreview.ready
-                            anchors { top: parent.top; right: parent.right; margins: 6 }
-                            iconName: "refresh-cw"; variant: "secondary"; tip: "Reload the page"
-                            onClicked: addPreview.reload()
-                        }
-                    }
-                    // Audio: a live meter per side, so you can tell it's the right one, and see a mic
-                    // that only comes in on one side (that's what Mono fixes).
-                    RowLayout {
-                        visible: addDialog.audioKind
-                        Layout.fillWidth: true
-                        spacing: 10
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 3
-                            Repeater {
-                                model: [{ side: "L", db: audioMeter.levelL }, { side: "R", db: audioMeter.levelR }]
-                                delegate: RowLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    spacing: 6
-                                    Caption { text: modelData.side; Layout.preferredWidth: 10 }
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        implicitHeight: 8; radius: 4
-                                        color: Pal.s1
-                                        border.color: Pal.border
-                                        Rectangle {
-                                            // Mono on: both sides carry the mix, as they will once it's added.
-                                            readonly property real db: addDialog.mono ? audioMeter.level : modelData.db
-                                            readonly property real f: Math.max(0, Math.min(1, (db + 60) / 60))
-                                            width: (parent.width - 2) * f; height: parent.height - 2; x: 1; y: 1; radius: 3
-                                            color: db > -9 ? "#e5484d" : db > -20 ? "#f5a524" : "#30a46c"
-                                        }
-                                    }
-                                }
-                            }
-                            SourcePreview {
-                                id: audioMeter
-                                visible: false
-                                kind: addDialog.audioKind ? addDialog.kind : ""
-                                settings: addDialog.previewSettings
-                                live: addDialog.visible && !addDialog.adding && addDialog.audioKind
-                            }
-                        }
-                        Caption { text: audioMeter.level > -59 ? Math.round(audioMeter.level) + " dB" : addDialog.kind === "mic" ? "Say something" : "Play something"; Layout.preferredWidth: 84 }
-                        FCheckbox { text: "Mono"; checked: addDialog.mono; onClicked: addDialog.mono = checked }
-                    }
-                    Caption {
-                        // Sound on one side only, for a second: suggest the fix. It keeps its space
-                        // while hidden, so the dialog doesn't jump as the hint comes and goes.
-                        readonly property bool lopsidedNow: audioMeter.level > -45 && Math.abs(audioMeter.levelL - audioMeter.levelR) > 15
-                        id: oneSide
-                        property bool lopsided: false
-                        // On after a second of it, off after two seconds without (no flicker).
-                        onLopsidedNowChanged: { lopsidedTimer.restart() }
-                        Timer { id: lopsidedTimer; interval: oneSide.lopsidedNow ? 1000 : 2000; onTriggered: oneSide.lopsided = oneSide.lopsidedNow }
-                        visible: addDialog.audioKind && addDialog.kind === "mic"
-                        opacity: !addDialog.mono && lopsided ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: Pal.fast } }
-                        Layout.fillWidth: true; wrapMode: Text.WordWrap
-                        text: "Only one side has sound. Turn on Mono so viewers hear it in both ears."
-                        color: "#fbbf24"
-                    }
-                    BrowserOptions {
-                        visible: addDialog.kind === "browser"
-                        st: addDialog.browserSt
-                        onChanged: (key, value) => addDialog.setBrowser(key, value)
-                    }
-                    ColumnLayout {
-                        visible: addDialog.kind === "window"
-                        Layout.fillWidth: true
-                        spacing: 6
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Caption { text: "Choose the window to capture"; Layout.fillWidth: true }
-                            FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "Refresh window list"; onClicked: addDialog.refreshDevices() }
-                        }
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 220
-                            radius: Pal.radius
-                            color: Pal.s3
-                            border.color: Pal.border
-                            Text {
-                                visible: addDialog.devices.length === 0
-                                anchors.centerIn: parent
-                                width: parent.width - 32
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WordWrap
-                                text: permissions.missing.some(m => m.id === "screen") ? "Allow Screen Recording to list your windows." : "No windows to capture."
-                                color: Pal.muted; font.family: Pal.font; font.pixelSize: Pal.body
-                            }
-                            ListView {
-                                id: windowList
-                                anchors.fill: parent
-                                anchors.margins: 4
-                                clip: true
-                                model: addDialog.devices
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    readonly property bool chosen: addDialog.device === modelData.value
-                                    width: windowList.width
-                                    height: 30
-                                    radius: Pal.radius - 2
-                                    color: chosen ? Pal.selected : winMouse.containsMouse ? Pal.hover : "transparent"
-                                    Text {
-                                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 10; rightMargin: 10 }
-                                        text: modelData.name
-                                        elide: Text.ElideRight
-                                        color: Pal.fg; font.family: Pal.font; font.pixelSize: Pal.body; font.weight: chosen ? 550 : 400
-                                    }
-                                    MouseArea {
-                                        id: winMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        Accessible.role: Accessible.Button
-                                        Accessible.name: String(modelData.name)
-                                        onClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name }
-                                        onDoubleClicked: { addDialog.device = modelData.value; addDialog.deviceName = modelData.name; addDialog.create() }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            FInput { id: nameField; Layout.fillWidth: true; placeholderText: "Name (optional)"; onAccepted: addDialog.create() }
-            FInput {
-                id: extraField
-                Layout.fillWidth: true
-                visible: ["text", "color", "image", "media"].indexOf(addDialog.kind) >= 0
-                placeholderText: addDialog.kind === "text" ? "Text" : addDialog.kind === "color" ? "#1d1b2e" : "File path"
-                onAccepted: addDialog.create()
-            }
-            FCheckbox { id: placeBox; checked: true; text: "Also place on " + app.editSceneName; visible: ["mic", "desktop_audio"].indexOf(addDialog.kind) < 0 }
-            // A new mic: set it up right away (P2-9).
-            FCheckbox { id: tuneBox; checked: true; text: "Tune it after adding (30 seconds)"; visible: addDialog.kind === "mic" }
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.topMargin: 4
-                Item { Layout.fillWidth: true }
-                Caption { visible: addDialog.inUseBy !== "" && addDialog.audioKind; text: "Already in your show" }
-                FButton { text: "Cancel"; variant: "ghost"; onClicked: addDialog.close() }
-                FButton {
-                    text: !addDialog.inUseBy ? "Add source" : addDialog.audioKind ? "Add source" : "Place on " + app.editSceneName
-                    variant: "primary"
-                    enabled: addDialog.ready && !(addDialog.inUseBy && (addDialog.audioKind || !placeBox.checked))
-                    onClicked: addDialog.create()
-                }
-            }
-        }
+        onTuneMicRequested: (id) => addMicWizard.openFor(id)
     }
 
-    MicWizard { id: addMicWizard; fromAdd: true } // straight after adding a mic: closing is skipping
-    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500; // below the top bar: it drags the window and has its buttons
+    MicWizard { id: addMicWizard; fromAdd: true }
+    SettingsPage { id: settingsPage; parent: Overlay.overlay; anchors.fill: parent; anchors.topMargin: topBar.height; z: 500
         onUpdateRequested: { open = false; updateDialog.open() }
         onTwitchConnectRequested: twitchSignIn.begin() }
 
-    // Connect with Twitch, as OBS's Connect Account: Twitch's sign-in page in LOBS's own browser
-    // (the Twitch panels' profile, so they're signed in too). Closes once the stream key is in.
     FDialog {
         id: twitchSignIn
         title: "Connect with Twitch"
         width: 520
-        z: 1000 // over Settings
+        z: 1000
         property string url: ""
         function begin() { url = twitch.beginSignIn(); if (url) open(); else failToast() }
         function failToast() { app.notify(twitch.error) }
@@ -2863,18 +842,15 @@ ApplicationWindow {
             }
             RowLayout {
                 Layout.fillWidth: true
-                // Zoom, as in a browser (Ctrl + / Ctrl - work on the page too).
                 FButton { text: "−"; variant: "ghost"; tip: "Zoom out"; enabled: twitchPage.zoom > 0.51; onClicked: twitchPage.zoom -= 0.1 }
                 FButton { text: Math.round(twitchPage.zoom * 100) + "%"; variant: "ghost"; tip: "Back to 100%"; onClicked: twitchPage.zoom = 1 }
                 FButton { text: "+"; variant: "ghost"; tip: "Zoom in"; enabled: twitchPage.zoom < 2.49; onClicked: twitchPage.zoom += 0.1 }
-                // Twitch's Authorize can stay greyed after you log in until the page reloads.
                 FButton { iconName: "refresh-cw"; variant: "ghost"; tip: "Reload the page"; onClicked: twitchPage.reload() }
                 Item { Layout.fillWidth: true }
                 FButton { text: "Cancel"; variant: "ghost"; onClicked: twitchSignIn.close() }
             }
         }
     }
-    // A new LOBS: what's in it, then download, verify and install (never while on air).
     FDialog {
         id: updateDialog
         title: appUpdater.state === "ready" ? "Install LOBS " + appUpdater.latest + "?" : "LOBS " + appUpdater.latest + " is available"
@@ -2919,13 +895,11 @@ ApplicationWindow {
             }
         }
     }
-    // Last run crashed: offer to report it (a minidump and the log are in the crash folder).
     FDialog {
         id: crashDialog
         title: "LOBS closed unexpectedly"
         width: 420
         closePolicy: Popup.NoAutoClose
-        // After the setup assistant on a first run, so one doesn't cover the other.
         Timer { interval: 900; running: crashReport.pending && !setupTimer.running && !setupWizard.visible && !crashDialog.visible; onTriggered: crashDialog.open() }
         ColumnLayout {
             anchors.fill: parent

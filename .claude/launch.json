@@ -2,21 +2,26 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "lobs",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "app", "run", "dev"],
-      "port": 5317
-    },
-    {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "web", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "web",
+        "run",
+        "dev"
+      ],
       "port": 5320
     },
     {
       "name": "overlays",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5330", "-d", "overlays"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5330",
+        "-d",
+        "overlays"
+      ],
       "port": 5330
     }
   ]

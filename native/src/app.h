@@ -27,7 +27,7 @@ class App : public QObject {
 	Q_PROPERTY(QVariantList pool READ poolCached NOTIFY poolChanged)
 	Q_PROPERTY(QVariantList layers READ layersCached NOTIFY layersChanged)
 	Q_PROPERTY(QVariantMap inspector READ inspectorCached NOTIFY inspectorChanged)
-	// The selection's x, y, w, h and rot alone: follows a canvas drag every frame (LOBS-025).
+	// The selection's x, y, w, h and rot alone: follows a canvas drag every frame.
 	Q_PROPERTY(QVariantMap inspectorTransform READ inspectorTransform NOTIFY inspectorTransformChanged)
 	Q_PROPERTY(QVariantList history READ historyCached NOTIFY historyChanged)
 	Q_PROPERTY(int historyIndex READ historyIndex NOTIFY docChanged)
@@ -132,7 +132,7 @@ public:
 	// macOS allowed Screen Recording (nothing to list then). Not an undo step.
 	void fillMissingDevices();
 	Q_INVOKABLE void addAudioFilter(const QString &sourceId, const QString &type);
-	// Effect chains: copy and paste, .lobsfx files, presets (P2-8).
+	// Effect chains: copy and paste, .lobsfx files, presets.
 	Q_INVOKABLE void copyAudioFilters(const QString &sourceId);
 	Q_INVOKABLE bool canPasteAudioFilters() const;
 	Q_INVOKABLE void pasteAudioFilters(const QStringList &sourceIds, bool replace);
@@ -141,7 +141,7 @@ public:
 	Q_INVOKABLE QVariantList audioPresets() const;
 	Q_INVOKABLE void applyAudioPreset(const QString &sourceId, const QString &presetId);
 	Q_INVOKABLE bool saveAudioPreset(const QString &sourceId, const QString &name); // one of your own, in + Effect
-	// Mic wizard (P2-9): its effects off while measuring, then the tuned chain applied as one step.
+	// Mic wizard: its effects off while measuring, then the tuned chain applied as one step.
 	Q_INVOKABLE void setFxBypassed(const QString &sourceId, bool on) { m_engine->setFxBypassed(sourceId, on); }
 	Q_INVOKABLE void applyMicTuning(const QString &micId, const QVariantMap &measured);
 	// Before / after clips: record a source (after its effects), save it as a WAV, play it back.
@@ -338,7 +338,7 @@ public:
 	bool live() const { return m_engine->live(); }
 	bool unsavedShow() const { return m_projectFile.isEmpty() && !(doc() == m_cleanDoc); }
 	bool liveLocked() const { return m_engine->live() && m_engine->settings().liveLock && !m_liveUnlock; }
-	// LOBS-006: the one check for edits that move, resize, crop, reorder or remove layers in the
+	// The one check for edits that move, resize, crop, reorder or remove layers in the
 	// scene viewers see. Refuses (with a toast) while live lock is on, unless Alt is held.
 	bool liveEditAllowed(const QStringList &ids);
 	// The same check for adding layers to a scene, and for changing a source that is on air.
@@ -365,7 +365,7 @@ public:
 	// Sources panel: per-source device line and problems, refreshed every second; sourceTick
 	// moves the thumbnails along.
 	Q_PROPERTY(QVariantMap sourceStatus READ sourceStatus NOTIFY sourceStatusChanged)
-	Q_PROPERTY(int sourceTick READ sourceTick NOTIFY sourceStatusChanged)
+	Q_PROPERTY(int sourceTick READ sourceTick NOTIFY sourceTickChanged)
 	Q_PROPERTY(QVariantList assets READ assets NOTIFY assetsChanged)
 	Q_PROPERTY(QString assetPath READ assetPath NOTIFY assetsChanged)
 	Q_PROPERTY(QVariantList missingAssets READ missingAssets NOTIFY sourceStatusChanged)      // current folder, relative ("" = top)
@@ -572,6 +572,7 @@ signals:
 	void screenColorCanceled();
 	void toolChanged();
 	void sourceStatusChanged();
+	void sourceTickChanged();
 	void thumbTickChanged();
 	void previewVisibilityRequested(bool visible);
 	void previewHiddenChanged();
@@ -711,7 +712,7 @@ private:
 public:
 	// Time spent per phase of applying changes since the last call (ms), then reset. For profiling.
 	// QML reads these lists many times per change. Each read returns the copy refreshModels()
-	// last pushed instead of rebuilding it (LOBS-025).
+	// last pushed instead of rebuilding it.
 	QVariantList scenesCached() const { const QVariant v = m_modelCache.value(QStringLiteral("scenes")); return v.isValid() ? v.toList() : scenes(); }
 	QVariantList poolCached() const { const QVariant v = m_modelCache.value(QStringLiteral("pool")); return v.isValid() ? v.toList() : pool(); }
 	QVariantList layersCached() const { const QVariant v = m_modelCache.value(QStringLiteral("layers")); return v.isValid() ? v.toList() : layers(); }

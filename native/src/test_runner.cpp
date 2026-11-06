@@ -100,6 +100,8 @@ public:
 		connect(&m_e, &Engine::streamError, this, [this](const QString &m) { m_streamErrors << m; });
 		if (QQuickWindow *w = mainWindow())
 		{
+			SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+			SetWindowPos(reinterpret_cast<HWND>(w->winId()), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
 			connect(w, &QQuickWindow::frameSwapped, this, [this]() { ++m_frames; m_frameTimes << m_clock.nsecsElapsed() / 1e6; }, Qt::DirectConnection);
 			// Per-frame phases (ms), for profiling where a slow frame goes.
 			auto mark = [this](int k) { return [this, k]() { QMutexLocker l(&m_phaseLock); m_mark[k] = m_clock.nsecsElapsed() / 1e6; if (k == 5) {
@@ -170,7 +172,7 @@ public:
 		}
 		return out;
 	}
-	// Logs through libobs from several threads at once, as OBS's own threads do (LOBS-040).
+	// Logs through libobs from several threads at once, as OBS's own threads do.
 	Q_INVOKABLE int logStorm(int threads, int lines)
 	{
 		std::vector<std::thread> ts;
@@ -219,7 +221,7 @@ public:
 	Q_INVOKABLE qint64 fileSize(const QString &path) const { return QFileInfo(path).size(); }
 	Q_INVOKABLE bool removeFile(const QString &path) const { return QFile::remove(path); }
 	Q_INVOKABLE QStringList listDir(const QString &path) const { return QDir(path).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot); }
-	// LOBS-001: which argument lists start a self-test (and so use a throwaway document).
+	// Which argument lists start a self-test (and so use a throwaway document).
 	Q_INVOKABLE bool isSelfTestArgs(const QStringList &args) const { return isSelfTestRun(args); }
 	// Runs both JavaScript collectors (the scenario's and the UI's), to tell garbage from leaks.
 	// Diagnostics: stop the controller notifying the UI, to tell UI costs from C++ ones.
@@ -787,6 +789,9 @@ private:
 
 void isolateProfile(const QString &outDir)
 {
+	const QString model = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/models/ggml-base.bin";
+	if (qEnvironmentVariableIsEmpty("LOBS_WHISPER_MODEL") && QFile::exists(model))
+		qputenv("LOBS_WHISPER_MODEL", model.toUtf8());
 	QStandardPaths::setTestModeEnabled(true);
 	QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).removeRecursively();
 	const QString profile = outDir + "/profile";
@@ -817,6 +822,7 @@ void startScenario(QGuiApplication &app, App &controller, Engine &engine, QQmlAp
 
 	// Give the engine and the first frames time to come up, like the other self-tests.
 	QTimer::singleShot(3000, &app, [&app, js, api, script]() {
+		api->keyWindow();
 		std::atomic<bool> done{false};
 		const int limit = api->timeoutS();
 		std::thread watchdog([js, &done, limit]() {

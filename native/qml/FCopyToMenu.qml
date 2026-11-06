@@ -1,6 +1,6 @@
 import QtQuick
 
-// "Copy to ▸ <scene> ▸ Linked / Independent" for the selected layers (LOBS-020).
+// "Copy to ▸ <scene> ▸ Linked / Independent" for the selected layers.
 FMenu {
     id: m
     title: "Copy to"

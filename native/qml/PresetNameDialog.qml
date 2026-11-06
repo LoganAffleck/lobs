@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Names a source's effects as a preset of your own (P2-8), listed under + Effect → Start from a preset.
+// Names a source's effects as a preset of your own, listed under + Effect → Start from a preset.
 FDialog {
     id: dlg
     title: "Save as a preset"

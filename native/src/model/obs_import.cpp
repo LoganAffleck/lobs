@@ -249,7 +249,7 @@ ObsImport importObsCollection(const QJsonObject &o)
 			return isLobsHelper(x.it["name"].toString(), src["id"].toString());
 		});
 		if (onlyHelpers) {
-			r.pluginScenes << sceneName; // LOBS-027: say so instead of dropping it silently
+			r.pluginScenes << sceneName; // say so instead of dropping it silently
 			continue;
 		}
 

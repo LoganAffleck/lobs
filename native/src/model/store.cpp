@@ -8,7 +8,7 @@ static const int kMaxHistory = 200;
 
 // Each undo step holds a whole Doc. Unchanged parts are shared, but editing one layer copies
 // the layer table, about 300 bytes per layer. A big show keeps fewer steps, so history stays
-// within roughly 64 MB; small shows keep all 200 (LOBS-036).
+// within roughly 64 MB; small shows keep all 200.
 static int maxHistory(const Doc &d)
 {
 	const qint64 perStep = std::max<qint64>(1, qint64(d.instances.size()) * 320);
@@ -27,7 +27,7 @@ void Store::commit(const QString &label, const std::function<void(Doc &)> &fn)
 	Doc draft = m_doc;
 	fn(draft);
 	draft.syncVertical(); // vertical layouts follow their scenes
-	if (draft == m_doc) // LOBS-017: an edit that changes nothing adds no undo step
+	if (draft == m_doc) // an edit that changes nothing adds no undo step
 		return;
 	m_past.push_back(m_current);
 	while (m_past.size() > maxHistory(m_doc))

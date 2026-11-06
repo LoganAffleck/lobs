@@ -22,9 +22,17 @@ set(LOBS_MAC_ENGINE ${CMAKE_SOURCE_DIR}/deps/engine-mac CACHE PATH "Engine stage
 
 qt_add_executable(LOBS WIN32 MACOSX_BUNDLE
     src/main.cpp
+    src/preview_host.cpp src/preview_host.h
+    src/cli_tests.cpp src/cli_tests.h
     src/platform.h
     src/permissions.cpp src/permissions.h
     src/app.cpp
+    src/app_internal.h
+    src/app_inspector.cpp
+    src/app_audio.cpp
+    src/app_assets.cpp
+    src/app_canvas.cpp
+    src/app_setup.cpp
     src/app.h
     src/engine.cpp
     src/engine_output.cpp
@@ -82,6 +90,7 @@ endif()
 file(GLOB LOBS_GEM_FRAMES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS resources/gem/*.jpg)
 qt_add_qml_module(LOBS URI LOBS VERSION 1.0 QML_FILES
     qml/Main.qml
+    qml/ScenesPanel.qml qml/SourcesPanel.qml qml/AssetsPanel.qml qml/LayersPanel.qml qml/InspectorPanel.qml qml/AddSourceDialog.qml
     # Fluid Functionalism components (QML port)
     qml/FButton.qml qml/FInput.qml qml/FNumField.qml qml/FFillSlider.qml qml/FxControl.qml qml/FxGateBar.qml qml/FxEqFaders.qml qml/MicWizard.qml qml/PresetNameDialog.qml qml/WhatsNewDialog.qml qml/Gem.qml qml/FxChain.qml qml/FSwitch.qml qml/FCheckbox.qml
     qml/FTabs.qml qml/FMenu.qml qml/FMenuItem.qml qml/FSelect.qml qml/FDialog.qml qml/FluidList.qml

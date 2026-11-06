@@ -17,10 +17,10 @@ Item {
     signal inspectRequested()
     function inspect(id) { app.selectSource(id); inspectRequested() }
     // app.mixer converts the whole list to JavaScript on every read, so read it once per change:
-    // src(i) on a big show used to rebuild it per call and left seconds of garbage (LOBS-025).
+    // src(i) on a big show used to rebuild it per call and left seconds of garbage.
     readonly property var mix: app.mixer
     // Same for the meters: app.levels changes 20 times a second, and each strip reading it
-    // converted the whole map, every source's levels, per strip (LOBS-025).
+    // converted the whole map, every source's levels, per strip.
     readonly property var lv: app.levels
     // Drag to reorder (strips sideways, rows up and down). Off while the search filters the list.
     property string dragId: ""
@@ -137,7 +137,7 @@ Item {
             width: parent.width
             topPadding: 4; bottomPadding: 4
             Repeater {
-                model: mv.count // by position, so faders aren't recreated mid-drag
+                model: mv.strips ? 0 : mv.count // by position, so faders aren't recreated mid-drag
                 delegate: Item {
                     id: row
                     required property int index
@@ -219,7 +219,7 @@ Item {
             leftPadding: 6; topPadding: 6; bottomPadding: 6
             spacing: 4
             Repeater {
-                model: mv.count
+                model: mv.strips ? mv.count : 0
                 delegate: Rectangle {
                     id: strip
                     required property int index

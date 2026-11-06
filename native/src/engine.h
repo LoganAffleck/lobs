@@ -197,8 +197,6 @@ public:
 	struct SharedFrames { int generation = 0; uint32_t handles[kSharedFrames] = {}; int width = 0, height = 0; };
 	SharedFrames sharedPreviewFrames() const; // handles change with the generation (on resize)
 	int sharedPreviewGeneration() const { return m_spGen; }
-	// The newest finished frame. The UI's render thread calls this once per frame; the last three
-	// it took stay off-limits to the engine (the GPU may still be sampling them).
 	int takeSharedPreviewFrame()
 	{
 		const int p = m_spPublished;
@@ -330,11 +328,11 @@ private:
 		bool hasApplied = false;
 		obs_source *maskFilter = nullptr, *opacityFilter = nullptr; // kept, updated in place
 		double opacity = 1;
-		bool parked = false; // filters detached while its scene isn't showing (LOBS-034)
+		bool parked = false; // filters detached while its scene isn't showing
 	};
 	// Each OBS filter, and a scene item with a scale filter, keeps a render target the size of the
 	// layer's source until it's destroyed. So a layer whose scene stopped showing gives its filters
-	// and scale filter back, and gets them again just before the scene shows (LOBS-034).
+	// and scale filter back, and gets them again just before the scene shows.
 	void parkHiddenFilters();
 	void unparkScene(const QString &sceneId);
 	QTimer m_parkTimer;
@@ -372,7 +370,9 @@ private:
 	QStringList scenesToMake(const lobs::Doc &doc) const;
 	void syncVerticalProgram();
 	void updateEditCanvas();
-	void renderPluginChannels(); // graphics thread: plugins' output channels, over the live scene
+	void renderPluginChannels();
+	void pollPluginChannels();
+	QImage renderSourceToImage(obs_source *src, uint32_t srcW, uint32_t srcH, uint32_t outW, uint32_t outH);
 	obs_source *m_transition = nullptr;
 	QString m_transitionType;
 	obs_source *ensureTransition();
@@ -386,6 +386,7 @@ private:
 	// Switching the edited scene plays the show's transition on the canvas, as OBS's preview does.
 	obs_source *m_canvasTr = nullptr;
 	QString m_canvasTrSig;
+	qint64 m_canvasTrEndMs = 0;
 	std::atomic<bool> m_canvasTrRunning{false}; // until the transition says it stopped (a stinger runs its video's length)
 	bool canvasTransitioning() const { return m_canvasTr && m_canvasTrRunning; }
 	bool m_pvAtB = false;
@@ -432,7 +433,11 @@ private:
 	QVector<QPointF> m_ink;
 	float m_inkColor[4] = {1, 1, 1, 1};
 	double m_inkWidth = 4;
-	struct gs_texture_render *m_previewTex = nullptr; // full-size canvas for high-quality preview scaling
+	struct gs_texture_render *m_previewTex = nullptr;
+	struct gs_texture_render *m_thumbTex = nullptr;
+	struct gs_stage_surface *m_thumbStage = nullptr;
+	uint32_t m_thumbStageW = 0, m_thumbStageH = 0;
+	QString m_pluginChannelsSeen;
 	QMutex m_overlayLock;
 	QVector<OverlayBox> m_boxes;
 	QVector<BlockedLayer> m_blocked;
@@ -499,7 +504,7 @@ private:
 	QString m_root;
 	QVariantMap m_liveStats;
 	os_cpu_usage_info *m_cpu = nullptr;
-	// Frame counters at each stats poll over the last ~10 s, for the status bar's warning (LOBS-005).
+	// Frame counters at each stats poll over the last ~10 s, for the status bar's warning.
 	struct FrameSample { qint64 ms; uint32_t lagged, rendered, skipped, encoded; };
 	QVector<FrameSample> m_frameSamples;
 	QElapsedTimer m_frameClock;
@@ -510,6 +515,7 @@ private:
 	QString m_lastReplay;
 	obs_output *m_vcamOutput = nullptr;
 	QSet<QString> m_pttBound, m_pttHeld;
+	QHash<QString, qint64> m_mediaRestartedAt;
 	QHash<QString, bool> m_docMuted; // the show's mute state per audio source
 	void applyMutes();
 	void applyMute(const QString &id, obs_source *in);

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Tune my mic (P2-9). LOBS listens in short steps and sets up the mic's effects from what it
+// Tune my mic. LOBS listens in short steps and sets up the mic's effects from what it
 // heard. Each step starts by itself: quiet after a short countdown, talking when it hears your
 // voice, loud when it hears a jump. The first reading and a second one (with the new effects)
 // are kept as clips, so you can hear before and after. The mic's effects are off while it

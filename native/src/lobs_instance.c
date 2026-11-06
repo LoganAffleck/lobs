@@ -152,7 +152,7 @@ static void li_video_render(void *data, gs_effect_t *unused)
 	}
 
 	// No crop: draw the source straight through. Only a crop needs an offscreen copy, so most
-	// layers hold no texture at all (LOBS-034).
+	// layers hold no texture at all.
 	if (!li->crop_l && !li->crop_t && !li->crop_r && !li->crop_b) {
 		obs_source_video_render(child);
 		gs_matrix_pop();
@@ -196,7 +196,7 @@ static void li_video_render(void *data, gs_effect_t *unused)
 }
 
 // A layer that stops showing (its scene is no longer previewed or on air) gives its offscreen
-// copy back; it's recreated on the next render (LOBS-034).
+// copy back; it's recreated on the next render.
 static void li_hide(void *data)
 {
 	struct lobs_instance *li = data;
